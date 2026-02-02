@@ -1,10 +1,160 @@
+import { useState, useEffect } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { db, auth } from '@/config/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
-export const ApplicantAnalytics = () => (
+interface StatusStats {
+    total: number;
+    passed: number;
+    pending: number;
+    rejected: number;
+    reviewing: number;
+    thisMonth: number;
+}
+
+interface DailyCount {
+    date: string;
+    count: number;
+}
+
+export const ApplicantAnalytics = () => {
+    const [stats, setStats] = useState<StatusStats>({
+        total: 0,
+        passed: 0,
+        pending: 0,
+        rejected: 0,
+        reviewing: 0,
+        thisMonth: 0
+    });
+    const [dailyData, setDailyData] = useState<DailyCount[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchAnalytics();
+    }, []);
+
+    const fetchAnalytics = async () => {
+        try {
+            const currentUser = auth.currentUser;
+            if (!currentUser) {
+                setLoading(false);
+                return;
+            }
+
+            const applicationsQuery = query(
+                collection(db, 'applications'),
+                where('recruiterId', '==', currentUser.uid)
+            );
+
+            const snapshot = await getDocs(applicationsQuery);
+            const applications = snapshot.docs.map(doc => doc.data());
+
+            // 상태별 카운트
+            let passed = 0;
+            let pending = 0;
+            let rejected = 0;
+            let reviewing = 0;
+            let thisMonth = 0;
+
+            const now = new Date();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+
+            // 최근 7일 데이터
+            const last7Days: { [key: string]: number } = {};
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateStr = date.toISOString().split('T')[0];
+                last7Days[dateStr] = 0;
+            }
+
+            applications.forEach(app => {
+                // 상태별 카운트
+                if (app.status === '합격') passed++;
+                else if (app.status === '보류') pending++;
+                else if (app.status === '불합격') rejected++;
+                else if (app.status === '검토중') reviewing++;
+
+                // 이번 달 지원자
+                if (app.appliedAt) {
+                    const appliedDate = app.appliedAt.toDate ? app.appliedAt.toDate() : new Date(app.appliedAt);
+                    if (appliedDate.getMonth() === currentMonth && appliedDate.getFullYear() === currentYear) {
+                        thisMonth++;
+                    }
+
+                    // 최근 7일 데이터
+                    const dateStr = appliedDate.toISOString().split('T')[0];
+                    if (last7Days.hasOwnProperty(dateStr)) {
+                        last7Days[dateStr]++;
+                    }
+                }
+            });
+
+            setStats({
+                total: applications.length,
+                passed,
+                pending,
+                rejected,
+                reviewing,
+                thisMonth
+            });
+
+            // 차트 데이터 변환
+            const chartData = Object.keys(last7Days).map(date => ({
+                date,
+                count: last7Days[date]
+            }));
+            setDailyData(chartData);
+
+        } catch (error) {
+            console.error('통계 로딩 실패:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // SVG 경로 생성 (최근 7일 데이터 기반)
+    const generatePath = () => {
+        if (dailyData.length === 0) return "M0,130 L400,130";
+        
+        const maxCount = Math.max(...dailyData.map(d => d.count), 1);
+        const points = dailyData.map((d, i) => {
+            const x = (i / (dailyData.length - 1)) * 400;
+            const y = 150 - (d.count / maxCount) * 120; // 150은 최하단, 30은 최상단
+            return { x, y };
+        });
+
+        // Smooth curve using quadratic Bezier
+        let path = `M${points[0].x},${points[0].y}`;
+        for (let i = 1; i < points.length; i++) {
+            const prev = points[i - 1];
+            const curr = points[i];
+            const cpX = (prev.x + curr.x) / 2;
+            path += ` Q${cpX},${prev.y} ${curr.x},${curr.y}`;
+        }
+        return path;
+    };
+
+    const mainPath = generatePath();
+    const areaPath = mainPath + " V150 H0 Z";
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-96">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-500">통계 로딩 중...</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
     <div className="space-y-8 max-w-[1200px] mx-auto pb-10">
         <div>
             <h2 className="text-2xl font-bold text-gray-900 tracking-tight">지원자 현황</h2>
-            <p className="text-gray-500 text-sm mt-1">AI가 스크리닝한 인재 목록을 확인하세요.</p>
+            <p className="text-gray-500 text-sm mt-1">AI가 스크리닝한 인재 목록을 확인하세요. (총 {stats.total}명)</p>
         </div>
 
         {/* Analytics Top */}
@@ -14,7 +164,7 @@ export const ApplicantAnalytics = () => (
                 <div className="flex justify-between items-center mb-8">
                     <h3 className="font-bold text-lg text-gray-800">총 지원자 추이</h3>
                     <div className="text-[12px] font-bold text-gray-500 bg-gray-50 px-3 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer hover:bg-gray-100">
-                        January 2026 <ChevronRight size={14}/>
+                        최근 7일 <ChevronRight size={14}/>
                     </div>
                 </div>
                 <div className="h-[220px] w-full relative">
@@ -31,21 +181,15 @@ export const ApplicantAnalytics = () => (
                         <line x1="0" y1="100" x2="400" y2="100" stroke="#F3F4F6" strokeWidth="1" />
                         <line x1="0" y1="50" x2="400" y2="50" stroke="#F3F4F6" strokeWidth="1" />
                         
-                        {/* Dashed Line (Previous) */}
-                        <path d="M0,120 Q50,110 100,80 T200,90 T300,70 T400,90" fill="none" stroke="#E5E7EB" strokeWidth="2" strokeDasharray="5,5" />
-                        
                         {/* Main Line */}
-                        <path d="M0,130 Q40,120 80,70 T180,60 T280,30 T400,60" fill="none" stroke="#6366f1" strokeWidth="3" strokeLinecap="round"/>
-                        <path d="M0,130 Q40,120 80,70 T180,60 T280,30 T400,60 V150 H0 Z" fill="url(#gradientArea)" stroke="none"/>
-                        
-                        {/* Active Point */}
-                        <circle cx="280" cy="30" r="4" fill="white" stroke="#6366f1" strokeWidth="3" />
+                        <path d={mainPath} fill="none" stroke="#6366f1" strokeWidth="3" strokeLinecap="round"/>
+                        <path d={areaPath} fill="url(#gradientArea)" stroke="none"/>
                     </svg>
                     
                     {/* Floating Tooltip */}
                     <div className="absolute top-[10%] left-[65%] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.1)] px-4 py-2.5 rounded-xl border border-gray-100 text-center animate-bounce duration-[2000ms]">
                         <div className="text-[10px] text-gray-400 font-bold uppercase mb-0.5">This Month</div>
-                        <div className="font-extrabold text-xl text-gray-900 leading-none">37 <span className="text-[10px] font-medium text-gray-400">명</span></div>
+                        <div className="font-extrabold text-xl text-gray-900 leading-none">{stats.thisMonth} <span className="text-[10px] font-medium text-gray-400">명</span></div>
                         <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-gray-100 rotate-45"></div>
                     </div>
                 </div>
@@ -62,18 +206,18 @@ export const ApplicantAnalytics = () => (
                             <circle cx="72" cy="72" r="56" fill="transparent" stroke="#6366F1" strokeWidth="16" strokeDasharray="350" strokeDashoffset="120" strokeLinecap="round" />
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center flex-col">
-                            <span className="text-[18px] font-extrabold text-gray-900">65%</span>
-                            <span className="text-[10px] text-gray-400 font-medium">남성</span>
+                            <span className="text-[18px] font-extrabold text-gray-900">-</span>
+                            <span className="text-[10px] text-gray-400 font-medium">정보 없음</span>
                         </div>
                     </div>
                     <div className="flex justify-center gap-4 mt-6">
                         <div className="flex items-center gap-1.5">
                             <div className="w-2.5 h-2.5 rounded-full bg-indigo-500"></div>
-                            <span className="text-[11px] font-medium text-gray-500">남성 20</span>
+                            <span className="text-[11px] font-medium text-gray-500">남성 -</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                             <div className="w-2.5 h-2.5 rounded-full bg-indigo-100"></div>
-                            <span className="text-[11px] font-medium text-gray-500">여성 10</span>
+                            <span className="text-[11px] font-medium text-gray-500">여성 -</span>
                         </div>
                     </div>
                 </div>
@@ -87,18 +231,18 @@ export const ApplicantAnalytics = () => (
                             <circle cx="72" cy="72" r="56" fill="transparent" stroke="#8B5CF6" strokeWidth="16" strokeDasharray="350" strokeDashoffset="80" strokeLinecap="round" />
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center flex-col">
-                            <span className="text-[18px] font-extrabold text-gray-900">72%</span>
-                            <span className="text-[10px] text-gray-400 font-medium">시니어</span>
+                            <span className="text-[18px] font-extrabold text-gray-900">-</span>
+                            <span className="text-[10px] text-gray-400 font-medium">정보 없음</span>
                         </div>
                     </div>
                      <div className="flex justify-center gap-4 mt-6">
                         <div className="flex items-center gap-1.5">
                             <div className="w-2.5 h-2.5 rounded-full bg-violet-500"></div>
-                            <span className="text-[11px] font-medium text-gray-500">5년+</span>
+                            <span className="text-[11px] font-medium text-gray-500">5년+ -</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                             <div className="w-2.5 h-2.5 rounded-full bg-violet-100"></div>
-                            <span className="text-[11px] font-medium text-gray-500">주니어</span>
+                            <span className="text-[11px] font-medium text-gray-500">주니어 -</span>
                         </div>
                     </div>
                 </div>
@@ -110,10 +254,10 @@ export const ApplicantAnalytics = () => (
              <h3 className="font-bold text-lg text-gray-800 mb-5">채용 진행 현황</h3>
              <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
                  {[
-                     { label: '합격', count: 15, bg: 'bg-[#4ADE80]', text: 'text-white' },
-                     { label: '보류', count: 3, bg: 'bg-[#FDE047]', text: 'text-yellow-800' },
-                     { label: '불합격', count: 17, bg: 'bg-[#FCA5A5]', text: 'text-white' },
-                     { label: '검토중', count: 20, bg: 'bg-[#C4B5FD]', text: 'text-white' }
+                     { label: '합격', count: stats.passed, bg: 'bg-[#4ADE80]', text: 'text-white' },
+                     { label: '보류', count: stats.pending, bg: 'bg-[#FDE047]', text: 'text-yellow-800' },
+                     { label: '불합격', count: stats.rejected, bg: 'bg-[#FCA5A5]', text: 'text-white' },
+                     { label: '검토중', count: stats.reviewing, bg: 'bg-[#C4B5FD]', text: 'text-white' }
                  ].map(status => (
                      <div key={status.label} className={`h-[120px] p-6 rounded-2xl ${status.bg} shadow-sm transition-all hover:scale-105 cursor-pointer flex flex-col justify-between`}>
                          <div className={`font-bold text-lg ${status.text}`}>{status.label}</div>
@@ -123,4 +267,5 @@ export const ApplicantAnalytics = () => (
              </div>
         </div>
     </div>
-);
+    );
+};
