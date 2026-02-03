@@ -1,4 +1,4 @@
-import { ChevronRight, Users, MessageSquare, BarChart3 } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { FONTS } from '@/constants/fonts';
 
 interface LandingPageProps {
