@@ -1,6 +1,5 @@
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Users, MessageSquare, BarChart3 } from 'lucide-react';
 import { FONTS } from '@/constants/fonts';
-import { FunnelCSS } from '@/components/common/FunnelCSS';
 
 interface LandingPageProps {
   onLogin: () => void;
@@ -9,7 +8,6 @@ interface LandingPageProps {
 export const LandingPage = ({ onLogin }: LandingPageProps) => {
   return (
     <div className="min-h-screen bg-white text-gray-900" style={{ fontFamily: FONTS.sans }}>
-      <FunnelCSS />
       {/* Header */}
       <header className="fixed top-0 w-full bg-white/70 backdrop-blur-xl z-50 border-b border-gray-100/50">
         <div className="max-w-[1200px] mx-auto px-6 h-[72px] flex justify-between items-center">
@@ -57,145 +55,188 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
           </button>
         </div>
 
-        {/* 3D Funnel Graphic */}
-        <div className="funnel-wrapper">
-            <div className="funnel-main">
-                <div className="funnel-arrows">
-                    <div className="funnel-arrow"></div>
-                    <div className="funnel-arrow"></div>
-                    <div className="funnel-arrow"></div>
-                </div>
-                <div className="funnel-container">
-                {/* Top Layer */}
-                <div className="funnel-layer funnel-top" 
-                     onMouseEnter={() => document.getElementById('desc-top')?.classList.add('active')}
-                     onMouseLeave={() => document.getElementById('desc-top')?.classList.remove('active')}
-                     style={{ width: '550px', height: '130px', marginBottom: '-5px', zIndex: 30 }}>
-                    <svg width="550" height="130" viewBox="0 0 550 130" xmlns="http://www.w3.org/2000/svg">
-                        <defs>
-                            <linearGradient id="topGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" style={{ stopColor: '#3B82F6', stopOpacity: 1 }} />
-                                <stop offset="50%" style={{ stopColor: '#60A5FA', stopOpacity: 1 }} />
-                                <stop offset="100%" style={{ stopColor: '#3B82F6', stopOpacity: 1 }} />
-                            </linearGradient>
-                            <radialGradient id="topRim" cx="50%" cy="50%">
-                                <stop offset="0%" style={{ stopColor: '#BFDBFE', stopOpacity: 1 }} />
-                                <stop offset="40%" style={{ stopColor: '#93C5FD', stopOpacity: 1 }} />
-                                <stop offset="100%" style={{ stopColor: '#60A5FA', stopOpacity: 1 }} />
-                            </radialGradient>
-                        </defs>
-                        {/* Top rim ellipse */}
-                        <ellipse cx="275" cy="22" rx="273" ry="22" fill="url(#topRim)" opacity="0.95"/>
-                        {/* Curved sides using quadratic bezier */}
-                        <path d="M 2 22 Q 90 130, 178 130 L 372 130 Q 460 130, 548 22 L 548 22 Q 460 42, 275 42 Q 90 42, 2 22 Z" 
-                              fill="url(#topGrad)" />
-                        {/* Inner shadows for depth */}
-                        <path d="M 2 22 Q 90 130, 178 130 L 200 130 Q 110 130, 25 22 Z" 
-                              fill="black" opacity="0.15"/>
-                        <path d="M 548 22 Q 460 130, 372 130 L 350 130 Q 440 130, 525 22 Z" 
-                              fill="white" opacity="0.12"/>
-                    </svg>
-                    <span className="funnel-text">JD OPTIMIZATION</span>
-                </div>
+        {/* Features Section - 3 Steps */}
+        <div className="max-w-[1100px] mx-auto">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4 text-slate-900">
+            3단계로 완성하는 <span className="text-blue-600">스마트 채용</span>
+          </h2>
+          <p className="text-gray-500 text-lg mb-16">
+            지원자 관리부터 AI 면접, 분석까지 한 곳에서
+          </p>
 
-                {/* Middle Layer */}
-                <div className="funnel-layer funnel-middle" 
-                     onMouseEnter={() => document.getElementById('desc-middle')?.classList.add('active')}
-                     onMouseLeave={() => document.getElementById('desc-middle')?.classList.remove('active')}
-                     style={{ width: '465px', height: '125px', marginBottom: '-5px', zIndex: 20 }}>
-                    <svg width="465" height="125" viewBox="0 0 465 125" xmlns="http://www.w3.org/2000/svg">
-                        <defs>
-                            <linearGradient id="midGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" style={{ stopColor: '#2563EB', stopOpacity: 1 }} />
-                                <stop offset="50%" style={{ stopColor: '#3B82F6', stopOpacity: 1 }} />
-                                <stop offset="100%" style={{ stopColor: '#2563EB', stopOpacity: 1 }} />
-                            </linearGradient>
-                            <radialGradient id="midRim" cx="50%" cy="50%">
-                                <stop offset="0%" style={{ stopColor: '#93C5FD', stopOpacity: 1 }} />
-                                <stop offset="40%" style={{ stopColor: '#60A5FA', stopOpacity: 1 }} />
-                                <stop offset="100%" style={{ stopColor: '#3B82F6', stopOpacity: 1 }} />
-                            </radialGradient>
-                        </defs>
-                        <ellipse cx="232.5" cy="20" rx="230" ry="20" fill="url(#midRim)" opacity="0.95"/>
-                        <path d="M 2.5 20 Q 75 125, 147.5 125 L 317.5 125 Q 390 125, 462.5 20 L 462.5 20 Q 390 38, 232.5 38 Q 75 38, 2.5 20 Z" 
-                              fill="url(#midGrad)" />
-                        <path d="M 2.5 20 Q 75 125, 147.5 125 L 167.5 125 Q 92 125, 22 20 Z" 
-                              fill="black" opacity="0.18"/>
-                        <path d="M 462.5 20 Q 390 125, 317.5 125 L 297.5 125 Q 373 125, 443 20 Z" 
-                              fill="white" opacity="0.1"/>
-                    </svg>
-                    <span className="funnel-text">AI SCREENING</span>
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Step 1: 지원자 UI */}
+            <div className="group relative h-[420px] rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.02] transition-all duration-300">
+              {/* Background with overlay */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-blue-800 to-blue-950"></div>
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(59,130,246,0.3),transparent_50%)]"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+              
+              {/* 실제 UI 미리보기 */}
+              <div className="absolute inset-0 p-6 opacity-30">
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 h-full">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-white font-bold text-sm">지원자 목록</h4>
+                    <div className="flex gap-2">
+                      <div className="w-6 h-6 bg-white/20 rounded"></div>
+                      <div className="w-6 h-6 bg-white/20 rounded"></div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {[92, 88, 85, 82].map((score, i) => (
+                      <div key={i} className="bg-white/20 rounded-lg p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-blue-600 rounded-full"></div>
+                          <div className="space-y-1">
+                            <div className="w-16 h-2 bg-white/60 rounded"></div>
+                            <div className="w-24 h-2 bg-white/30 rounded"></div>
+                          </div>
+                        </div>
+                        <div className="bg-blue-600 text-white text-xs px-2 py-1 rounded font-bold">{score}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+              </div>
 
-                {/* Bottom Layer */}
-                <div className="funnel-layer funnel-bottom" 
-                     onMouseEnter={() => document.getElementById('desc-bottom')?.classList.add('active')}
-                     onMouseLeave={() => document.getElementById('desc-bottom')?.classList.remove('active')}
-                     style={{ width: '370px', height: '115px', zIndex: 10 }}>
-                    <svg width="370" height="115" viewBox="0 0 370 115" xmlns="http://www.w3.org/2000/svg">
-                        <defs>
-                            <linearGradient id="botGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" style={{ stopColor: '#1D4ED8', stopOpacity: 1 }} />
-                                <stop offset="50%" style={{ stopColor: '#2563EB', stopOpacity: 1 }} />
-                                <stop offset="100%" style={{ stopColor: '#1D4ED8', stopOpacity: 1 }} />
-                            </linearGradient>
-                            <radialGradient id="botRim" cx="50%" cy="50%">
-                                <stop offset="0%" style={{ stopColor: '#60A5FA', stopOpacity: 1 }} />
-                                <stop offset="40%" style={{ stopColor: '#3B82F6', stopOpacity: 1 }} />
-                                <stop offset="100%" style={{ stopColor: '#2563EB', stopOpacity: 1 }} />
-                            </radialGradient>
-                        </defs>
-                        <ellipse cx="185" cy="18" rx="183" ry="18" fill="url(#botRim)" opacity="0.95"/>
-                        <path d="M 2 18 Q 60 115, 118 115 L 252 115 Q 310 115, 368 18 L 368 18 Q 310 34, 185 34 Q 60 34, 2 18 Z" 
-                              fill="url(#botGrad)" />
-                        <path d="M 2 18 Q 60 115, 118 115 L 135 115 Q 75 115, 20 18 Z" 
-                              fill="black" opacity="0.22"/>
-                        <path d="M 368 18 Q 310 115, 252 115 L 235 115 Q 295 115, 350 18 Z" 
-                              fill="white" opacity="0.08"/>
-                    </svg>
-                    <span className="funnel-text">SHORTLIST</span>
+              {/* Content */}
+              <div className="relative z-10 h-full flex flex-col justify-between p-8 text-white">
+                <div>
+                  <div className="inline-block px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-xs font-medium mb-4">
+                    인사 · 관리
+                  </div>
+                  <h3 className="text-2xl font-bold leading-tight mb-3">
+                    지원자 목록을<br />
+                    한눈에 확인하고<br />
+                    효율적으로 관리
+                  </h3>
                 </div>
+                <div className="space-y-1 text-sm text-white/80">
+                  <p>실시간 현황 파악 | 상태별 필터링 제공</p>
+                </div>
+              </div>
             </div>
-            </div>
-            
-            {/* Description Boxes */}
-            <div className="funnel-descriptions">
-                <div id="desc-top" className="funnel-description">
-                    <h4>JD 최적화</h4>
-                    <p>AI가 채용공고를 분석하여 최적의 인재를 찾을 수 있도록 개선합니다.</p>
-                    <ul>
-                        <li>직무 요구사항 명확화</li>
-                        <li>키워드 최적화로 검색 노출 증대</li>
-                        <li>매력적인 공고 문구 자동 생성</li>
-                    </ul>
-                </div>
-                
-                <div id="desc-middle" className="funnel-description">
-                    <h4>AI 스크리닝</h4>
-                    <p>수백 개의 지원서를 AI가 자동으로 분석하여 적합한 후보를 선별합니다.</p>
-                    <ul>
-                        <li>이력서 자동 파싱 및 분석</li>
-                        <li>직무 적합도 AI 평가</li>
-                        <li>허수 지원자 필터링</li>
-                    </ul>
-                </div>
-                
-                <div id="desc-bottom" className="funnel-description">
-                    <h4>최종 후보 선정</h4>
-                    <p>상위 매칭 후보들을 한눈에 확인하고 인터뷰를 진행하세요.</p>
-                    <ul>
-                        <li>Top 후보자 리스트 자동 생성</li>
-                        <li>종합 평가 리포트 제공</li>
-                        <li>일정 관리 및 알림</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
 
-        <h3 className="mt-20 text-2xl font-bold text-slate-800 tracking-tight">Unlock your Hiring Potential</h3>
-        <div className="flex gap-2.5 mt-4">
-            <div className="w-2 h-2 rounded-full bg-slate-800"></div>
-            <div className="w-2 h-2 rounded-full bg-slate-300"></div>
+            {/* Step 2: AI 대화 UI */}
+            <div className="group relative h-[420px] rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.02] transition-all duration-300">
+              {/* Background with overlay */}
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-950"></div>
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_50%,rgba(168,85,247,0.3),transparent_50%)]"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+              
+              {/* 실제 채팅 UI 미리보기 */}
+              <div className="absolute inset-0 p-6 opacity-30">
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 h-full flex flex-col">
+                  <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/20">
+                    <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">AI</div>
+                    <div className="text-white font-bold text-sm">WINNOW AI</div>
+                  </div>
+                  <div className="flex-1 space-y-3 overflow-hidden">
+                    <div className="flex gap-2">
+                      <div className="w-7 h-7 bg-purple-600 rounded-full flex-shrink-0"></div>
+                      <div className="bg-white/20 rounded-2xl rounded-tl-sm px-3 py-2 max-w-[70%]">
+                        <div className="w-32 h-2 bg-white/60 rounded mb-1"></div>
+                        <div className="w-24 h-2 bg-white/40 rounded"></div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <div className="bg-purple-600/60 rounded-2xl rounded-tr-sm px-3 py-2 max-w-[70%]">
+                        <div className="w-28 h-2 bg-white/80 rounded mb-1"></div>
+                        <div className="w-20 h-2 bg-white/60 rounded"></div>
+                      </div>
+                      <div className="w-7 h-7 bg-white/40 rounded-full flex-shrink-0"></div>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="w-7 h-7 bg-purple-600 rounded-full flex-shrink-0"></div>
+                      <div className="bg-white/20 rounded-2xl rounded-tl-sm px-3 py-2 max-w-[70%]">
+                        <div className="w-36 h-2 bg-white/60 rounded"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="relative z-10 h-full flex flex-col justify-between p-8 text-white">
+                <div>
+                  <div className="inline-block px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-xs font-medium mb-4">
+                    AI · 면접
+                  </div>
+                  <h3 className="text-2xl font-bold leading-tight mb-3">
+                    AI와 대화하며<br />
+                    지원자를 심층<br />
+                    평가하고 분석
+                  </h3>
+                </div>
+                <div className="space-y-1 text-sm text-white/80">
+                  <p>자동 질문 생성 | 실시간 답변 분석</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 3: 분석 표 */}
+            <div className="group relative h-[420px] rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.02] transition-all duration-300">
+              {/* Background with overlay */}
+              <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950"></div>
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.2),transparent_50%)]"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+              
+              {/* 실제 분석 대시보드 미리보기 */}
+              <div className="absolute inset-0 p-6 opacity-30">
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 h-full">
+                  <h4 className="text-white font-bold text-sm mb-4">지원자 분석</h4>
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    {[{ label: '총 지원', val: '24' }, { label: '서류통과', val: '12' }, { label: '최종', val: '5' }].map((stat, i) => (
+                      <div key={i} className="bg-white/20 rounded-lg p-3">
+                        <div className="text-white/60 text-xs mb-1">{stat.label}</div>
+                        <div className="text-white font-bold text-xl">{stat.val}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-2">
+                    <div className="bg-white/10 rounded p-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 bg-green-600 rounded"></div>
+                        <div className="w-20 h-2 bg-white/60 rounded"></div>
+                      </div>
+                      <div className="w-12 h-6 bg-green-600 rounded"></div>
+                    </div>
+                    <div className="bg-white/10 rounded p-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 bg-blue-600 rounded"></div>
+                        <div className="w-16 h-2 bg-white/60 rounded"></div>
+                      </div>
+                      <div className="w-12 h-6 bg-blue-600 rounded"></div>
+                    </div>
+                    <div className="bg-white/10 rounded p-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 bg-yellow-600 rounded"></div>
+                        <div className="w-24 h-2 bg-white/60 rounded"></div>
+                      </div>
+                      <div className="w-12 h-6 bg-yellow-600 rounded"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="relative z-10 h-full flex flex-col justify-between p-8 text-white">
+                <div>
+                  <div className="inline-block px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-xs font-medium mb-4">
+                    분석 · 통계
+                  </div>
+                  <h3 className="text-2xl font-bold leading-tight mb-3">
+                    데이터 기반으로<br />
+                    지원자를 비교하고<br />
+                    최적 인재 선택
+                  </h3>
+                </div>
+                <div className="space-y-1 text-sm text-white/80">
+                  <p>종합 분석표 | 시각화된 리포트</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

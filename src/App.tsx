@@ -166,7 +166,11 @@ const App = () => {
         return <SignUpPage onLogin={handleLogin} onNavigateToLogin={() => setCurrentPage('login')} />;
       }
       if (currentPage === 'login') {
-        return <LoginPage onLogin={handleLogin} onNavigateToSignUp={() => setCurrentPage('signup')} />;
+        return <LoginPage 
+          onLogin={handleLogin} 
+          onNavigateToSignUp={() => setCurrentPage('signup')}
+          onBackToLanding={() => setCurrentPage('landing')}
+        />;
       }
       return <LandingPage onLogin={() => setCurrentPage('login')} />;
   }

@@ -2,13 +2,15 @@ import { FONTS } from '@/constants/fonts';
 import { auth } from '@/config/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 
 interface LoginPageProps {
     onLogin: () => void;
     onNavigateToSignUp?: () => void;
+    onBackToLanding?: () => void;
 }
 
-export const LoginPage = ({ onLogin, onNavigateToSignUp }: LoginPageProps) => {
+export const LoginPage = ({ onLogin, onNavigateToSignUp, onBackToLanding }: LoginPageProps) => {
         const [email, setEmail] = useState('');
         const [password, setPassword] = useState('');
         const [loading, setLoading] = useState(false);
@@ -54,6 +56,16 @@ export const LoginPage = ({ onLogin, onNavigateToSignUp }: LoginPageProps) => {
                                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-extrabold text-sm shadow-lg shadow-blue-600/20">W</div>
                                 <span className="font-extrabold text-xl tracking-tight text-slate-900">WINNOW</span>
                         </div>
+
+                        {onBackToLanding && (
+                                <button
+                                        onClick={onBackToLanding}
+                                        className="absolute top-10 right-10 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors font-medium text-sm"
+                                >
+                                        <ArrowLeft size={20} />
+                                        <span>랜딩페이지로</span>
+                                </button>
+                        )}
 
                         <div className="w-full max-w-[400px] relative z-10">
                                 <h1 className="text-[32px] font-extrabold text-center mb-12 text-slate-900">로그인</h1>
