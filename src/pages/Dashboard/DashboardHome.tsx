@@ -93,14 +93,21 @@ export const DashboardHome = ({ onNavigate }: DashboardHomeProps) => (
                 </div>
             ))}
             
+            {/* ===== <AI 스크리닝 리포트> ===== */}
             {/* Dark Report Card */}
             <div className="bg-[#111827] p-7 rounded-2xl text-white flex flex-col justify-between shadow-xl shadow-gray-200">
                 <div>
                     <div className="text-[15px] font-bold mb-1">AI 스크리닝 리포트</div>
                     <p className="text-gray-400 text-xs">최근 지원자 분석이 완료되었습니다.</p>
                 </div>
-                <button className="w-full bg-white/10 hover:bg-white/15 transition-colors py-3 rounded-lg text-[13px] font-medium text-center border border-white/5 backdrop-blur-sm">리포트 확인하기</button>
+                <button 
+                    onClick={() => onNavigate('applicants')}
+                    className="w-full bg-white/10 hover:bg-white/15 transition-colors py-3 rounded-lg text-[13px] font-medium text-center border border-white/5 backdrop-blur-sm"
+                >
+                    리포트 확인하기
+                </button>
             </div>
+            {/* ===== </AI 스크리닝 리포트> ===== */}
         </div>
 
         {/* Active Jobs List */}
