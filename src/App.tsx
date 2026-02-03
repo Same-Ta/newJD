@@ -49,12 +49,25 @@ const App = () => {
     return null;
   };
 
+  const [currentPage, setCurrentPage] = useState('landing');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [selectedJdId, setSelectedJdId] = useState<string | undefined>(undefined);
+  const [init, setInit] = useState(false);
+  const [userName, setUserName] = useState('채용 담당자');
+  const [userEmail, setUserEmail] = useState('');
+  const [userInitials, setUserInitials] = useState('U');
+
   // 초기 URL 확인
   const initialJdId = getJdIdFromUrl();
-  const [currentPage, setCurrentPage] = useState(initialJdId ? 'jd-detail' : 'landing');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [selectedJdId, setSelectedJdId] = useState<string | undefined>(initialJdId || undefined);
-  const [init, setInit] = useState(false);
+  const [currentPageState] = useState(initialJdId ? 'jd-detail' : 'landing');
+  const [selectedJdIdState] = useState<string | undefined>(initialJdId || undefined);
+
+  useEffect(() => {
+    if (initialJdId && !selectedJdId) {
+      setSelectedJdId(initialJdId);
+      setCurrentPage('jd-detail');
+    }
+  }, []);
 
   // Firebase Auth 상태 감지
   useEffect(() => {
@@ -62,6 +75,19 @@ const App = () => {
       if (user) {
         console.log('로그인 상태 확인:', user.email);
         setIsLoggedIn(true);
+        
+        // 사용자 정보 설정
+        const name = user.displayName || user.email?.split('@')[0] || '채용 담당자';
+        setUserName(name);
+        setUserEmail(user.email || '');
+        
+        // 이니셜 생성 (이름의 첫 글자 또는 이메일의 첫 두 글자)
+        if (user.displayName) {
+          setUserInitials(user.displayName.substring(0, 1).toUpperCase());
+        } else if (user.email) {
+          setUserInitials(user.email.substring(0, 2).toUpperCase());
+        }
+        
         // 로그인되어 있고 landing 페이지에 있으며 JD 상세 페이지가 아닐 때만 dashboard로 이동
         if (currentPage === 'landing' && !getJdIdFromUrl()) {
           setCurrentPage('dashboard');
@@ -257,10 +283,10 @@ const App = () => {
              <SidebarItem icon={Settings} label="계정 설정" active={false} onClick={() => {}} />
              <div className="mt-4 px-4 pt-5 border-t border-gray-50">
                  <div className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition-colors cursor-pointer group">
-                     <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs border border-blue-200">KH</div>
+                     <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs border border-blue-200">{userInitials}</div>
                      <div className="flex-1 min-w-0">
-                         <div className="text-[13px] font-bold text-gray-800 truncate">김윈노</div>
-                         <div className="text-[11px] text-gray-400 truncate">guest@winnow.ai</div>
+                         <div className="text-[13px] font-bold text-gray-800 truncate">{userName}</div>
+                         <div className="text-[11px] text-gray-400 truncate">{userEmail}</div>
                      </div>
                      <LogOut size={16} className="text-gray-300 group-hover:text-red-500 transition-colors" onClick={(e) => { e.stopPropagation(); handleLogout(); }}/>
                  </div>
