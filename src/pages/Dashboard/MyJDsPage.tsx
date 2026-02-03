@@ -17,7 +17,7 @@ interface JDItem {
   status?: string;
 }
 
-export const MyJDsPage = ({ onNavigate, onNavigateToJD }: MyJDsPageProps) => {
+export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
   const [jdList, setJdList] = useState<JDItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -136,14 +136,9 @@ export const MyJDsPage = ({ onNavigate, onNavigateToJD }: MyJDsPageProps) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {jdList.map((job) => {
           // Firestore Timestamp를 yyyy.mm.dd 형식으로 변환
-          let formattedDate = '';
           let dDay = '';
           if (job.createdAt) {
             const date = job.createdAt?.toDate ? job.createdAt.toDate() : new Date(job.createdAt);
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            formattedDate = `${year}.${month}.${day}`;
             
             // D-day 계산 (30일 후 마감으로 가정)
             const deadline = new Date(date);

@@ -1,4 +1,4 @@
-import { ChevronRight, MessageSquare, X, FileText, CheckCircle2, Circle } from 'lucide-react';
+import { ChevronRight, MessageSquare, X, FileText } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { generateJD } from '../../utils/gemini';
 import { auth, db } from '../../config/firebase';

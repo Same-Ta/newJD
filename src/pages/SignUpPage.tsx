@@ -9,7 +9,7 @@ interface SignUpPageProps {
     onNavigateToLogin: () => void;
 }
 
-export const SignUpPage = ({ onLogin, onNavigateToLogin }: SignUpPageProps) => {
+export const SignUpPage = ({ onNavigateToLogin }: SignUpPageProps) => {
         const [email, setEmail] = useState('');
         const [password, setPassword] = useState('');
         const [confirmPassword, setConfirmPassword] = useState('');
