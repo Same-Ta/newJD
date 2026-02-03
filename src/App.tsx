@@ -24,9 +24,36 @@ import { auth } from '@/config/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 const App = () => {
-  const [currentPage, setCurrentPage] = useState('landing');
+  // URL에서 JD ID 추출 함수
+  const getJdIdFromUrl = () => {
+    // 1. 해시 라우팅 확인: #/jd/[id]
+    const hash = window.location.hash;
+    if (hash.startsWith('#/jd/')) {
+      return hash.replace('#/jd/', '');
+    }
+    
+    // 2. 경로 라우팅 확인: /jd/[id]
+    const pathname = window.location.pathname;
+    const pathMatch = pathname.match(/^\/jd\/([^\/]+)/);
+    if (pathMatch) {
+      return pathMatch[1];
+    }
+    
+    // 3. 쿼리 파라미터 확인: ?jdId=[id]
+    const params = new URLSearchParams(window.location.search);
+    const jdIdParam = params.get('jdId');
+    if (jdIdParam) {
+      return jdIdParam;
+    }
+    
+    return null;
+  };
+
+  // 초기 URL 확인
+  const initialJdId = getJdIdFromUrl();
+  const [currentPage, setCurrentPage] = useState(initialJdId ? 'jd-detail' : 'landing');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [selectedJdId, setSelectedJdId] = useState<string | undefined>(undefined);
+  const [selectedJdId, setSelectedJdId] = useState<string | undefined>(initialJdId || undefined);
   const [init, setInit] = useState(false);
 
   // Firebase Auth 상태 감지
@@ -35,8 +62,8 @@ const App = () => {
       if (user) {
         console.log('로그인 상태 확인:', user.email);
         setIsLoggedIn(true);
-        // 로그인되어 있고 landing 페이지에 있다면 dashboard로 이동
-        if (currentPage === 'landing') {
+        // 로그인되어 있고 landing 페이지에 있으며 JD 상세 페이지가 아닐 때만 dashboard로 이동
+        if (currentPage === 'landing' && !getJdIdFromUrl()) {
           setCurrentPage('dashboard');
         }
       } else {
@@ -53,13 +80,11 @@ const App = () => {
     return () => unsubscribe();
   }, [currentPage]);
 
-  // URL 해시를 통한 공개 링크 처리
+  // URL 변경 감지 및 공개 링크 처리
   useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash;
-      // #/jd/[id] 형식의 URL 처리
-      if (hash.startsWith('#/jd/')) {
-        const jdId = hash.replace('#/jd/', '');
+    const handleUrlChange = () => {
+      const jdId = getJdIdFromUrl();
+      if (jdId) {
         console.log('공개 JD 링크 접근:', jdId);
         setSelectedJdId(jdId);
         setCurrentPage('jd-detail');
@@ -67,11 +92,17 @@ const App = () => {
     };
 
     // 초기 로드 시 체크
-    handleHashChange();
+    handleUrlChange();
     
     // 해시 변경 감지
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    // popstate 이벤트로 경로 변경 감지
+    window.addEventListener('popstate', handleUrlChange);
+    
+    return () => {
+      window.removeEventListener('hashchange', handleUrlChange);
+      window.removeEventListener('popstate', handleUrlChange);
+    };
   }, []);
 
   const handleLogin = () => {

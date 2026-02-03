@@ -64,13 +64,31 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     }, [jdId]);
 
     const handleShare = async () => {
+        if (!jdId) return;
+        
         try {
-            const currentUrl = window.location.href;
-            await navigator.clipboard.writeText(currentUrl);
-            alert('링크가 클립보드에 복사되었습니다!');
+            // 베이스 URL 가져오기 (origin)
+            const baseUrl = window.location.origin;
+            
+            // 공유 링크 생성 (세 가지 형식 모두 지원)
+            // 1. 해시 라우팅 (가장 안정적)
+            const shareUrl = `${baseUrl}/#/jd/${jdId}`;
+            
+            // 또는 경로 기반 라우팅 (vercel에서 잘 작동)
+            // const shareUrl = `${baseUrl}/jd/${jdId}`;
+            
+            // 또는 쿼리 파라미터 방식
+            // const shareUrl = `${baseUrl}?jdId=${jdId}`;
+            
+            await navigator.clipboard.writeText(shareUrl);
+            console.log('공유 링크 생성:', shareUrl);
+            alert('공고 링크가 클립보드에 복사되었습니다!\n지원자에게 이 링크를 공유하세요.');
         } catch (err) {
             console.error('클립보드 복사 실패:', err);
-            alert('링크 복사에 실패했습니다.');
+            // fallback: 링크를 수동으로 보여주기
+            const baseUrl = window.location.origin;
+            const shareUrl = `${baseUrl}/#/jd/${jdId}`;
+            prompt('아래 링크를 복사하세요:', shareUrl);
         }
     };
 
