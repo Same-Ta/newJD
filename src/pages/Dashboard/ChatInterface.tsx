@@ -212,14 +212,25 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         console.log('공고 게시 시작...', currentJD);
 
         try {
+            // undefined 값을 빈 문자열이나 빈 배열로 변환
             const jobData = {
-                ...currentJD,
                 userId: user.uid,
                 createdAt: serverTimestamp(),
                 status: 'published',
-                title: currentJD.title,
+                title: currentJD.title || '',
                 jobRole: currentJD.jobRole || '',
-                company: currentJD.company || ''
+                company: currentJD.company || '',
+                companyName: currentJD.companyName || '',
+                teamName: currentJD.teamName || '',
+                location: currentJD.location || '',
+                scale: currentJD.scale || '',
+                vision: currentJD.vision || '',
+                mission: currentJD.mission || '',
+                techStacks: currentJD.techStacks || [],
+                responsibilities: currentJD.responsibilities || [],
+                requirements: currentJD.requirements || [],
+                preferred: currentJD.preferred || [],
+                benefits: currentJD.benefits || []
             };
 
             console.log('저장할 데이터:', jobData);
