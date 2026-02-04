@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Filter, Download, MoreHorizontal, X, Sparkles, FileText } from 'lucide-react';
 import { db, auth } from '@/config/firebase';
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, addDoc, Timestamp } from 'firebase/firestore';
 
 interface Application {
     id: string;
@@ -113,21 +113,74 @@ export const ApplicantList = () => {
             let answersText = ``;
             
             if (application.requirementAnswers && application.requirementAnswers.length > 0) {
-                answersText += `[자격 요건]\n`;
+                answersText += `[자격 요건 답변]\n`;
                 application.requirementAnswers.forEach(a => {
-                    answersText += `- ${a.question}: ${a.answer === 'Y' ? '충족함' : '미충족'}\n`;
+                    const status = a.answer === 'Y' ? '✓ 충족' : '✗ 미충족';
+                    const detail = a.detail ? ` - 상세: ${a.detail}` : '';
+                    answersText += `${status} ${a.question}${detail}\n`;
                 });
                 answersText += `\n`;
             }
             
             if (application.preferredAnswers && application.preferredAnswers.length > 0) {
-                answersText += `[우대 사항]\n`;
+                answersText += `[우대 사항 답변]\n`;
                 application.preferredAnswers.forEach(a => {
-                    answersText += `- ${a.question}: ${a.answer === 'Y' ? '충족함' : '미충족'}\n`;
+                    const status = a.answer === 'Y' ? '✓ 충족' : '✗ 미충족';
+                    const detail = a.detail ? ` - 상세: ${a.detail}` : '';
+                    answersText += `${status} ${a.question}${detail}\n`;
                 });
             }
 
-            const prompt = `다음은 ${application.applicantName}님이 ${application.jdTitle} 포지션에 지원하면서 작성한 답변입니다.\n\n${answersText}\n\n위 내용을 분석하여 다음 항목으로 요약해주세요:\n1. 지원자의 핵심 강점 (2-3줄)\n2. 충족한 자격요건 및 우대사항 요약\n3. 포지션 적합도 평가 (2-3줄)\n4. 종합 의견 (2-3줄)\n\n전문적이고 객관적인 톤으로 작성해주세요.`;
+            const prompt = `[시스템 역할]
+당신은 스타트업과 창업 팀의 초기 멤버를 선발하는 전문 채용 컨설턴트입니다. 지원자의 답변을 바탕으로 **[역량(Skill)]**과 **[의지(Will)]**를 분석하여 4가지 유형으로 분류하고, 우리 조직과의 적합성을 평가하세요.
+
+[분석 기준 - 2x2 Matrix]
+- **Star (High Skill / High Will)**: 구체적인 성과 지표를 제시하며, 스스로 문제를 정의하고 해결책을 찾아 실행하는 '압도적 실행가'
+- **Expert (High Skill / Low Will)**: 기술적 수준은 높으나 수동적이며, 보상이나 조건에 민감하고 팀의 비전보다는 개인의 과업에 집중하는 '냉소적 전문가'
+- **Prospect (Low Skill / High Will)**: 현재 기술은 부족하나 학습 속도가 빠르고, 팀의 성장을 위해 궂은일도 마다하지 않는 '폭발적 성장주'
+- **Risk (Low Skill / Low Will)**: 답변이 모호하고 구체적 경험이 없으며, 개선 의지나 직무에 대한 이해도가 모두 낮은 '비적합 대상'
+
+---
+
+[지원자 정보]
+- 이름: ${application.applicantName}
+- 포지션: ${application.jdTitle}
+
+[지원자 답변]
+${answersText}
+
+---
+
+위 내용을 바탕으로 아래 형식으로 분석 결과를 작성해주세요:
+
+## 🔍 지원자 심층 분석 결과: ${application.applicantName}
+
+### 1. 사분면 위치 및 종합 평가
+> **분류: [Star / Expert / Prospect / Risk]**
+> **한줄 요약:** (핵심 특징을 한 문장으로)
+
+### 2. 역량/의지 세부 판별 근거
+| 항목 | 평가 | 핵심 근거 |
+|:---|:---|:---|
+| **직무 역량** | 상/중/하 | (지원자 답변 기반) |
+| **문제 해결** | 상/중/하 | (구체적 근거) |
+| **학습 의지** | 상/중/하 | (구체적 근거) |
+| **협업 태도** | 상/중/하 | (구체적 근거) |
+
+### 3. 조직 적합도 체크리스트
+- **스타트업 마인드셋:** [예/아니오] - (근거)
+- **자기 주도성:** [예/아니오] - (근거)
+- **커뮤니케이션:** [예/아니오] - (근거)
+
+### 4. 채용 가이드 및 리스크 관리
+**💡 강점:** (이 사람이 합류했을 때 팀에 가져올 긍정적 변화)
+
+**⚠️ 주의점:** (관리 시 주의해야 할 리스크나 매니징 포인트)
+
+**🙋 추가 질문 추천:** (부족한 부분을 확인하기 위해 면접 시 필요한 질문 2-3개)
+
+---
+마크다운 형식으로 깔끔하게 작성해주세요.`;
 
             // fetch API 직접 사용
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
@@ -173,6 +226,154 @@ export const ApplicantList = () => {
         setAiSummary('');
     };
 
+    // 테스트 지원자 추가 함수
+    const addTestApplicants = async () => {
+        try {
+            const currentUser = auth.currentUser;
+            if (!currentUser) {
+                alert('로그인이 필요합니다.');
+                return;
+            }
+
+            const testApplicants = [
+                {
+                    recruiterId: currentUser.uid,
+                    applicantName: '김준혁',
+                    applicantEmail: 'junhyuk.kim@example.com',
+                    applicantPhone: '010-1234-5678',
+                    applicantGender: '남성',
+                    jdTitle: '프론트엔드 개발자',
+                    requirementAnswers: [
+                        { 
+                            question: 'React 3년 이상 경험이 있나요?', 
+                            answer: 'Y',
+                            checked: true,
+                            detail: '스타트업에서 React로 전자상거래 플랫폼을 처음부터 구축했습니다. 월 거래액 5억 달성에 기여했고, 성능 최적화로 로딩 속도를 70% 개선했습니다.'
+                        },
+                        { 
+                            question: 'TypeScript 사용 경험이 있나요?', 
+                            answer: 'Y',
+                            checked: true,
+                            detail: '모든 프로젝트에서 TypeScript를 사용합니다. 타입 안정성 덕분에 런타임 에러가 80% 감소했습니다.'
+                        },
+                        { 
+                            question: '팀 프로젝트 리드 경험이 있나요?', 
+                            answer: 'Y',
+                            checked: true,
+                            detail: '3명의 주니어 개발자를 이끌며 신규 서비스를 3개월 만에 출시했습니다. 주간 코드 리뷰와 페어 프로그래밍을 주도했습니다.'
+                        },
+                        { 
+                            question: 'UI/UX 디자인에 대한 이해가 있나요?', 
+                            answer: 'Y',
+                            checked: true,
+                            detail: '디자이너와 긴밀히 협업하며 사용자 경험을 개선했습니다. A/B 테스트를 통해 전환율을 25% 향상시켰습니다.'
+                        }
+                    ],
+                    preferredAnswers: [
+                        { 
+                            question: 'Next.js 사용 경험이 있나요?', 
+                            answer: 'Y',
+                            checked: true,
+                            detail: 'SEO가 중요한 블로그 플랫폼을 Next.js로 구축했습니다. SSR/SSG를 활용해 검색 노출을 3배 향상시켰습니다.'
+                        },
+                        { 
+                            question: '대규모 트래픽 처리 경험이 있나요?', 
+                            answer: 'Y',
+                            checked: true,
+                            detail: '동시접속자 1만명 이벤트를 성공적으로 처리했습니다. Redis 캐싱과 CDN 최적화를 도입했습니다.'
+                        },
+                        { 
+                            question: '성능 최적화 경험이 있나요?', 
+                            answer: 'Y',
+                            checked: true,
+                            detail: 'Lighthouse 점수를 45점에서 95점으로 개선했습니다. Code splitting과 lazy loading을 적극 활용했습니다.'
+                        },
+                        { 
+                            question: '애니메이션 구현 경험이 있나요?', 
+                            answer: 'Y',
+                            checked: true,
+                            detail: 'Framer Motion으로 인터랙티브한 UI를 구현했고, 사용자 체류시간이 40% 증가했습니다.'
+                        }
+                    ],
+                    appliedAt: Timestamp.now(),
+                    status: '검토중'
+                },
+                {
+                    recruiterId: currentUser.uid,
+                    applicantName: '이서현',
+                    applicantEmail: 'seohyun.lee@example.com',
+                    applicantPhone: '010-9876-5432',
+                    applicantGender: '여성',
+                    jdTitle: '백엔드 개발자',
+                    requirementAnswers: [
+                        { 
+                            question: 'Node.js/Express 3년 이상 경험이 있나요?', 
+                            answer: 'N',
+                            checked: false,
+                            detail: 'Node.js는 1년 정도 사용했습니다. 현재 온라인 강의를 통해 학습 중이며, 토이 프로젝트로 RESTful API를 구축하고 있습니다.'
+                        },
+                        { 
+                            question: '데이터베이스 설계 경험이 있나요?', 
+                            answer: 'N',
+                            checked: false,
+                            detail: '간단한 CRUD 작업은 해봤지만 대규모 DB 설계 경험은 없습니다. MySQL 기본은 알고 있고, 정규화에 대해 공부 중입니다.'
+                        },
+                        { 
+                            question: 'API 설계 및 문서화 경험이 있나요?', 
+                            answer: 'Y',
+                            checked: true,
+                            detail: '학교 프로젝트에서 Swagger를 사용해 API 문서를 작성했습니다. RESTful 원칙을 준수하려고 노력했습니다.'
+                        },
+                        { 
+                            question: 'Git/GitHub 협업 경험이 있나요?', 
+                            answer: 'Y',
+                            checked: true,
+                            detail: '팀 프로젝트에서 Git Flow를 사용했고, Pull Request 리뷰를 통해 코드 품질을 관리했습니다.'
+                        }
+                    ],
+                    preferredAnswers: [
+                        { 
+                            question: 'Docker/Kubernetes 경험이 있나요?', 
+                            answer: 'N',
+                            checked: false,
+                            detail: 'Docker 기본 개념은 알고 있지만 실무에서 사용해본 적은 없습니다. 최근 온라인 강의로 학습을 시작했습니다.'
+                        },
+                        { 
+                            question: 'AWS 클라우드 경험이 있나요?', 
+                            answer: 'N',
+                            checked: false,
+                            detail: 'EC2에 간단한 서버를 배포해본 정도입니다. 앞으로 AWS 자격증 공부를 계획하고 있습니다.'
+                        },
+                        { 
+                            question: '테스트 코드 작성 경험이 있나요?', 
+                            answer: 'Y',
+                            checked: true,
+                            detail: 'Jest를 사용해 단위 테스트를 작성했습니다. TDD의 중요성을 느끼고 있고, 테스트 커버리지 향상에 관심이 많습니다.'
+                        },
+                        { 
+                            question: '대용량 트래픽 처리 경험이 있나요?', 
+                            answer: 'N',
+                            checked: false,
+                            detail: '아직 실무 경험은 없지만, 이론적으로 공부하고 있습니다. 캐싱, 로드밸런싱 등에 대해 학습 중입니다.'
+                        }
+                    ],
+                    appliedAt: Timestamp.now(),
+                    status: '검토중'
+                }
+            ];
+
+            for (const testApp of testApplicants) {
+                await addDoc(collection(db, 'applications'), testApp);
+            }
+            
+            alert(`${testApplicants.length}명의 테스트 지원자가 추가되었습니다!`);
+            await fetchApplications();
+        } catch (error) {
+            console.error('테스트 지원자 추가 실패:', error);
+            alert('테스트 지원자 추가에 실패했습니다.');
+        }
+    };
+
     const filteredApplications = statusFilter === 'all'
         ? applications
         : applications.filter(app => app.status === statusFilter);
@@ -198,6 +399,12 @@ export const ApplicantList = () => {
                 <p className="text-xs text-gray-400 mt-1">총 {filteredApplications.length}명의 지원자가 있습니다.</p>
              </div>
              <div className="flex gap-2 relative">
+                 <button 
+                     onClick={addTestApplicants}
+                     className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-xs font-bold text-white transition-colors"
+                 >
+                     <Sparkles size={16}/> 테스트 지원자 추가
+                 </button>
                  <button 
                      onClick={() => setShowFilterMenu(!showFilterMenu)}
                      className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-medium text-gray-600 transition-colors"
