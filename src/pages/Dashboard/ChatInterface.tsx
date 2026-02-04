@@ -25,6 +25,7 @@ interface ChatMessage {
     role: 'user' | 'ai';
     text: string;
     timestamp: string;
+    options?: string[];
 }
 
 interface ChatInterfaceProps {
@@ -55,6 +56,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             timestamp: '오전 10:23'
         }
     ]);
+    const [waitingForCustomInput, setWaitingForCustomInput] = useState(false);
     const [currentJD, setCurrentJD] = useState<CurrentJD>({
         title: '',
         jobRole: '',
@@ -303,19 +305,38 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         }
     };
 
-    const handleSend = async () => {
-        if (!input.trim() || isLoading) return;
+    const handleSend = async (selectedOption?: string) => {
+        const messageText = selectedOption || input.trim();
+        if (!messageText || isLoading) return;
 
         const userMessage: ChatMessage = {
             role: 'user',
-            text: input,
+            text: messageText,
             timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
         };
 
         setMessages(prev => [...prev, userMessage]);
-        const currentInput = input;
-        setInput('');
+        const currentInput = messageText;
+        if (!selectedOption) setInput('');
         setIsLoading(true);
+
+        // "기타" 선택 시 추가 입력 대기
+        if (selectedOption === '기타') {
+            const followUpMessage: ChatMessage = {
+                role: 'ai',
+                text: '구체적으로 어떻게 하시나요? 자유롭게 답변해주세요.',
+                timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+            };
+            setMessages(prev => [...prev, followUpMessage]);
+            setWaitingForCustomInput(true);
+            setIsLoading(false);
+            return;
+        }
+
+        // 기타 선택 후 사용자 입력인 경우
+        if (waitingForCustomInput) {
+            setWaitingForCustomInput(false);
+        }
 
         try {
             // messages 상태를 Gemini API 형식으로 변환
@@ -327,13 +348,42 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             // generateJD 호출 - 항상 { aiResponse, jdData } 형태로 반환됨
             const response = await generateJD(currentInput, conversationHistory);
             
+            // 선택지가 필요한 질문 감지
+            let aiOptions: string[] | undefined;
+            const questionPatterns = [
+                // 동아리/기업 공통
+                { pattern: /주.*몷.*회|활동.*빈도|스터디.*횟수|모임.*빈도/i, options: ['주 1회', '주 2회', '주 3회', '주 4회 이상', '기타'] },
+                { pattern: /팀.*규모|팀.*크기|멤버.*수|인원.*규모/i, options: ['1-5명', '6-10명', '11-20명', '21명 이상', '기타'] },
+                { pattern: /활동.*기간|총.*기간|참여.*기간/i, options: ['1개월 이하', '1-3개월', '3-6개월', '6개월 이상', '기타'] },
+                { pattern: /위치|지역|장소/i, options: ['온라인', '오프라인', '하이브리드', '상황에 따라', '기타'] },
+                
+                // 기업 전용
+                { pattern: /근무.*시간|근무.*형태|출근|근무제/i, options: ['주 5일 (09:00-18:00)', '주 5일 (자율 출퇴근)', '주 4.5일', '자율 근무', '기타'] },
+                { pattern: /경력|연차|년차|경험/i, options: ['신입', '1-3년', '4-7년', '8년 이상', '기타'] },
+                { pattern: /급여|연봉|compensation|대우/i, options: ['3000만원 이하', '3000-5000만원', '5000-7000만원', '7000만원 이상', '기타'] },
+                { pattern: /복지|혜택|베네피트/i, options: ['연차4000+', '건강검진', '식대/간식 제공', '교육비 지원', '기타'] },
+                
+                // 동아리 전용
+                { pattern: /학년|학번|학기/i, options: ['1학년', '2학년', '3학년', '4학년+', '기타'] },
+                { pattern: /활동.*분야|분야|파트/i, options: ['기획/운영', '개발/기술', '디자인', '마케팅/홈보', '기타'] },
+                { pattern: /참가비|활동비|지원금/i, options: ['없음', '10만원 이하', '10-20만원', '20만원 이상', '기타'] }
+            ];
+
+            for (const { pattern, options } of questionPatterns) {
+                if (pattern.test(response.aiResponse)) {
+                    aiOptions = options;
+                    break;
+                }
+            }
+            
             // 1. 채팅 메시지 추가: aiResponse 필드 사용
             const chatMessageText = response.aiResponse || '응답을 받았습니다.';
             
             const aiMessage: ChatMessage = {
                 role: 'ai',
                 text: chatMessageText,
-                timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+                timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+                options: aiOptions
             };
             
             setMessages(prev => [...prev, aiMessage]);
@@ -411,24 +461,42 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 
                 <div className="flex-1 p-5 space-y-6 overflow-y-auto scrollbar-hide bg-[#F8FAFC]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                     {messages.map((msg, idx) => (
-                        <div key={idx} className="flex gap-3">
-                            {msg.role === 'ai' && (
-                                <div className="w-8 h-8 bg-blue-100 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-blue-600 border border-blue-200">AI</div>
-                            )}
-                            <div className={`space-y-1 max-w-[260px] ${msg.role === 'user' ? 'ml-auto' : ''}`}>
-                                <div className={`p-3.5 rounded-2xl text-[13px] shadow-sm border leading-relaxed ${
-                                    msg.role === 'ai' 
-                                        ? 'bg-white rounded-tl-none text-gray-700 border-gray-100' 
-                                        : 'bg-blue-600 rounded-tr-none text-white border-blue-600'
-                                }`}>
-                                    {msg.role === 'ai' ? (
-                                        <span dangerouslySetInnerHTML={{ __html: msg.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>') }} />
-                                    ) : (
-                                        msg.text
-                                    )}
+                        <div key={idx} className="flex gap-3 flex-col">
+                            <div className="flex gap-3">
+                                {msg.role === 'ai' && (
+                                    <div className="w-8 h-8 bg-blue-100 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-blue-600 border border-blue-200">AI</div>
+                                )}
+                                <div className={`space-y-1 max-w-[260px] ${msg.role === 'user' ? 'ml-auto' : ''}`}>
+                                    <div className={`p-3.5 rounded-2xl text-[13px] shadow-sm border leading-relaxed ${
+                                        msg.role === 'ai' 
+                                            ? 'bg-white rounded-tl-none text-gray-700 border-gray-100' 
+                                            : 'bg-blue-600 rounded-tr-none text-white border-blue-600'
+                                    }`}>
+                                        {msg.role === 'ai' ? (
+                                            <span dangerouslySetInnerHTML={{ __html: msg.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>') }} />
+                                        ) : (
+                                            msg.text
+                                        )}
+                                    </div>
+                                    <div className={`text-[10px] text-gray-400 ${msg.role === 'user' ? 'text-right pr-1' : 'pl-1'}`}>{msg.timestamp}</div>
                                 </div>
-                                <div className={`text-[10px] text-gray-400 ${msg.role === 'user' ? 'text-right pr-1' : 'pl-1'}`}>{msg.timestamp}</div>
                             </div>
+                            
+                            {/* 선택지 버튼 */}
+                            {msg.role === 'ai' && msg.options && (
+                                <div className="flex flex-col gap-2 ml-11">
+                                    {msg.options.map((option, optIdx) => (
+                                        <button
+                                            key={optIdx}
+                                            onClick={() => handleSend(option)}
+                                            disabled={isLoading}
+                                            className="px-4 py-2.5 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-400 rounded-lg text-[13px] font-medium text-gray-700 hover:text-blue-600 transition-all text-left disabled:opacity-50"
+                                        >
+                                            {option}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     ))}
                     {isLoading && (
@@ -454,7 +522,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                             className="w-full pl-4 pr-12 py-3.5 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:border-blue-500 focus:bg-white transition-all text-[13px] font-medium placeholder:text-gray-400 shadow-inner"
                         />
                         <button 
-                            onClick={handleSend}
+                            onClick={() => handleSend()}
                             disabled={isLoading}
                             className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white hover:bg-blue-700 transition-colors shadow-md disabled:opacity-50"
                         >
