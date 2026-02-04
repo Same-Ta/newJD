@@ -398,13 +398,13 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     };
 
     return (
-        <div className="flex bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden w-full gap-1" style={{ height: 'calc(100% - 0px)', zoom: '0.75'}}>
+        <div className="flex bg-gray-100 rounded-2xl border border-gray-200 shadow-xl overflow-hidden w-full gap-3" style={{ height: 'calc(100% - 0px)', zoom: '0.75'}}>
             {/* Chat Area - Left */}
             <div className="w-[40%] flex flex-col bg-white rounded-l-2xl border border-gray-200 shadow-sm">
-                <div className="p-5 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-white flex justify-between items-center h-[70px]">
-                    <div className="flex items-center gap-2.5 font-bold text-[16px] text-gray-900">
-                        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-md"><MessageSquare size={16} fill="white"/></div>
-                        채팅
+                <div className="p-5 border-b border-gray-200 bg-white flex justify-between items-center h-[70px]">
+                    <div className="flex items-center gap-2.5 font-bold text-[15px] text-gray-800">
+                        <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-sm"><MessageSquare size={14} fill="white"/></div>
+                        JD 생성 매니저
                     </div>
                     <X size={18} className="text-gray-400 cursor-pointer hover:text-gray-600"/>
                 </div>
@@ -468,10 +468,9 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             <div className="flex-1 bg-white flex relative overflow-hidden rounded-r-2xl border border-gray-200 shadow-sm">
                 
                 {/* Preview Header */}
-                <div className="absolute top-0 left-0 right-0 h-[70px] bg-gradient-to-r from-white to-purple-50 border-b-2 border-gray-200 flex items-center px-6 z-10">
-                    <div className="flex items-center gap-2.5 font-bold text-[16px] text-gray-900">
-                        <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white shadow-md"><FileText size={16}/></div>
-                        미리보기
+                <div className="absolute top-0 left-0 right-0 h-[70px] bg-white border-b border-gray-200 flex items-center px-6 z-10">
+                    <div className="flex items-center gap-2.5 font-bold text-[15px] text-gray-800">
+                        실시간 미리보기
                     </div>
                 </div>
                 
