@@ -45,6 +45,27 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
         preferredAnswers: {} as Record<number, { checked: boolean; detail: string }>
     });
     
+    // 공고 페이지에서의 체크박스 상태 (보여주기용)
+    const [viewRequirementChecks, setViewRequirementChecks] = useState<Record<number, { checked: boolean; detail: string }>>({});
+    const [viewPreferredChecks, setViewPreferredChecks] = useState<Record<number, { checked: boolean; detail: string }>>({});
+    
+    // 프로필 이미지를 한 번만 선택하도록 useState 사용
+    const [profileImage] = useState(() => {
+        const officeImages = [
+            'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=400&h=400&fit=crop',
+            'https://images.unsplash.com/photo-1497032205916-ac775f0649ae?w=400&h=400&fit=crop',
+            'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=400&h=400&fit=crop',
+            'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=400&h=400&fit=crop',
+            'https://images.unsplash.com/photo-1487017159836-4e23ece2e4cf?w=400&h=400&fit=crop',
+            'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400&h=400&fit=crop',
+            'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=400&h=400&fit=crop',
+            'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400&h=400&fit=crop',
+            'https://images.unsplash.com/photo-1573164713988-8665fc963095?w=400&h=400&fit=crop',
+            'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=400&h=400&fit=crop'
+        ];
+        return officeImages[Math.floor(Math.random() * officeImages.length)];
+    });
+    
     const currentUserId = auth.currentUser?.uid;
     const isOwner = currentUserId && jdData?.userId === currentUserId;
 
@@ -198,20 +219,6 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
         );
     }
 
-    const officeImages = [
-        'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=400&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1497032205916-ac775f0649ae?w=400&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=400&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=400&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1487017159836-4e23ece2e4cf?w=400&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=400&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1573164713988-8665fc963095?w=400&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=400&h=400&fit=crop'
-    ];
-    const profileImage = officeImages[Math.floor(Math.random() * officeImages.length)];
-
     return (
         <div className="flex h-full bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden max-w-[1200px] mx-auto" style={{ height: 'calc(100vh - 140px)'}}>
             {/* Left Profile Section */}
@@ -312,7 +319,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                     </div>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto scrollbar-hide">
                     <div className="p-8 space-y-8">
                         {/* 공고 제목 */}
                         <div>
@@ -349,10 +356,45 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                             <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">자격 요건 (CHECKLIST)</h4>
                             <div className="space-y-2">
                                 {jdData.requirements && jdData.requirements.length > 0 ? jdData.requirements.map((item, idx) => (
-                                    <label key={idx} className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
-                                        <input type="checkbox" className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
-                                        <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
-                                    </label>
+                                    <div key={idx} className="space-y-2">
+                                        <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={viewRequirementChecks[idx]?.checked || false}
+                                                onChange={(e) => {
+                                                    if (!isOwner) {
+                                                        setViewRequirementChecks({
+                                                            ...viewRequirementChecks,
+                                                            [idx]: {
+                                                                checked: e.target.checked,
+                                                                detail: viewRequirementChecks[idx]?.detail || ''
+                                                            }
+                                                        });
+                                                    }
+                                                }}
+                                                disabled={isOwner}
+                                                className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
+                                            />
+                                            <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
+                                        </label>
+                                        {!isOwner && viewRequirementChecks[idx]?.checked && (
+                                            <div className="ml-10 mt-2">
+                                                <textarea
+                                                    value={viewRequirementChecks[idx]?.detail || ''}
+                                                    onChange={(e) => setViewRequirementChecks({
+                                                        ...viewRequirementChecks,
+                                                        [idx]: {
+                                                            checked: true,
+                                                            detail: e.target.value
+                                                        }
+                                                    })}
+                                                    placeholder="관련 경험이나 역량을 구체적으로 작성해주세요"
+                                                    rows={3}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
                                 )) : (
                                     <p className="text-[13px] text-gray-400 p-3">자격 요건이 설정되지 않았습니다.</p>
                                 )}
@@ -364,10 +406,45 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                             <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">우대 사항 (PREFERRED)</h4>
                             <div className="space-y-2">
                                 {jdData.preferred && jdData.preferred.length > 0 ? jdData.preferred.map((item, idx) => (
-                                    <label key={idx} className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
-                                        <input type="checkbox" className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
-                                        <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
-                                    </label>
+                                    <div key={idx} className="space-y-2">
+                                        <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={viewPreferredChecks[idx]?.checked || false}
+                                                onChange={(e) => {
+                                                    if (!isOwner) {
+                                                        setViewPreferredChecks({
+                                                            ...viewPreferredChecks,
+                                                            [idx]: {
+                                                                checked: e.target.checked,
+                                                                detail: viewPreferredChecks[idx]?.detail || ''
+                                                            }
+                                                        });
+                                                    }
+                                                }}
+                                                disabled={isOwner}
+                                                className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
+                                            />
+                                            <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
+                                        </label>
+                                        {!isOwner && viewPreferredChecks[idx]?.checked && (
+                                            <div className="ml-10 mt-2">
+                                                <textarea
+                                                    value={viewPreferredChecks[idx]?.detail || ''}
+                                                    onChange={(e) => setViewPreferredChecks({
+                                                        ...viewPreferredChecks,
+                                                        [idx]: {
+                                                            checked: true,
+                                                            detail: e.target.value
+                                                        }
+                                                    })}
+                                                    placeholder="관련 경험이나 역량을 구체적으로 작성해주세요"
+                                                    rows={3}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
                                 )) : (
                                     <p className="text-[13px] text-gray-400 p-3">우대 사항이 설정되지 않았습니다.</p>
                                 )}
@@ -378,7 +455,15 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                         <div className="pt-6 border-t border-gray-100 flex justify-end items-center">
                             {!isOwner && (
                                 <button 
-                                    onClick={() => setShowApplicationModal(true)}
+                                    onClick={() => {
+                                        // 보기 페이지의 데이터를 모달로 전달
+                                        setApplicationForm({
+                                            ...applicationForm,
+                                            requirementAnswers: viewRequirementChecks,
+                                            preferredAnswers: viewPreferredChecks
+                                        });
+                                        setShowApplicationModal(true);
+                                    }}
                                     className="px-6 py-3 bg-blue-600 text-white rounded-lg text-[14px] font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -400,10 +485,16 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
             {/* 지원서 작성 모달 */}
             {showApplicationModal && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                        {/* 모달 헤더 */}
-                        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
-                            <h3 className="text-xl font-bold text-gray-900">지원서 작성</h3>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto scrollbar-hide">
+                        {/* 모달 헤더 - 드래그 가능하지만 아이콘 없음 */}
+                        <div 
+                            className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center cursor-move"
+                            draggable={true}
+                            onDragStart={(e) => {
+                                e.dataTransfer.effectAllowed = 'move';
+                            }}
+                        >
+                            <h3 className="text-xl font-bold text-gray-900 select-none">지원서 작성</h3>
                             <button 
                                 onClick={() => setShowApplicationModal(false)}
                                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -468,108 +559,6 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                     </select>
                                 </div>
                             </div>
-
-                            {/* 자격 요건 체크리스트 */}
-                            {jdData?.requirements && jdData.requirements.length > 0 && (
-                                <div className="space-y-3">
-                                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider">자격 요건</h4>
-                                    <div className="space-y-3 bg-gray-50 p-4 rounded-lg">
-                                        {jdData.requirements.map((item, idx) => (
-                                            <div key={idx} className="space-y-2">
-                                                <label className="flex items-start gap-3 cursor-pointer hover:bg-white p-2 rounded transition-colors">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={applicationForm.requirementAnswers[idx]?.checked || false}
-                                                        onChange={(e) => setApplicationForm({
-                                                            ...applicationForm,
-                                                            requirementAnswers: {
-                                                                ...applicationForm.requirementAnswers,
-                                                                [idx]: {
-                                                                    checked: e.target.checked,
-                                                                    detail: applicationForm.requirementAnswers[idx]?.detail || ''
-                                                                }
-                                                            }
-                                                        })}
-                                                        className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                                    />
-                                                    <span className="text-sm text-gray-700 flex-1">{item}</span>
-                                                </label>
-                                                {applicationForm.requirementAnswers[idx]?.checked && (
-                                                    <div className="ml-7 mt-2">
-                                                        <textarea
-                                                            value={applicationForm.requirementAnswers[idx]?.detail || ''}
-                                                            onChange={(e) => setApplicationForm({
-                                                                ...applicationForm,
-                                                                requirementAnswers: {
-                                                                    ...applicationForm.requirementAnswers,
-                                                                    [idx]: {
-                                                                        checked: true,
-                                                                        detail: e.target.value
-                                                                    }
-                                                                }
-                                                            })}
-                                                            placeholder="관련 경험이나 역량을 구체적으로 작성해주세요"
-                                                            rows={3}
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                                                        />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* 우대 사항 체크리스트 */}
-                            {jdData?.preferred && jdData.preferred.length > 0 && (
-                                <div className="space-y-3">
-                                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider">우대 사항</h4>
-                                    <div className="space-y-3 bg-gray-50 p-4 rounded-lg">
-                                        {jdData.preferred.map((item, idx) => (
-                                            <div key={idx} className="space-y-2">
-                                                <label className="flex items-start gap-3 cursor-pointer hover:bg-white p-2 rounded transition-colors">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={applicationForm.preferredAnswers[idx]?.checked || false}
-                                                        onChange={(e) => setApplicationForm({
-                                                            ...applicationForm,
-                                                            preferredAnswers: {
-                                                                ...applicationForm.preferredAnswers,
-                                                                [idx]: {
-                                                                    checked: e.target.checked,
-                                                                    detail: applicationForm.preferredAnswers[idx]?.detail || ''
-                                                                }
-                                                            }
-                                                        })}
-                                                        className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                                    />
-                                                    <span className="text-sm text-gray-700 flex-1">{item}</span>
-                                                </label>
-                                                {applicationForm.preferredAnswers[idx]?.checked && (
-                                                    <div className="ml-7 mt-2">
-                                                        <textarea
-                                                            value={applicationForm.preferredAnswers[idx]?.detail || ''}
-                                                            onChange={(e) => setApplicationForm({
-                                                                ...applicationForm,
-                                                                preferredAnswers: {
-                                                                    ...applicationForm.preferredAnswers,
-                                                                    [idx]: {
-                                                                        checked: true,
-                                                                        detail: e.target.value
-                                                                    }
-                                                                }
-                                                            })}
-                                                            placeholder="관련 경험이나 역량을 구체적으로 작성해주세요"
-                                                            rows={3}
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                                                        />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
                         </div>
 
                         {/* 모달 푸터 */}

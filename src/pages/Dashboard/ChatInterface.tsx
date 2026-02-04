@@ -339,41 +339,32 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         }
 
         try {
-            // messages 상태를 Gemini API 형식으로 변환
+            // messages 상태를 Gemini API 형식으로 변환 (options 필드 제외)
             const conversationHistory = messages.map(msg => ({
                 role: (msg.role === 'ai' ? 'model' : 'user') as 'user' | 'model',
                 parts: [{ text: msg.text }]
             }));
 
-            // generateJD 호출 - 항상 { aiResponse, jdData } 형태로 반환됨
+            // generateJD 호출 - 항상 { aiResponse, options, jdData } 형태로 반환됨
             const response = await generateJD(currentInput, conversationHistory);
             
-            // 선택지가 필요한 질문 감지
-            let aiOptions: string[] | undefined;
-            const questionPatterns = [
-                // 동아리/기업 공통
-                { pattern: /주.*몷.*회|활동.*빈도|스터디.*횟수|모임.*빈도/i, options: ['주 1회', '주 2회', '주 3회', '주 4회 이상', '기타'] },
-                { pattern: /팀.*규모|팀.*크기|멤버.*수|인원.*규모/i, options: ['1-5명', '6-10명', '11-20명', '21명 이상', '기타'] },
-                { pattern: /활동.*기간|총.*기간|참여.*기간/i, options: ['1개월 이하', '1-3개월', '3-6개월', '6개월 이상', '기타'] },
-                { pattern: /위치|지역|장소/i, options: ['온라인', '오프라인', '하이브리드', '상황에 따라', '기타'] },
-                
-                // 기업 전용
-                { pattern: /근무.*시간|근무.*형태|출근|근무제/i, options: ['주 5일 (09:00-18:00)', '주 5일 (자율 출퇴근)', '주 4.5일', '자율 근무', '기타'] },
-                { pattern: /경력|연차|년차|경험/i, options: ['신입', '1-3년', '4-7년', '8년 이상', '기타'] },
-                { pattern: /급여|연봉|compensation|대우/i, options: ['3000만원 이하', '3000-5000만원', '5000-7000만원', '7000만원 이상', '기타'] },
-                { pattern: /복지|혜택|베네피트/i, options: ['연차4000+', '건강검진', '식대/간식 제공', '교육비 지원', '기타'] },
-                
-                // 동아리 전용
-                { pattern: /학년|학번|학기/i, options: ['1학년', '2학년', '3학년', '4학년+', '기타'] },
-                { pattern: /활동.*분야|분야|파트/i, options: ['기획/운영', '개발/기술', '디자인', '마케팅/홈보', '기타'] },
-                { pattern: /참가비|활동비|지원금/i, options: ['없음', '10만원 이하', '10-20만원', '20만원 이상', '기타'] }
-            ];
-
-            for (const { pattern, options } of questionPatterns) {
-                if (pattern.test(response.aiResponse)) {
-                    aiOptions = options;
-                    break;
+            // 응답 검증
+            if (!response || typeof response !== 'object') {
+                throw new Error('Invalid response from AI');
+            }
+            
+            // AI로부터 받은 선택지 사용 (없으면 undefined)
+            let aiOptions: string[] | undefined = undefined;
+            try {
+                if (response.options && Array.isArray(response.options) && response.options.length > 0) {
+                    aiOptions = response.options.filter(opt => typeof opt === 'string' && opt.trim().length > 0);
+                    if (aiOptions.length === 0) {
+                        aiOptions = undefined;
+                    }
                 }
+            } catch (optError) {
+                console.warn('Options processing error:', optError);
+                aiOptions = undefined;
             }
             
             // 1. 채팅 메시지 추가: aiResponse 필드 사용
@@ -430,9 +421,20 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 if (response.jdData.mission && response.jdData.mission !== currentJD.mission) {
                     typeText('mission', response.jdData.mission, 20);
                 }
+                if (response.jdData.location && response.jdData.location !== currentJD.location) {
+                    typeText('location', response.jdData.location, 15);
+                }
+                if (response.jdData.scale && response.jdData.scale !== currentJD.scale) {
+                    typeText('scale', response.jdData.scale, 15);
+                }
                 
                 console.log('JD 업데이트:', newJD);
                 setCurrentJD(prev => ({ ...prev, ...newJD }));
+                
+                // 배열 필드들도 즉시 반영되도록 보장
+                setTimeout(() => {
+                    setCurrentJD(prev => ({ ...prev, ...newJD }));
+                }, 100);
             }
         } catch (error) {
             console.error('Error generating JD:', error);
@@ -483,7 +485,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                             </div>
                             
                             {/* 선택지 버튼 */}
-                            {msg.role === 'ai' && msg.options && (
+                            {msg.role === 'ai' && msg.options && Array.isArray(msg.options) && msg.options.length > 0 && (
                                 <div className="flex flex-col gap-2 ml-11">
                                     {msg.options.map((option, optIdx) => (
                                         <button
@@ -495,6 +497,26 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                             {option}
                                         </button>
                                     ))}
+                                    <button
+                                        onClick={() => handleSend('이 질문은 건너뛰겠습니다')}
+                                        disabled={isLoading}
+                                        className="px-4 py-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-300 hover:border-gray-400 rounded-lg text-[13px] font-medium text-gray-500 hover:text-gray-700 transition-all text-center disabled:opacity-50"
+                                    >
+                                        건너뛰기
+                                    </button>
+                                </div>
+                            )}
+                            
+                            {/* 일반 질문에도 건너뛰기 버튼 표시 (선택지가 없고, 마지막 메시지이고, AI 메시지인 경우) */}
+                            {msg.role === 'ai' && !msg.options && idx === messages.length - 1 && !isLoading && (
+                                <div className="flex justify-start ml-11 mt-2">
+                                    <button
+                                        onClick={() => handleSend('이 질문은 건너뛰겠습니다')}
+                                        disabled={isLoading}
+                                        className="px-4 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-300 hover:border-gray-400 rounded-lg text-[12px] font-medium text-gray-500 hover:text-gray-700 transition-all disabled:opacity-50"
+                                    >
+                                        건너뛰기
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -564,7 +586,10 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                 </svg>
                                 {currentJD.location ? (
-                                    <span className="text-gray-700">{currentJD.location}</span>
+                                    <span className="text-gray-700">
+                                        {typingText['location'] !== undefined ? typingText['location'] : currentJD.location}
+                                        {typingText['location'] !== undefined && <span className="animate-pulse">|</span>}
+                                    </span>
                                 ) : (
                                     <span className="text-gray-400">아직 설정되지 않았습니다</span>
                                 )}
@@ -578,7 +603,10 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                                 </svg>
                                 {currentJD.scale ? (
-                                    <span className="text-gray-700">{currentJD.scale}</span>
+                                    <span className="text-gray-700">
+                                        {typingText['scale'] !== undefined ? typingText['scale'] : currentJD.scale}
+                                        {typingText['scale'] !== undefined && <span className="animate-pulse">|</span>}
+                                    </span>
                                 ) : (
                                     <span className="text-gray-400">아직 설정되지 않았습니다</span>
                                 )}

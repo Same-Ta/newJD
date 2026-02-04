@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Filter, Download, X, Sparkles, FileText } from 'lucide-react';
+import { Filter, Download, X, Sparkles, FileText, Trash2 } from 'lucide-react';
 import { db, auth } from '@/config/firebase';
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 
 interface Application {
@@ -23,6 +23,11 @@ export const ApplicantList = () => {
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [showFilterMenu, setShowFilterMenu] = useState(false);
     
+    // 공고별 필터링 상태
+    const [jdFilter, setJdFilter] = useState<string>('all');
+    const [jdList, setJdList] = useState<Array<{ id: string; title: string }>>([]);
+    const [showJdFilterMenu, setShowJdFilterMenu] = useState(false);
+    
     // AI 스크리닝 리포트 관련 상태
     const [selectedApplicant, setSelectedApplicant] = useState<Application | null>(null);
     const [aiSummary, setAiSummary] = useState<string>('');
@@ -30,6 +35,7 @@ export const ApplicantList = () => {
 
     useEffect(() => {
         fetchApplications();
+        fetchJDs();
     }, []);
 
     const fetchApplications = async () => {
@@ -71,6 +77,28 @@ export const ApplicantList = () => {
         }
     };
 
+    const fetchJDs = async () => {
+        try {
+            const currentUser = auth.currentUser;
+            if (!currentUser) return;
+
+            const jdsQuery = query(
+                collection(db, 'jds'),
+                where('userId', '==', currentUser.uid)
+            );
+
+            const snapshot = await getDocs(jdsQuery);
+            const jdsData = snapshot.docs.map(doc => ({
+                id: doc.id,
+                title: doc.data().title || '제목 없음'
+            }));
+
+            setJdList(jdsData);
+        } catch (error) {
+            console.error('공고 목록 로딩 실패:', error);
+        }
+    };
+
     const handleStatusChange = async (applicationId: string, newStatus: string) => {
         try {
             const applicationRef = doc(db, 'applications', applicationId);
@@ -85,6 +113,25 @@ export const ApplicantList = () => {
         } catch (error) {
             console.error('상태 업데이트 실패:', error);
             alert('상태 업데이트에 실패했습니다.');
+        }
+    };
+
+    const handleDeleteApplicant = async (applicationId: string, applicantName: string) => {
+        if (!confirm(`정말 ${applicantName} 지원자를 삭제하시겠습니까?`)) {
+            return;
+        }
+
+        try {
+            const applicationRef = doc(db, 'applications', applicationId);
+            await deleteDoc(applicationRef);
+
+            // 로컬 상태에서 삭제
+            setApplications(prev => prev.filter(app => app.id !== applicationId));
+            
+            alert('지원자가 삭제되었습니다.');
+        } catch (error) {
+            console.error('지원자 삭제 실패:', error);
+            alert('지원자 삭제에 실패했습니다.');
         }
     };
 
@@ -133,55 +180,102 @@ export const ApplicantList = () => {
             }
 
             const prompt = `[시스템 역할]
-당신은 스타트업과 창업 팀의 초기 멤버를 선발하는 전문 채용 컨설턴트입니다. 지원자의 답변을 바탕으로 **[역량(Skill)]**과 **[의지(Will)]**를 분석하여 4가지 유형으로 분류하고, 우리 조직과의 적합성을 평가하세요.
+당신은 초기 스타트업의 생존과 직결된 핵심 인재를 선발하는 전문 채용 컨설턴트입니다. 지원자의 답변에서 '추상적인 미사여구'를 걷어내고, 구체적인 [데이터, 방법론, 행동 패턴]을 근거로 역량(Skill)과 의지(Will)를 냉정하게 평가하세요.
 
-[분석 기준 - 2x2 Matrix]
-- **Star (High Skill / High Will)**: 구체적인 성과 지표를 제시하며, 스스로 문제를 정의하고 해결책을 찾아 실행하는 '압도적 실행가'
-- **Expert (High Skill / Low Will)**: 기술적 수준은 높으나 수동적이며, 보상이나 조건에 민감하고 팀의 비전보다는 개인의 과업에 집중하는 '냉소적 전문가'
-- **Prospect (Low Skill / High Will)**: 현재 기술은 부족하나 학습 속도가 빠르고, 팀의 성장을 위해 궂은일도 마다하지 않는 '폭발적 성장주'
-- **Risk (Low Skill / Low Will)**: 답변이 모호하고 구체적 경험이 없으며, 개선 의지나 직무에 대한 이해도가 모두 낮은 '비적합 대상'
+[평가 로직: 냉정한 상/중/하 기준]
+- [상]: 구체적인 수치, 방법론, 혹은 타당한 논리적 근거가 답변에 포함된 경우
+- [중]: 경험은 있으나 과정이나 결과가 추상적이고 보편적인 수준인 경우
+- [하]: 단순한 주장만 있거나, 질문의 본질을 파악하지 못한 모호한 답변인 경우
 
----
+[분석 기준]
+• 완성형 리더: 스스로 문제를 정의하고 성과를 견인하는 핵심 인재
+• 직무 중심 전문가: 기술력은 뛰어나나 개인 과업 중심인 기술 전문가
+• 성장형 유망주: 학습 속도가 빠르고 헌신적인 잠재 인재
+• 신중 검토 대상: 직무 이해도와 개선 의지가 모두 낮은 보완 필요 인재
+
+[출력 가이드]
+• 모든 근거는 지원자의 답변 중 가장 핵심적인 문구만 짧게 발췌(Quotes)할 것
+• 스타트업 특성상 '실행 속도'와 '문제 정의 능력'에 높은 가중치를 둘 것
+• 불필요한 마크다운 기호를 최소화하여 모바일에서도 읽기 편하게 작성할 것
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 [지원자 정보]
-- 이름: ${application.applicantName}
-- 포지션: ${application.jdTitle}
+이름: ${application.applicantName}
+포지션: ${application.jdTitle}
 
 [지원자 답변]
 ${answersText}
 
----
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 위 내용을 바탕으로 아래 형식으로 분석 결과를 작성해주세요:
 
-## 🔍 지원자 심층 분석 결과: ${application.applicantName}
 
-### 1. 사분면 위치 및 종합 평가
-> **분류: [Star / Expert / Prospect / Risk]**
-> **한줄 요약:** (핵심 특징을 한 문장으로)
+🔍 지원자 분석: ${application.applicantName}
 
-### 2. 역량/의지 세부 판별 근거
-| 항목 | 평가 | 핵심 근거 |
-|:---|:---|:---|
-| **직무 역량** | 상/중/하 | (지원자 답변 기반) |
-| **문제 해결** | 상/중/하 | (구체적 근거) |
-| **학습 의지** | 상/중/하 | (구체적 근거) |
-| **협업 태도** | 상/중/하 | (구체적 근거) |
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-### 3. 조직 적합도 체크리스트
-- **스타트업 마인드셋:** [예/아니오] - (근거)
-- **자기 주도성:** [예/아니오] - (근거)
-- **커뮤니케이션:** [예/아니오] - (근거)
+📊 1. 종합 진단
 
-### 4. 채용 가이드 및 리스크 관리
-**💡 강점:** (이 사람이 합류했을 때 팀에 가져올 긍정적 변화)
+✓ 최종 분류
+→ [완성형 리더 / 직무 중심 전문가 / 성장형 유망주 / 신중 검토 대상]
 
-**⚠️ 주의점:** (관리 시 주의해야 할 리스크나 매니징 포인트)
+✓ 역량(Skill): [높음 / 보통 / 낮음]
+✓ 의지(Will): [높음 / 보통 / 낮음]
 
-**🙋 추가 질문 추천:** (부족한 부분을 확인하기 위해 면접 시 필요한 질문 2-3개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
----
-마크다운 형식으로 깔끔하게 작성해주세요.`;
+📋 2. 세부 평가 (냉정 평가 모드)
+
+▶ 직무 역량 | [상 / 중 / 하]
+근거: (발췌: " " | 판정 이유: 실무 활용 가능성 및 전문성 기반 분석)
+
+▶ 문제 해결 | [상 / 중 / 하]
+근거: (발췌: " " | 판정 이유: 장애물을 마주했을 때의 사고 논리 및 해결 속도)
+
+▶ 성장 잠재력 | [상 / 중 / 하]
+근거: (발췌: " " | 판정 이유: 단순 학습 의지가 아닌, 실제 학습 성과와 적용 사례 유무)
+
+▶ 협업 태도 | [상 / 중 / 하]
+근거: (발췌: " " | 판정 이유: 감정적 소통이 아닌, 목표 달성을 위한 전략적 협업 관점)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ 3. 조직 적합도 (Culture Fit)
+
+□ 스타트업 마인드셋
+→ [확인됨 / 미흡]: (MVP 사고방식 및 리소스 제한 극복 경험 유무)
+
+□ 자기 주도성
+→ [확인됨 / 미흡]: (지시 대기형인지, 스스로 과업을 정의하는 타입인지 판별)
+
+□ 커뮤니케이션
+→ [확인됨 / 미흡]: (결론 중심의 논리적 소통 및 피드백 수용성)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 4. 채용 가이드
+
+▶ 핵심 강점
+• 
+• 
+
+▶ 주의 사항
+• (이 인재의 가장 치명적인 결함 혹은 리스크 요소)
+• (관리자가 에너지를 쏟아야 할 포인트)
+
+▶ 추가 질문
+• (답변의 진위 여부를 파악하기 위한 압박 질문)
+• (역량의 바닥을 확인할 수 있는 기술적 질문)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[중요 지시]
+- 지원자의 답변이 부족할 경우 '판단 불가'라고 적지 말고, 답변 수준에 근거해 '낮음' 혹은 '미흡'으로 냉정하게 처리하세요
+- 각 항목은 2줄 이내로 핵심만 찌르듯 작성하세요
+- 절대 JSON 형식이나 코드 블록으로 출력하지 마세요
+- 반드시 위에 제시된 텍스트 형식 그대로 작성하세요`;
 
             // fetch API 직접 사용
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
@@ -190,7 +284,13 @@ ${answersText}
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    contents: [{ role: "user", parts: [{ text: prompt }] }]
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        temperature: 0.7,
+                        topK: 40,
+                        topP: 0.95,
+                        maxOutputTokens: 8192,
+                    }
                 }),
             });
 
@@ -293,9 +393,9 @@ ${answersText}
         }
     };
 
-    const filteredApplications = statusFilter === 'all'
-        ? applications
-        : applications.filter(app => app.status === statusFilter);
+    const filteredApplications = applications
+        .filter(app => statusFilter === 'all' || app.status === statusFilter)
+        .filter(app => jdFilter === 'all' || app.jdTitle === jdFilter);
 
     const statusOptions = ['검토중', '합격', '불합격'];
 
@@ -312,52 +412,101 @@ ${answersText}
 
     return (
      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm min-h-[600px] flex flex-col max-w-[1200px] mx-auto">
-         <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-             <div>
-                <h3 className="font-bold text-lg text-gray-900">지원자 리스트</h3>
-                <p className="text-xs text-gray-400 mt-1">총 {filteredApplications.length}명의 지원자가 있습니다.</p>
+         <div className="p-6 border-b border-gray-100">
+             <div className="flex justify-between items-start mb-3">
+                 <h3 className="font-bold text-lg text-gray-900">지원자 관리</h3>
+                 <div className="flex gap-2">
+                     {/* 상태별 필터 */}
+                     <div className="relative">
+                         <button 
+                             onClick={() => setShowFilterMenu(!showFilterMenu)}
+                             className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-medium text-gray-600 transition-colors"
+                         >
+                             <Filter size={16}/> 필터 {statusFilter !== 'all' && `(${statusFilter})`}
+                         </button>
+                         
+                         {showFilterMenu && (
+                             <div className="absolute top-12 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-2 w-40">
+                                 <button
+                                     onClick={() => {
+                                         setStatusFilter('all');
+                                         setShowFilterMenu(false);
+                                     }}
+                                     className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
+                                 >
+                                     전체 보기
+                                 </button>
+                                 {statusOptions.map(status => (
+                                     <button
+                                         key={status}
+                                         onClick={() => {
+                                             setStatusFilter(status);
+                                             setShowFilterMenu(false);
+                                         }}
+                                         className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
+                                     >
+                                         {status}
+                                     </button>
+                                 ))}
+                             </div>
+                         )}
+                     </div>
+                     
+                     <button 
+                         onClick={handleExcelDownload}
+                         className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-medium text-gray-600 transition-colors"
+                     >
+                         <Download size={16}/> 엑셀 다운로드
+                     </button>
+                 </div>
              </div>
-             <div className="flex gap-2 relative">
+             
+             {/* 공고별 필터 - 지원자 관리 바로 아래, 흰색 배경, ▽ 아이콘 */}
+             <div className="relative inline-block mb-3">
                  <button 
-                     onClick={() => setShowFilterMenu(!showFilterMenu)}
-                     className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-medium text-gray-600 transition-colors"
+                     onClick={() => setShowJdFilterMenu(!showJdFilterMenu)}
+                     className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-colors border border-gray-200 shadow-sm"
                  >
-                     <Filter size={16}/> 필터 {statusFilter !== 'all' && `(${statusFilter})`}
+                     <FileText size={16} className="text-gray-500"/>
+                     <span>{jdFilter === 'all' ? '모든 공고' : jdFilter}</span>
+                     {jdList.length > 0 && (
+                         <span className="ml-1 px-2 py-0.5 bg-gray-100 rounded-full text-xs text-gray-600">{jdList.length}</span>
+                     )}
+                     <span className="ml-1 text-gray-400">▽</span>
                  </button>
                  
-                 {showFilterMenu && (
-                     <div className="absolute top-12 left-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-2 w-40">
+                 {showJdFilterMenu && (
+                     <div className="absolute top-12 left-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-2 min-w-[250px] max-h-[300px] overflow-y-auto">
                          <button
                              onClick={() => {
-                                 setStatusFilter('all');
-                                 setShowFilterMenu(false);
+                                 setJdFilter('all');
+                                 setShowJdFilterMenu(false);
                              }}
-                             className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
+                             className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors ${
+                                 jdFilter === 'all' ? 'bg-blue-50 text-blue-600 font-semibold' : ''
+                             }`}
                          >
-                             전체 보기
+                             모든 공고
                          </button>
-                         {statusOptions.map(status => (
+                         {jdList.map(jd => (
                              <button
-                                 key={status}
+                                 key={jd.id}
                                  onClick={() => {
-                                     setStatusFilter(status);
-                                     setShowFilterMenu(false);
+                                     setJdFilter(jd.title);
+                                     setShowJdFilterMenu(false);
                                  }}
-                                 className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
+                                 className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors ${
+                                     jdFilter === jd.title ? 'bg-blue-50 text-blue-600 font-semibold' : ''
+                                 }`}
                              >
-                                 {status}
+                                 {jd.title}
                              </button>
                          ))}
                      </div>
                  )}
-                 
-                 <button 
-                     onClick={handleExcelDownload}
-                     className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-medium text-gray-600 transition-colors"
-                 >
-                     <Download size={16}/> 엑셀 다운로드
-                 </button>
              </div>
+             
+             <p className="text-xs text-gray-400">총 {filteredApplications.length}명의 지원자가 있습니다.</p>
          </div>
          <div className="flex-1 overflow-auto">
              <table className="w-full text-left text-sm text-gray-600">
@@ -370,12 +519,13 @@ ${answersText}
                          <th className="px-6 py-4">지원 일시</th>
                          <th className="px-6 py-4">작성 내용</th>
                          <th className="px-6 py-4 text-center">상태</th>
+                         <th className="px-6 py-4 text-center">관리</th>
                      </tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50">
                      {filteredApplications.length === 0 ? (
                          <tr>
-                             <td colSpan={7} className="px-6 py-20 text-center text-gray-400">
+                             <td colSpan={8} className="px-6 py-20 text-center text-gray-400">
                                  {statusFilter === 'all' ? '아직 지원자가 없습니다.' : `${statusFilter} 상태의 지원자가 없습니다.`}
                              </td>
                          </tr>
@@ -434,6 +584,20 @@ ${answersText}
                                          </button>
                                      </div>
                                  </td>
+                                 <td className="px-6 py-5">
+                                     <div className="flex justify-center">
+                                         <button
+                                             onClick={(e) => {
+                                                 e.stopPropagation();
+                                                 handleDeleteApplicant(application.id, application.applicantName);
+                                             }}
+                                             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                             title="지원자 삭제"
+                                         >
+                                             <Trash2 size={16} />
+                                         </button>
+                                     </div>
+                                 </td>
                              </tr>
                          ))
                      )}
@@ -462,7 +626,7 @@ ${answersText}
                      </div>
 
                      {/* 모달 본문 */}
-                     <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                     <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                          {/* AI 요약 섹션 */}
                          <div className="mb-8">
                              <div className="flex items-center gap-2 mb-4">
