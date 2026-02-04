@@ -14,7 +14,17 @@ body {
   padding: 0;
 }
 
-/* 스크롤바 숨기기 */
+/* 전역 스크롤바 숨기기 */
+html::-webkit-scrollbar {
+  display: none;
+}
+
+html {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 스크롤바 숨기기 클래스 */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
