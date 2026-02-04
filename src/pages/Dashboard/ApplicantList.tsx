@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Filter, Download, MoreHorizontal, X, Sparkles, FileText, UserPlus } from 'lucide-react';
+import { Filter, Download, MoreHorizontal, X, Sparkles, FileText } from 'lucide-react';
 import { db, auth } from '@/config/firebase';
-import { collection, query, where, getDocs, doc, updateDoc, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 
 interface Application {
     id: string;
@@ -10,8 +10,8 @@ interface Application {
     applicantPhone?: string;
     applicantGender?: string;
     jdTitle: string;
-    requirementAnswers?: Array<{ question: string; checked: boolean; detail: string }>;
-    preferredAnswers?: Array<{ question: string; checked: boolean; detail: string }>;
+    requirementAnswers?: Array<{ question: string; checked: boolean; detail: string; answer?: string }>;
+    preferredAnswers?: Array<{ question: string; checked: boolean; detail: string; answer?: string }>;
     appliedAt: any;
     status: string;
 }
@@ -171,148 +171,6 @@ export const ApplicantList = () => {
     const closeModal = () => {
         setSelectedApplicant(null);
         setAiSummary('');
-    };
-
-    // 테스트 데이터 추가 함수
-    const addTestApplicant = async () => {
-        try {
-            const currentUser = auth.currentUser;
-            if (!currentUser) {
-                alert('로그인이 필요합니다.');
-                return;
-            }
-
-            console.log('테스트 지원자들 추가 시작, recruiterId:', currentUser.uid);
-
-            const testApplicants = [
-                {
-                    recruiterId: currentUser.uid,
-                    applicantName: '김지원',
-                    applicantEmail: 'jiwon.kim@example.com',
-                    applicantPhone: '010-1234-5678',
-                    applicantGender: '여성',
-                    jdTitle: '프론트엔드 개발자',
-                    requirementAnswers: [
-                        { question: 'React 3년 이상 경험', answer: 'Y' },
-                        { question: 'TypeScript 사용 경험', answer: 'Y' },
-                        { question: '팀 리더 경험', answer: 'Y' },
-                        { question: 'UI/UX 디자인 이해', answer: 'Y' }
-                    ],
-                    preferredAnswers: [
-                        { question: 'Next.js 사용 경험', answer: 'Y' },
-                        { question: '대규모 프로젝트 경험', answer: 'Y' },
-                        { question: '성능 최적화 경험', answer: 'Y' },
-                        { question: '애니메이션 구현 경험', answer: 'Y' }
-                    ],
-                    appliedAt: Timestamp.now(),
-                    status: '검토중'
-                },
-                {
-                    recruiterId: currentUser.uid,
-                    applicantName: '박민수',
-                    applicantEmail: 'minsu.park@example.com',
-                    applicantPhone: '010-2345-6789',
-                    applicantGender: '남성',
-                    jdTitle: '백엔드 개발자',
-                    requirementAnswers: [
-                        { question: 'Java/Spring 5년 이상 경험', answer: 'Y' },
-                        { question: 'MSA 아키텍처 설계 경험', answer: 'Y' },
-                        { question: 'DB 설계 및 최적화 경험', answer: 'Y' },
-                        { question: 'RESTful API 설계 경험', answer: 'Y' }
-                    ],
-                    preferredAnswers: [
-                        { question: 'Kubernetes 운영 경험', answer: 'Y' },
-                        { question: 'AWS 클라우드 경험', answer: 'N' },
-                        { question: 'Redis 캐싱 경험', answer: 'Y' },
-                        { question: '대용량 트래픽 처리 경험', answer: 'Y' }
-                    ],
-                    appliedAt: Timestamp.now(),
-                    status: '검토중'
-                },
-                {
-                    recruiterId: currentUser.uid,
-                    applicantName: '이서연',
-                    applicantEmail: 'seoyeon.lee@example.com',
-                    applicantPhone: '010-3456-7890',
-                    applicantGender: '여성',
-                    jdTitle: 'UX/UI 디자이너',
-                    requirementAnswers: [
-                        { question: 'Figma/Sketch 사용 경험 3년 이상', answer: 'Y' },
-                        { question: '사용자 리서치 경험', answer: 'Y' },
-                        { question: '프로토타입 제작 경험', answer: 'Y' },
-                        { question: '디자인 시스템 구축 경험', answer: 'N' }
-                    ],
-                    preferredAnswers: [
-                        { question: '모션 디자인 경험', answer: 'Y' },
-                        { question: '앱 디자인 경험', answer: 'Y' },
-                        { question: 'HTML/CSS 이해', answer: 'N' },
-                        { question: 'A/B 테스팅 경험', answer: 'Y' }
-                    ],
-                    appliedAt: Timestamp.now(),
-                    status: '검토중'
-                },
-                {
-                    recruiterId: currentUser.uid,
-                    applicantName: '최준호',
-                    applicantEmail: 'junho.choi@example.com',
-                    applicantPhone: '010-4567-8901',
-                    applicantGender: '남성',
-                    jdTitle: '데이터 분석가',
-                    requirementAnswers: [
-                        { question: 'Python/R 데이터 분석 경험 3년 이상', answer: 'Y' },
-                        { question: 'SQL 고급 활용 능력', answer: 'Y' },
-                        { question: '통계학 전공 또는 관련 경험', answer: 'Y' },
-                        { question: '시각화 도구 활용 경험', answer: 'Y' }
-                    ],
-                    preferredAnswers: [
-                        { question: '머신러닝 모델 구축 경험', answer: 'N' },
-                        { question: 'BigQuery/Redshift 경험', answer: 'Y' },
-                        { question: 'Tableau/PowerBI 경험', answer: 'Y' },
-                        { question: 'A/B 테스트 설계 및 분석', answer: 'N' }
-                    ],
-                    appliedAt: Timestamp.now(),
-                    status: '검토중'
-                },
-                {
-                    recruiterId: currentUser.uid,
-                    applicantName: '정하은',
-                    applicantEmail: 'haeun.jung@example.com',
-                    applicantPhone: '010-5678-9012',
-                    applicantGender: '여성',
-                    jdTitle: 'Product Manager',
-                    requirementAnswers: [
-                        { question: '제품 기획 및 관리 경험 5년 이상', answer: 'Y' },
-                        { question: '애자일/스크럼 방법론 경험', answer: 'Y' },
-                        { question: '데이터 기반 의사결정 경험', answer: 'Y' },
-                        { question: '개발팀 협업 경험', answer: 'Y' }
-                    ],
-                    preferredAnswers: [
-                        { question: 'B2B SaaS 제품 경험', answer: 'N' },
-                        { question: '글로벌 시장 런칭 경험', answer: 'N' },
-                        { question: 'SQL 활용 능력', answer: 'Y' },
-                        { question: 'UX 리서치 진행 경험', answer: 'Y' }
-                    ],
-                    appliedAt: Timestamp.now(),
-                    status: '검토중'
-                }
-            ];
-
-            let count = 0;
-            for (const testApp of testApplicants) {
-                await addDoc(collection(db, 'applications'), testApp);
-                count++;
-            }
-            
-            console.log(`${count}명의 테스트 지원자 추가 완료`);
-            
-            // 목록 새로고침
-            setLoading(true);
-            await fetchApplications();
-            alert(`${count}명의 테스트 지원자가 추가되었습니다!`);
-        } catch (error) {
-            console.error('테스트 지원자 추가 실패:', error);
-            alert('테스트 지원자 추가에 실패했습니다: ' + error);
-        }
     };
 
     const filteredApplications = statusFilter === 'all'
