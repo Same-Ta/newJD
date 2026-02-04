@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   FileText, 
-  Users, 
   Settings, 
   LogOut, 
   CheckCircle2, 
@@ -16,7 +15,6 @@ import { LoginPage } from '@/pages/LoginPage';
 import { SignUpPage } from '@/pages/SignUpPage';
 import { DashboardHome } from '@/pages/Dashboard/DashboardHome';
 import { JDDetail } from '@/pages/Dashboard/JDDetail';
-import { ApplicantAnalytics } from '@/pages/Dashboard/ApplicantAnalytics';
 import { ApplicantList } from '@/pages/Dashboard/ApplicantList';
 import { ChatInterface } from '@/pages/Dashboard/ChatInterface';
 import { MyJDsPage } from '@/pages/Dashboard/MyJDsPage';

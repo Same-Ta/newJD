@@ -1,4 +1,4 @@
-import { Plus, Users, FileText, ChevronRight, X } from 'lucide-react';
+import { Plus, Users, FileText, ChevronRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { db, auth } from '@/config/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
