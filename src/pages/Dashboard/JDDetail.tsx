@@ -372,7 +372,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                         });
                                                     }
                                                 }}
-                                                disabled={isOwner}
+                                                disabled={!!isOwner}
                                                 className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
                                             />
                                             <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
@@ -422,7 +422,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                         });
                                                     }
                                                 }}
-                                                disabled={isOwner}
+                                                disabled={!!isOwner}
                                                 className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
                                             />
                                             <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
