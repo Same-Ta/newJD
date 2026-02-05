@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Filter, Download, X, Sparkles, FileText, Trash2 } from 'lucide-react';
+import { Filter, Download, X, Sparkles, FileText, Trash2, EyeOff, Shield } from 'lucide-react';
 import { db, auth } from '@/config/firebase';
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
+import { maskEmail, maskName, maskSensitiveData, safeLog } from '@/utils/security';
 
 interface Application {
     id: string;
@@ -32,6 +33,9 @@ export const ApplicantList = () => {
     const [selectedApplicant, setSelectedApplicant] = useState<Application | null>(null);
     const [aiSummary, setAiSummary] = useState<string>('');
     const [summaryLoading, setSummaryLoading] = useState(false);
+    
+    // 개인정보 마스킹 상태
+    const [isPrivacyMode, setIsPrivacyMode] = useState(true); // 기본값: 마스킹 활성화
 
     useEffect(() => {
         fetchApplications();
@@ -157,14 +161,15 @@ export const ApplicantList = () => {
                 return;
             }
 
-            // 답변 텍스트 생성
+            // 답변 텍스트 생성 (AI에 전송 시 민감정보 마스킹)
             let answersText = ``;
             
             if (application.requirementAnswers && application.requirementAnswers.length > 0) {
                 answersText += `[자격 요건 답변]\n`;
                 application.requirementAnswers.forEach(a => {
                     const status = a.answer === 'Y' ? '✓ 충족' : '✗ 미충족';
-                    const detail = a.detail ? ` - 상세: ${a.detail}` : '';
+                    // 상세 내용의 민감정보 마스킹
+                    const detail = a.detail ? ` - 상세: ${maskSensitiveData(a.detail)}` : '';
                     answersText += `${status} ${a.question}${detail}\n`;
                 });
                 answersText += `\n`;
@@ -174,10 +179,14 @@ export const ApplicantList = () => {
                 answersText += `[우대 사항 답변]\n`;
                 application.preferredAnswers.forEach(a => {
                     const status = a.answer === 'Y' ? '✓ 충족' : '✗ 미충족';
-                    const detail = a.detail ? ` - 상세: ${a.detail}` : '';
+                    // 상세 내용의 민감정보 마스킹
+                    const detail = a.detail ? ` - 상세: ${maskSensitiveData(a.detail)}` : '';
                     answersText += `${status} ${a.question}${detail}\n`;
                 });
             }
+
+            // AI 요청 로깅 (민감정보 제외)
+            safeLog('AI 분석 요청', { applicantId: application.id, jdTitle: application.jdTitle });
 
             const prompt = `[시스템 역할]
 당신은 초기 스타트업의 생존과 직결된 핵심 인재를 선발하는 전문 채용 컨설턴트입니다. 지원자의 답변에서 '추상적인 미사여구'를 걷어내고, 구체적인 [데이터, 방법론, 행동 패턴]을 근거로 역량(Skill)과 의지(Will)를 냉정하게 평가하세요.
@@ -329,6 +338,18 @@ ${answersText}
 
     // 엑셀 다운로드 함수
     const handleExcelDownload = () => {
+        // 보안 경고
+        const confirmed = confirm(
+            '⚠️ 보안 경고\n\n' +
+            '엑셀 파일에는 지원자의 개인정보(이름, 이메일, 전화번호)가 포함되어 있습니다.\n\n' +
+            '• 파일을 안전하게 보관하세요\n' +
+            '• 권한이 없는 사람과 공유하지 마세요\n' +
+            '• 사용 후 안전하게 삭제하세요\n\n' +
+            '다운로드하시겠습니까?'
+        );
+        
+        if (!confirmed) return;
+        
         try {
             // 엑셀로 변환할 데이터 준비
             const excelData = filteredApplications.map((app, index) => {
@@ -416,6 +437,20 @@ ${answersText}
              <div className="flex justify-between items-start mb-3">
                  <h3 className="font-bold text-lg text-gray-900">지원자 관리</h3>
                  <div className="flex gap-2">
+                     {/* 프라이버시 모드 토글 */}
+                     <button 
+                         onClick={() => setIsPrivacyMode(!isPrivacyMode)}
+                         className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                             isPrivacyMode 
+                                 ? 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200' 
+                                 : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200'
+                         }`}
+                         title={isPrivacyMode ? '개인정보 보호 모드 활성화됨' : '개인정보가 노출됩니다'}
+                     >
+                         {isPrivacyMode ? <Shield size={16}/> : <EyeOff size={16}/>}
+                         {isPrivacyMode ? '보호 모드' : '전체 표시'}
+                     </button>
+                     
                      {/* 상태별 필터 */}
                      <div className="relative">
                          <button 
@@ -534,8 +569,12 @@ ${answersText}
                              <tr key={application.id} className="hover:bg-blue-50/30 transition-colors group cursor-pointer">
                                  <td className="px-6 py-5"><input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" onClick={(e) => e.stopPropagation()}/></td>
                                  <td className="px-6 py-5" onClick={() => handleApplicantClick(application)}>
-                                     <div className="font-bold text-[14px] text-gray-900">{application.applicantName}</div>
-                                     <div className="text-[11px] text-gray-400">{application.applicantEmail}</div>
+                                     <div className="font-bold text-[14px] text-gray-900">
+                                         {isPrivacyMode ? maskName(application.applicantName) : application.applicantName}
+                                     </div>
+                                     <div className="text-[11px] text-gray-400">
+                                         {isPrivacyMode ? maskEmail(application.applicantEmail) : application.applicantEmail}
+                                     </div>
                                  </td>
                                  <td className="px-6 py-5" onClick={() => handleApplicantClick(application)}>
                                      <div className="text-[13px] font-medium text-gray-700">{application.jdTitle}</div>
@@ -617,7 +656,9 @@ ${answersText}
                                      <Sparkles size={24} className="fill-white" />
                                      <h2 className="text-2xl font-bold">AI 스크리닝 리포트</h2>
                                  </div>
-                                 <p className="text-blue-100 text-sm">{selectedApplicant.applicantName} · {selectedApplicant.jdTitle}</p>
+                                 <p className="text-blue-100 text-sm">
+                                     {isPrivacyMode ? maskName(selectedApplicant.applicantName) : selectedApplicant.applicantName} · {selectedApplicant.jdTitle}
+                                 </p>
                              </div>
                              <button onClick={closeModal} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
                                  <X size={24} />

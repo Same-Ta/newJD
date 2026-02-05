@@ -1,20 +1,74 @@
 // src/services/gemini.ts
+import { maskSensitiveData, safeLog } from './security';
 
-// ★ 중요: 여기에 실제 API 키를 넣거나 환경변수를 확인하세요.
+// 환경 변수에서 API 키 로드 (하드코딩 금지)
 const env = (import.meta as any).env as Record<string, string>;
-const API_KEY = env.VITE_GEMINI_API_KEY || "AIzaSyD_여기에_직접_키를_넣어도_됩니다";
+const API_KEY = env.VITE_GEMINI_API_KEY;
+
+// API 키 유효성 검사
+if (!API_KEY || API_KEY.includes('여기에')) {
+  console.error('⚠️ Gemini API 키가 설정되지 않았습니다. .env 파일을 확인하세요.');
+}
+
+/**
+ * 채팅 기록에서 민감 정보를 마스킹
+ */
+const sanitizeChatHistory = (chatHistory: any[]): any[] => {
+  return chatHistory.map(msg => ({
+    ...msg,
+    parts: msg.parts.map((part: any) => ({
+      ...part,
+      text: maskSensitiveData(part.text || '')
+    }))
+  }));
+};
 
 export const generateJD = async (message: string, chatHistory: any[]) => {
+  // API 키 검증
+  if (!API_KEY) {
+    return {
+      aiResponse: "API 키가 설정되지 않았습니다. 관리자에게 문의하세요.",
+      options: [],
+      jdData: {}
+    };
+  }
+
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
+    
+    // 민감 정보 마스킹 처리
+    const sanitizedMessage = maskSensitiveData(message);
+    const sanitizedHistory = sanitizeChatHistory(chatHistory);
+    
+    // 안전한 로깅 (민감 정보 제외)
+    safeLog('Gemini 요청:', { messageLength: message.length, historyLength: chatHistory.length });
     
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [
-          ...chatHistory,
-          { role: "user", parts: [{ text: message }] }
+          ...sanitizedHistory,
+          { role: "user", parts: [{ text: sanitizedMessage }] }
+        ],
+        // 안전 설정 추가
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_HATE_SPEECH",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          }
         ],
         system_instruction: {
             parts: [{ 

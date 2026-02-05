@@ -26,6 +26,18 @@ interface JDData {
     createdAt: any;
     status?: string;
     userId?: string;
+    // 지원 양식 커스텀 필드
+    applicationFields?: {
+        name: boolean;
+        email: boolean;
+        phone: boolean;
+        gender: boolean;
+        birthDate: boolean;
+        university: boolean;
+        major: boolean;
+        portfolio: boolean;
+        customQuestions: string[];
+    };
 }
 
 export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
@@ -41,6 +53,11 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
         email: '',
         phone: '',
         gender: '',
+        birthDate: '',
+        university: '',
+        major: '',
+        portfolio: '',
+        customAnswers: {} as Record<number, string>,
         requirementAnswers: {} as Record<number, { checked: boolean; detail: string }>,
         preferredAnswers: {} as Record<number, { checked: boolean; detail: string }>
     });
@@ -121,9 +138,16 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     };
 
     const handleApplicationSubmit = async () => {
-        // 유효성 검사
-        if (!applicationForm.name || !applicationForm.email || !applicationForm.phone) {
-            alert('이름, 이메일, 연락처는 필수 입력 항목입니다.');
+        // 필수 필드 검증 (이름, 이메일은 항상 필수)
+        if (!applicationForm.name || !applicationForm.email) {
+            alert('이름과 이메일은 필수 입력 항목입니다.');
+            return;
+        }
+        
+        // 전화번호가 필수로 설정된 경우 검증
+        const fields = jdData?.applicationFields;
+        if (fields?.phone && !applicationForm.phone) {
+            alert('전화번호는 필수 입력 항목입니다.');
             return;
         }
 
@@ -153,6 +177,12 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                     detail: answer?.detail || ''
                 };
             }) || [];
+            
+            // 커스텀 질문 응답 변환
+            const customQuestionResponses = fields?.customQuestions?.map((question, idx) => ({
+                question,
+                answer: applicationForm.customAnswers[idx] || ''
+            })) || [];
 
             // Firestore에 지원서 저장
             const applicationData = {
@@ -161,8 +191,13 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                 recruiterId: jdData.userId,
                 applicantName: applicationForm.name,
                 applicantEmail: applicationForm.email,
-                applicantPhone: applicationForm.phone,
+                applicantPhone: applicationForm.phone || '',
                 applicantGender: applicationForm.gender || '',
+                applicantBirthDate: applicationForm.birthDate || '',
+                applicantUniversity: applicationForm.university || '',
+                applicantMajor: applicationForm.major || '',
+                applicantPortfolio: applicationForm.portfolio || '',
+                customQuestionAnswers: customQuestionResponses,
                 requirementAnswers: requirementResponses,
                 preferredAnswers: preferredResponses,
                 appliedAt: serverTimestamp(),
@@ -180,6 +215,11 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                 email: '',
                 phone: '',
                 gender: '',
+                birthDate: '',
+                university: '',
+                major: '',
+                portfolio: '',
+                customAnswers: {},
                 requirementAnswers: {},
                 preferredAnswers: {}
             });
@@ -505,9 +545,12 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
 
                         {/* 모달 본문 */}
                         <div className="p-6 space-y-6">
-                            {/* 기본 정보 */}
+                            {/* 기본 정보 - 항상 표시되는 필수 필드 */}
                             <div className="space-y-4">
-                                <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider">기본 정보</h4>
+                                <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                                    <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                                    필수 정보
+                                </h4>
                                 
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">이름 *</label>
@@ -532,33 +575,143 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                         required
                                     />
                                 </div>
-
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">연락처 *</label>
-                                    <input
-                                        type="tel"
-                                        value={applicationForm.phone}
-                                        onChange={(e) => setApplicationForm({ ...applicationForm, phone: e.target.value })}
-                                        placeholder="010-0000-0000"
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        required
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">성별</label>
-                                    <select
-                                        value={applicationForm.gender}
-                                        onChange={(e) => setApplicationForm({ ...applicationForm, gender: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    >
-                                        <option value="">선택 안 함</option>
-                                        <option value="남성">남성</option>
-                                        <option value="여성">여성</option>
-                                        <option value="기타">기타</option>
-                                    </select>
-                                </div>
                             </div>
+
+                            {/* 선택 정보 - applicationFields 설정에 따라 표시 */}
+                            {(jdData?.applicationFields?.phone || 
+                              jdData?.applicationFields?.gender || 
+                              jdData?.applicationFields?.birthDate ||
+                              jdData?.applicationFields?.university ||
+                              jdData?.applicationFields?.major ||
+                              jdData?.applicationFields?.portfolio ||
+                              // 기존 공고 호환성: applicationFields가 없으면 기본값 표시
+                              !jdData?.applicationFields) && (
+                                <div className="space-y-4">
+                                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                                        <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                        추가 정보
+                                    </h4>
+                                    
+                                    {/* 전화번호 - 기본 표시 또는 설정된 경우 */}
+                                    {(jdData?.applicationFields?.phone || !jdData?.applicationFields) && (
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                연락처 {jdData?.applicationFields?.phone && '*'}
+                                            </label>
+                                            <input
+                                                type="tel"
+                                                value={applicationForm.phone}
+                                                onChange={(e) => setApplicationForm({ ...applicationForm, phone: e.target.value })}
+                                                placeholder="010-0000-0000"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* 성별 */}
+                                    {(jdData?.applicationFields?.gender || !jdData?.applicationFields) && (
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">성별</label>
+                                            <select
+                                                value={applicationForm.gender}
+                                                onChange={(e) => setApplicationForm({ ...applicationForm, gender: e.target.value })}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            >
+                                                <option value="">선택 안 함</option>
+                                                <option value="남성">남성</option>
+                                                <option value="여성">여성</option>
+                                                <option value="기타">기타</option>
+                                            </select>
+                                        </div>
+                                    )}
+                                    
+                                    {/* 생년월일 */}
+                                    {jdData?.applicationFields?.birthDate && (
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">생년월일</label>
+                                            <input
+                                                type="date"
+                                                value={applicationForm.birthDate}
+                                                onChange={(e) => setApplicationForm({ ...applicationForm, birthDate: e.target.value })}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                    )}
+                                    
+                                    {/* 학교 */}
+                                    {jdData?.applicationFields?.university && (
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">학교</label>
+                                            <input
+                                                type="text"
+                                                value={applicationForm.university}
+                                                onChange={(e) => setApplicationForm({ ...applicationForm, university: e.target.value })}
+                                                placeholder="OO대학교"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                    )}
+                                    
+                                    {/* 전공 */}
+                                    {jdData?.applicationFields?.major && (
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">전공</label>
+                                            <input
+                                                type="text"
+                                                value={applicationForm.major}
+                                                onChange={(e) => setApplicationForm({ ...applicationForm, major: e.target.value })}
+                                                placeholder="컴퓨터공학과"
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                    )}
+                                    
+                                    {/* 포트폴리오 */}
+                                    {jdData?.applicationFields?.portfolio && (
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">포트폴리오 링크</label>
+                                            <input
+                                                type="url"
+                                                value={applicationForm.portfolio}
+                                                onChange={(e) => setApplicationForm({ ...applicationForm, portfolio: e.target.value })}
+                                                placeholder="https://..."
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            
+                            {/* 커스텀 질문 */}
+                            {jdData?.applicationFields?.customQuestions && jdData.applicationFields.customQuestions.length > 0 && (
+                                <div className="space-y-4">
+                                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                                        <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+                                        추가 질문
+                                    </h4>
+                                    
+                                    {jdData.applicationFields.customQuestions.map((question, idx) => (
+                                        <div key={idx}>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                                Q{idx + 1}. {question}
+                                            </label>
+                                            <textarea
+                                                value={applicationForm.customAnswers[idx] || ''}
+                                                onChange={(e) => setApplicationForm({
+                                                    ...applicationForm,
+                                                    customAnswers: {
+                                                        ...applicationForm.customAnswers,
+                                                        [idx]: e.target.value
+                                                    }
+                                                })}
+                                                placeholder="답변을 입력해주세요"
+                                                rows={3}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* 모달 푸터 */}

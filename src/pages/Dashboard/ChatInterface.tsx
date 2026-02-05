@@ -19,6 +19,18 @@ interface CurrentJD {
     requirements: string[];
     preferred: string[];
     benefits: string[];
+    // 지원 양식 커스텀 필드
+    applicationFields?: {
+        name: boolean;
+        email: boolean;
+        phone: boolean;
+        gender: boolean;
+        birthDate: boolean;
+        university: boolean;
+        major: boolean;
+        portfolio: boolean;
+        customQuestions: string[];
+    };
 }
 
 interface ChatMessage {
@@ -78,6 +90,21 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     const chatEndRef = useRef<HTMLDivElement>(null);
     const [isEditMode, setIsEditMode] = useState(false);
     const [editedJD, setEditedJD] = useState<CurrentJD>(currentJD);
+    
+    // 지원 양식 커스터마이징 모달 상태
+    const [showApplicationFieldsModal, setShowApplicationFieldsModal] = useState(false);
+    const [applicationFieldsConfig, setApplicationFieldsConfig] = useState({
+        name: true,        // 필수 (비활성화 불가)
+        email: true,       // 필수 (비활성화 불가)
+        phone: true,
+        gender: false,
+        birthDate: false,
+        university: false,
+        major: false,
+        portfolio: false,
+        customQuestions: [] as string[]
+    });
+    const [newCustomQuestion, setNewCustomQuestion] = useState('');
 
     // 페이지 로드 시 임시저장 데이터 불러오기
     useEffect(() => {
@@ -199,6 +226,42 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         }
     };
 
+    // 공고 게시 버튼 클릭 시 -> 지원양식 설정 모달 표시
+    const handlePublishClick = () => {
+        const user = auth.currentUser;
+        if (!user) {
+            alert('로그인이 필요합니다.');
+            return;
+        }
+
+        if (!currentJD.title && currentJD.responsibilities.length === 0) {
+            alert('게시할 내용이 없습니다.');
+            return;
+        }
+
+        setShowApplicationFieldsModal(true);
+    };
+
+    // 커스텀 질문 추가
+    const addCustomQuestion = () => {
+        if (newCustomQuestion.trim()) {
+            setApplicationFieldsConfig(prev => ({
+                ...prev,
+                customQuestions: [...prev.customQuestions, newCustomQuestion.trim()]
+            }));
+            setNewCustomQuestion('');
+        }
+    };
+
+    // 커스텀 질문 삭제
+    const removeCustomQuestion = (index: number) => {
+        setApplicationFieldsConfig(prev => ({
+            ...prev,
+            customQuestions: prev.customQuestions.filter((_, i) => i !== index)
+        }));
+    };
+
+    // 실제 공고 게시 (모달에서 확인 후)
     const publishJob = async () => {
         const user = auth.currentUser;
         if (!user) {
@@ -232,7 +295,9 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 responsibilities: currentJD.responsibilities || [],
                 requirements: currentJD.requirements || [],
                 preferred: currentJD.preferred || [],
-                benefits: currentJD.benefits || []
+                benefits: currentJD.benefits || [],
+                // 지원 양식 설정 추가
+                applicationFields: applicationFieldsConfig
             };
 
             console.log('저장할 데이터:', jobData);
@@ -241,6 +306,9 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             const jobDocRef = await addDoc(collection(db, 'jds'), jobData);
             
             console.log('JD 저장 완료:', jobDocRef.id);
+            
+            // 모달 닫기
+            setShowApplicationFieldsModal(false);
             
             // 화면 초기화
             setCurrentJD({
@@ -258,6 +326,19 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 requirements: [],
                 preferred: [],
                 benefits: []
+            });
+            
+            // 지원 양식 설정 초기화
+            setApplicationFieldsConfig({
+                name: true,
+                email: true,
+                phone: true,
+                gender: false,
+                birthDate: false,
+                university: false,
+                major: false,
+                portfolio: false,
+                customQuestions: []
             });
             
             // 채팅 내역 초기화
@@ -475,7 +556,24 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                             : 'bg-blue-600 rounded-tr-none text-white border-blue-600'
                                     }`}>
                                         {msg.role === 'ai' ? (
-                                            <span dangerouslySetInnerHTML={{ __html: msg.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>') }} />
+                                            <span dangerouslySetInnerHTML={{ 
+                                                __html: (() => {
+                                                    // JSON 객체가 아닌 순수 텍스트만 표시
+                                                    let displayText = msg.text;
+                                                    try {
+                                                        // JSON 형태의 문자열이면 파싱 시도
+                                                        const parsed = JSON.parse(msg.text);
+                                                        // aiResponse 필드가 있으면 그것만 사용
+                                                        if (parsed.aiResponse) {
+                                                            displayText = parsed.aiResponse;
+                                                        }
+                                                    } catch (e) {
+                                                        // JSON이 아니면 원본 텍스트 사용
+                                                        displayText = msg.text;
+                                                    }
+                                                    return displayText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>');
+                                                })()
+                                            }} />
                                         ) : (
                                             msg.text
                                         )}
@@ -847,7 +945,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                         <>
                                             <button onClick={startEdit} className="px-4 py-2.5 border border-blue-500 text-blue-600 rounded-lg text-[13px] font-bold hover:bg-blue-50 transition-colors">편집</button>
                                             <button onClick={saveDraft} className="px-4 py-2.5 border border-gray-200 rounded-lg text-[13px] font-bold text-gray-600 hover:bg-gray-50 transition-colors">임시 저장</button>
-                                            <button onClick={publishJob} className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-[13px] font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all">공고 게시</button>
+                                            <button onClick={handlePublishClick} className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-[13px] font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all">공고 게시</button>
                                         </>
                                     ) : (
                                         <>
@@ -866,6 +964,174 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                     </div>
                 </div>
             </div>
+            
+            {/* 지원 양식 커스터마이징 모달 */}
+            {showApplicationFieldsModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl max-w-md w-full max-h-[85vh] overflow-hidden shadow-2xl border border-gray-200">
+                        {/* 모달 헤더 */}
+                        <div className="px-6 py-5 border-b border-gray-100">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h2 className="text-[17px] font-bold text-gray-900">지원 양식 설정</h2>
+                                    <p className="text-[12px] text-gray-500 mt-1">지원자로부터 받을 정보를 선택하세요</p>
+                                </div>
+                                <button 
+                                    onClick={() => setShowApplicationFieldsModal(false)}
+                                    className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {/* 모달 본문 */}
+                        <div className="p-6 overflow-y-auto max-h-[55vh]">
+                            {/* 필수 정보 */}
+                            <div className="mb-6">
+                                <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">필수 정보</h3>
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between py-2.5 px-3 bg-gray-50 rounded-lg">
+                                        <span className="text-[13px] font-medium text-gray-500">이름</span>
+                                        <div className="w-5 h-5 bg-blue-600 rounded flex items-center justify-center">
+                                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between py-2.5 px-3 bg-gray-50 rounded-lg">
+                                        <span className="text-[13px] font-medium text-gray-500">이메일</span>
+                                        <div className="w-5 h-5 bg-blue-600 rounded flex items-center justify-center">
+                                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {/* 선택 정보 */}
+                            <div className="mb-6">
+                                <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">선택 정보</h3>
+                                <div className="space-y-2">
+                                    <label className="flex items-center justify-between py-2.5 px-3 bg-white border border-gray-200 rounded-lg hover:border-blue-400 cursor-pointer transition-all group">
+                                        <span className="text-[13px] font-medium text-gray-700 group-hover:text-gray-900">전화번호</span>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={applicationFieldsConfig.phone}
+                                            onChange={(e) => setApplicationFieldsConfig({...applicationFieldsConfig, phone: e.target.checked})}
+                                            className="w-[18px] h-[18px] text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                        />
+                                    </label>
+                                    <label className="flex items-center justify-between py-2.5 px-3 bg-white border border-gray-200 rounded-lg hover:border-blue-400 cursor-pointer transition-all group">
+                                        <span className="text-[13px] font-medium text-gray-700 group-hover:text-gray-900">성별</span>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={applicationFieldsConfig.gender}
+                                            onChange={(e) => setApplicationFieldsConfig({...applicationFieldsConfig, gender: e.target.checked})}
+                                            className="w-[18px] h-[18px] text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                        />
+                                    </label>
+                                    <label className="flex items-center justify-between py-2.5 px-3 bg-white border border-gray-200 rounded-lg hover:border-blue-400 cursor-pointer transition-all group">
+                                        <span className="text-[13px] font-medium text-gray-700 group-hover:text-gray-900">생년월일</span>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={applicationFieldsConfig.birthDate}
+                                            onChange={(e) => setApplicationFieldsConfig({...applicationFieldsConfig, birthDate: e.target.checked})}
+                                            className="w-[18px] h-[18px] text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                        />
+                                    </label>
+                                    <label className="flex items-center justify-between py-2.5 px-3 bg-white border border-gray-200 rounded-lg hover:border-blue-400 cursor-pointer transition-all group">
+                                        <span className="text-[13px] font-medium text-gray-700 group-hover:text-gray-900">학교</span>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={applicationFieldsConfig.university}
+                                            onChange={(e) => setApplicationFieldsConfig({...applicationFieldsConfig, university: e.target.checked})}
+                                            className="w-[18px] h-[18px] text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                        />
+                                    </label>
+                                    <label className="flex items-center justify-between py-2.5 px-3 bg-white border border-gray-200 rounded-lg hover:border-blue-400 cursor-pointer transition-all group">
+                                        <span className="text-[13px] font-medium text-gray-700 group-hover:text-gray-900">전공</span>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={applicationFieldsConfig.major}
+                                            onChange={(e) => setApplicationFieldsConfig({...applicationFieldsConfig, major: e.target.checked})}
+                                            className="w-[18px] h-[18px] text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                        />
+                                    </label>
+                                    <label className="flex items-center justify-between py-2.5 px-3 bg-white border border-gray-200 rounded-lg hover:border-blue-400 cursor-pointer transition-all group">
+                                        <span className="text-[13px] font-medium text-gray-700 group-hover:text-gray-900">포트폴리오 링크</span>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={applicationFieldsConfig.portfolio}
+                                            onChange={(e) => setApplicationFieldsConfig({...applicationFieldsConfig, portfolio: e.target.checked})}
+                                            className="w-[18px] h-[18px] text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                        />
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            {/* 커스텀 질문 */}
+                            <div>
+                                <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">추가 질문</h3>
+                                
+                                {/* 추가된 질문 목록 */}
+                                {applicationFieldsConfig.customQuestions.length > 0 && (
+                                    <div className="space-y-2 mb-3">
+                                        {applicationFieldsConfig.customQuestions.map((question, idx) => (
+                                            <div key={idx} className="flex items-center gap-3 py-2.5 px-3 bg-blue-50 border border-blue-100 rounded-lg">
+                                                <span className="text-[12px] font-bold text-blue-600 shrink-0">Q{idx + 1}</span>
+                                                <span className="flex-1 text-[13px] text-gray-700 truncate">{question}</span>
+                                                <button
+                                                    onClick={() => removeCustomQuestion(idx)}
+                                                    className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors shrink-0"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                
+                                {/* 새 질문 입력 */}
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={newCustomQuestion}
+                                        onChange={(e) => setNewCustomQuestion(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && addCustomQuestion()}
+                                        placeholder="질문을 입력하세요"
+                                        className="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400"
+                                    />
+                                    <button
+                                        onClick={addCustomQuestion}
+                                        disabled={!newCustomQuestion.trim()}
+                                        className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-[13px] font-semibold hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        추가
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* 모달 푸터 */}
+                        <div className="border-t border-gray-100 px-6 py-4 bg-[#FAFBFC] flex justify-end items-center gap-2">
+                            <button
+                                onClick={() => setShowApplicationFieldsModal(false)}
+                                className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-[13px] font-semibold hover:bg-gray-50 transition-colors"
+                            >
+                                취소
+                            </button>
+                            <button
+                                onClick={publishJob}
+                                className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-[13px] font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                            >
+                                공고 게시
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
