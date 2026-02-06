@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Filter, Download, X, Sparkles, FileText, Trash2, EyeOff, Shield } from 'lucide-react';
+import { Filter, Download, X, Sparkles, FileText, Trash2, Search, Calendar, ChevronDown, Users } from 'lucide-react';
 import { auth } from '@/config/firebase';
 import * as XLSX from 'xlsx';
-import { maskEmail, maskName } from '@/utils/security';
 import { applicationAPI, jdAPI } from '@/services/api';
 
 interface Application {
@@ -21,21 +20,27 @@ interface Application {
 export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant?: (id: string) => void }) => {
     const [applications, setApplications] = useState<Application[]>([]);
     const [loading, setLoading] = useState(true);
-    const [statusFilter, setStatusFilter] = useState<string>('all');
-    const [showFilterMenu, setShowFilterMenu] = useState(false);
     
-    // 공고별 필터링 상태
-    const [jdFilter, setJdFilter] = useState<string>('all');
+    // 다중 필터 상태
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
+    const [jdFilter, setJdFilter] = useState<string[]>([]);
+    const [genderFilter, setGenderFilter] = useState<string[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [dateRange, setDateRange] = useState<{start: string, end: string}>({start: '', end: ''});
+    
+    // 드롭다운 메뉴 상태
+    const [showStatusMenu, setShowStatusMenu] = useState(false);
+    const [showJdMenu, setShowJdMenu] = useState(false);
+    const [showGenderMenu, setShowGenderMenu] = useState(false);
+    const [showDateMenu, setShowDateMenu] = useState(false);
+    
+    // 공고 목록
     const [jdList, setJdList] = useState<Array<{ id: string; title: string }>>([]);
-    const [showJdFilterMenu, setShowJdFilterMenu] = useState(false);
     
     // AI 스크리닝 리포트 관련 상태
     const [selectedApplicant, setSelectedApplicant] = useState<Application | null>(null);
     const [aiSummary, setAiSummary] = useState<string>('');
     const [summaryLoading, setSummaryLoading] = useState(false);
-    
-    // 개인정보 마스킹 상태
-    const [isPrivacyMode, setIsPrivacyMode] = useState(true); // 기본값: 마스킹 활성화
 
     useEffect(() => {
         fetchApplications();
@@ -66,7 +71,7 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
         } catch (error) {
             console.error('지원서 로딩 실패:', error);
             alert('지원서를 불러오는 중 오류가 발생했습니다.');
-        } finally {
+        } finally{
             setLoading(false);
         }
     };
@@ -241,11 +246,125 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
         }
     };
 
-    const filteredApplications = applications
-        .filter(app => statusFilter === 'all' || app.status === statusFilter)
-        .filter(app => jdFilter === 'all' || app.jdTitle === jdFilter);
+    const filteredApplications = applications.filter(app => {
+        // 상태 필터
+        if (statusFilter.length > 0 && !statusFilter.includes(app.status)) {
+            return false;
+        }
+        
+        // 공고 필터
+        if (jdFilter.length > 0 && !jdFilter.includes(app.jdTitle)) {
+            return false;
+        }
+        
+        // 성별 필터
+        if (genderFilter.length > 0 && !genderFilter.includes(app.applicantGender || '')) {
+            return false;
+        }
+        
+        // 검색어 필터 (이름, 이메일, 전화번호)
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            const matchesName = app.applicantName.toLowerCase().includes(query);
+            const matchesEmail = app.applicantEmail.toLowerCase().includes(query);
+            const matchesPhone = app.applicantPhone?.toLowerCase().includes(query);
+            
+            if (!matchesName && !matchesEmail && !matchesPhone) {
+                return false;
+            }
+        }
+        
+        // 날짜 범위 필터
+        if (dateRange.start || dateRange.end) {
+            const appDate = new Date(app.appliedAt.seconds * 1000);
+            
+            if (dateRange.start) {
+                const startDate = new Date(dateRange.start);
+                startDate.setHours(0, 0, 0, 0);
+                if (appDate < startDate) return false;
+            }
+            
+            if (dateRange.end) {
+                const endDate = new Date(dateRange.end);
+                endDate.setHours(23, 59, 59, 999);
+                if (appDate > endDate) return false;
+            }
+        }
+        
+        return true;
+    });
 
     const statusOptions = ['검토중', '합격', '불합격'];
+    const genderOptions = ['남성', '여성', '기타'];
+
+    // 필터 토글 함수들
+    const toggleStatusFilter = (status: string) => {
+        setStatusFilter(prev => 
+            prev.includes(status) 
+                ? prev.filter(s => s !== status)
+                : [...prev, status]
+        );
+    };
+
+    const toggleJdFilter = (jdTitle: string) => {
+        setJdFilter(prev => 
+            prev.includes(jdTitle) 
+                ? prev.filter(j => j !== jdTitle)
+                : [...prev, jdTitle]
+        );
+    };
+
+    const toggleGenderFilter = (gender: string) => {
+        setGenderFilter(prev => 
+            prev.includes(gender) 
+                ? prev.filter(g => g !== gender)
+                : [...prev, gender]
+        );
+    };
+
+    // 빠른 날짜 필터
+    const setQuickDateFilter = (type: 'today' | 'week' | 'month' | 'all') => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        switch(type) {
+            case 'today':
+                setDateRange({
+                    start: today.toISOString().split('T')[0],
+                    end: today.toISOString().split('T')[0]
+                });
+                break;
+            case 'week':
+                const weekAgo = new Date(today);
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                setDateRange({
+                    start: weekAgo.toISOString().split('T')[0],
+                    end: today.toISOString().split('T')[0]
+                });
+                break;
+            case 'month':
+                const monthAgo = new Date(today);
+                monthAgo.setMonth(monthAgo.getMonth() - 1);
+                setDateRange({
+                    start: monthAgo.toISOString().split('T')[0],
+                    end: today.toISOString().split('T')[0]
+                });
+                break;
+            case 'all':
+                setDateRange({start: '', end: ''});
+                break;
+        }
+        setShowDateMenu(false);
+    };
+
+    // 모든 필터 초기화
+    const clearAllFilters = () => {
+        setStatusFilter([]);
+        setJdFilter([]);
+        setGenderFilter([]);
+        setSearchQuery('');
+        setDateRange({start: '', end: ''});
+    };
 
     if (loading) {
         return (
@@ -259,345 +378,538 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
     }
 
     return (
-     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm min-h-[600px] flex flex-col max-w-[1200px] mx-auto">
-         <div className="p-6 border-b border-gray-100">
-             <div className="flex justify-between items-start mb-3">
-                 <h3 className="font-bold text-lg text-gray-900">지원자 관리</h3>
-                 <div className="flex gap-2">
-                     {/* 프라이버시 모드 토글 */}
-                     <button 
-                         onClick={() => setIsPrivacyMode(!isPrivacyMode)}
-                         className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                             isPrivacyMode 
-                                 ? 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200' 
-                                 : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200'
-                         }`}
-                         title={isPrivacyMode ? '개인정보 보호 모드 활성화됨' : '개인정보가 노출됩니다'}
-                     >
-                         {isPrivacyMode ? <Shield size={16}/> : <EyeOff size={16}/>}
-                         {isPrivacyMode ? '보호 모드' : '전체 표시'}
-                     </button>
-                     
-                     {/* 상태별 필터 */}
-                     <div className="relative">
-                         <button 
-                             onClick={() => setShowFilterMenu(!showFilterMenu)}
-                             className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-medium text-gray-600 transition-colors"
-                         >
-                             <Filter size={16}/> 필터 {statusFilter !== 'all' && `(${statusFilter})`}
-                         </button>
-                         
-                         {showFilterMenu && (
-                             <div className="absolute top-12 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-2 w-40">
-                                 <button
-                                     onClick={() => {
-                                         setStatusFilter('all');
-                                         setShowFilterMenu(false);
-                                     }}
-                                     className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
-                                 >
-                                     전체 보기
-                                 </button>
-                                 {statusOptions.map(status => (
-                                     <button
-                                         key={status}
-                                         onClick={() => {
-                                             setStatusFilter(status);
-                                             setShowFilterMenu(false);
-                                         }}
-                                         className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
-                                     >
-                                         {status}
-                                     </button>
-                                 ))}
-                             </div>
-                         )}
-                     </div>
-                     
-                     <button 
-                         onClick={handleExcelDownload}
-                         className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-medium text-gray-600 transition-colors"
-                     >
-                         <Download size={16}/> 엑셀 다운로드
-                     </button>
-                 </div>
-             </div>
-             
-             {/* 공고별 필터 - 지원자 관리 바로 아래, 흰색 배경, ▽ 아이콘 */}
-             <div className="relative inline-block mb-3">
-                 <button 
-                     onClick={() => setShowJdFilterMenu(!showJdFilterMenu)}
-                     className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-colors border border-gray-200 shadow-sm"
-                 >
-                     <FileText size={16} className="text-gray-500"/>
-                     <span>{jdFilter === 'all' ? '모든 공고' : jdFilter}</span>
-                     {jdList.length > 0 && (
-                         <span className="ml-1 px-2 py-0.5 bg-gray-100 rounded-full text-xs text-gray-600">{jdList.length}</span>
-                     )}
-                     <span className="ml-1 text-gray-400">▽</span>
-                 </button>
-                 
-                 {showJdFilterMenu && (
-                     <div className="absolute top-12 left-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-2 min-w-[250px] max-h-[300px] overflow-y-auto">
-                         <button
-                             onClick={() => {
-                                 setJdFilter('all');
-                                 setShowJdFilterMenu(false);
-                             }}
-                             className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors ${
-                                 jdFilter === 'all' ? 'bg-blue-50 text-blue-600 font-semibold' : ''
-                             }`}
-                         >
-                             모든 공고
-                         </button>
-                         {jdList.map(jd => (
-                             <button
-                                 key={jd.id}
-                                 onClick={() => {
-                                     setJdFilter(jd.title);
-                                     setShowJdFilterMenu(false);
-                                 }}
-                                 className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors ${
-                                     jdFilter === jd.title ? 'bg-blue-50 text-blue-600 font-semibold' : ''
-                                 }`}
-                             >
-                                 {jd.title}
-                             </button>
-                         ))}
-                     </div>
-                 )}
-             </div>
-             
-             <p className="text-xs text-gray-400">총 {filteredApplications.length}명의 지원자가 있습니다.</p>
-         </div>
-         <div className="flex-1 overflow-auto">
-             <table className="w-full text-left text-sm text-gray-600">
-                 <thead className="bg-[#F8FAFC] text-[11px] uppercase font-bold text-gray-400 tracking-wider">
-                     <tr>
-                         <th className="px-6 py-4 w-12"><input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"/></th>
-                         <th className="px-6 py-4">이름</th>
-                         <th className="px-6 py-4">지원 포지션</th>
-                         <th className="px-6 py-4">성별</th>
-                         <th className="px-6 py-4">지원 일시</th>
-                         <th className="px-6 py-4">작성 내용</th>
-                         <th className="px-6 py-4 text-center">상태</th>
-                         <th className="px-6 py-4 text-center">관리</th>
-                     </tr>
-                 </thead>
-                 <tbody className="divide-y divide-gray-50">
-                     {filteredApplications.length === 0 ? (
-                         <tr>
-                             <td colSpan={8} className="px-6 py-20 text-center text-gray-400">
-                                 {statusFilter === 'all' ? '아직 지원자가 없습니다.' : `${statusFilter} 상태의 지원자가 없습니다.`}
-                             </td>
-                         </tr>
-                     ) : (
-                         filteredApplications.map((application) => (
-                             <tr key={application.id} className="hover:bg-blue-50/30 transition-colors group cursor-pointer">
-                                 <td className="px-6 py-5"><input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" onClick={(e) => e.stopPropagation()}/></td>
-                                 <td className="px-6 py-5" onClick={() => handleApplicantClick(application)}>
-                                     <div className="font-bold text-[14px] text-gray-900">
-                                         {isPrivacyMode ? maskName(application.applicantName) : application.applicantName}
-                                     </div>
-                                     <div className="text-[11px] text-gray-400">
-                                         {isPrivacyMode ? maskEmail(application.applicantEmail) : application.applicantEmail}
-                                     </div>
-                                 </td>
-                                 <td className="px-6 py-5" onClick={() => handleApplicantClick(application)}>
-                                     <div className="text-[13px] font-medium text-gray-700">{application.jdTitle}</div>
-                                 </td>
-                                 <td className="px-6 py-5 text-[13px] text-gray-600" onClick={() => handleApplicantClick(application)}>{application.applicantGender || '-'}</td>
-                                 <td className="px-6 py-5 text-[13px] text-gray-400" onClick={() => handleApplicantClick(application)}>{formatDate(application.appliedAt)}</td>
-                                 <td className="px-6 py-5">
-                                     <button
-                                         onClick={(e) => {
-                                             e.stopPropagation();
-                                             handleApplicantClick(application);
-                                         }}
-                                         className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-[12px] font-medium"
-                                     >
-                                         <Sparkles size={14} />
-                                         AI 분석
-                                     </button>
-                                 </td>
-                                 <td className="px-6 py-5">
-                                     <div className="flex justify-center gap-1">
-                                         <button
-                                             onClick={(e) => {
-                                                 e.stopPropagation();
-                                                 handleStatusChange(application.id, '합격');
-                                             }}
-                                             className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all ${
-                                                 application.status === '합격' 
-                                                     ? 'bg-green-500 text-white shadow-md' 
-                                                     : 'bg-gray-100 text-gray-500 hover:bg-green-100 hover:text-green-600'
-                                             }`}
-                                         >
-                                             합격
-                                         </button>
-                                         <button
-                                             onClick={(e) => {
-                                                 e.stopPropagation();
-                                                 handleStatusChange(application.id, '불합격');
-                                             }}
-                                             className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all ${
-                                                 application.status === '불합격' 
-                                                     ? 'bg-red-500 text-white shadow-md' 
-                                                     : 'bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-600'
-                                             }`}
-                                         >
-                                             불합격
-                                         </button>
-                                     </div>
-                                 </td>
-                                 <td className="px-6 py-5">
-                                     <div className="flex justify-center">
-                                         <button
-                                             onClick={(e) => {
-                                                 e.stopPropagation();
-                                                 handleDeleteApplicant(application.id, application.applicantName);
-                                             }}
-                                             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                             title="지원자 삭제"
-                                         >
-                                             <Trash2 size={16} />
-                                         </button>
-                                     </div>
-                                 </td>
-                             </tr>
-                         ))
-                     )}
-                 </tbody>
-             </table>
-         </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm min-h-[600px] flex flex-col max-w-[1400px] mx-auto">
+            <div className="p-6 border-b border-gray-100">
+                <div className="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 className="font-bold text-xl text-gray-900 mb-1">지원자 관리</h3>
+                        <p className="text-sm text-gray-500">총 {filteredApplications.length}명의 지원자</p>
+                    </div>
+                    
+                    <button 
+                        onClick={handleExcelDownload}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+                    >
+                        <Download size={18}/> 엑셀 다운로드
+                    </button>
+                </div>
+                
+                {/* 필터 영역 */}
+                <div className="space-y-3">
+                    {/* 검색바 */}
+                    <div className="relative">
+                        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="이름, 이메일, 전화번호로 검색..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        />
+                    </div>
+                    
+                    {/* 필터 버튼들 */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {/* 상태 필터 */}
+                        <div className="relative">
+                            <button 
+                                onClick={() => setShowStatusMenu(!showStatusMenu)}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                                    statusFilter.length > 0 
+                                        ? 'bg-blue-50 text-blue-700 border-blue-200' 
+                                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                }`}
+                            >
+                                <Filter size={16}/>
+                                상태
+                                {statusFilter.length > 0 && (
+                                    <span className="ml-1 px-1.5 py-0.5 bg-blue-600 text-white rounded-full text-xs font-bold">
+                                        {statusFilter.length}
+                                    </span>
+                                )}
+                                <ChevronDown size={14} />
+                            </button>
+                            
+                            {showStatusMenu && (
+                                <div className="absolute top-12 left-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-2 w-40">
+                                    {statusOptions.map(status => (
+                                        <label
+                                            key={status}
+                                            className="flex items-center gap-2 px-4 py-2 hover:bg-gray-50 cursor-pointer"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={statusFilter.includes(status)}
+                                                onChange={() => toggleStatusFilter(status)}
+                                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <span className="text-sm text-gray-700">{status}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
-         {/* AI 스크리닝 리포트 모달 */}
-         {selectedApplicant && (
-             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeModal}>
-                 <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                     {/* 모달 헤더 */}
-                     <div className="bg-gradient-to-r from-blue-600 to-blue-500 p-6 text-white">
-                         <div className="flex justify-between items-start">
-                             <div>
-                                 <div className="flex items-center gap-2 mb-2">
-                                     <Sparkles size={24} className="fill-white" />
-                                     <h2 className="text-2xl font-bold">AI 스크리닝 리포트</h2>
-                                 </div>
-                                 <p className="text-blue-100 text-sm">
-                                     {isPrivacyMode ? maskName(selectedApplicant.applicantName) : selectedApplicant.applicantName} · {selectedApplicant.jdTitle}
-                                 </p>
-                             </div>
-                             <button onClick={closeModal} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
-                                 <X size={24} />
-                             </button>
-                         </div>
-                     </div>
+                        {/* 공고 필터 */}
+                        <div className="relative">
+                            <button 
+                                onClick={() => setShowJdMenu(!showJdMenu)}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                                    jdFilter.length > 0 
+                                        ? 'bg-purple-50 text-purple-700 border-purple-200' 
+                                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                }`}
+                            >
+                                <FileText size={16}/>
+                                공고
+                                {jdFilter.length > 0 && (
+                                    <span className="ml-1 px-1.5 py-0.5 bg-purple-600 text-white rounded-full text-xs font-bold">
+                                        {jdFilter.length}
+                                    </span>
+                                )}
+                                <ChevronDown size={14} />
+                            </button>
+                            
+                            {showJdMenu && (
+                                <div className="absolute top-12 left-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-2 min-w-[250px] max-h-[300px] overflow-y-auto">
+                                    {jdList.map(jd => (
+                                        <label
+                                            key={jd.id}
+                                            className="flex items-center gap-2 px-4 py-2 hover:bg-gray-50 cursor-pointer"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={jdFilter.includes(jd.title)}
+                                                onChange={() => toggleJdFilter(jd.title)}
+                                                className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                            />
+                                            <span className="text-sm text-gray-700">{jd.title}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
-                     {/* 모달 본문 */}
-                     <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                         {/* AI 요약 섹션 */}
-                         <div className="mb-8">
-                             <div className="flex items-center gap-2 mb-4">
-                                 <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                                     <Sparkles size={18} className="text-blue-600" />
-                                 </div>
-                                 <h3 className="text-lg font-bold text-gray-900">AI 자동 요약</h3>
-                             </div>
-                             
-                             {summaryLoading ? (
-                                 <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
-                                     <div className="flex items-center gap-3">
-                                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                                         <p className="text-gray-600">AI가 지원자 답변을 분석하고 있습니다...</p>
-                                     </div>
-                                 </div>
-                             ) : (
-                                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
-                                     <div className="prose prose-sm max-w-none">
-                                         <div className="text-gray-800 whitespace-pre-wrap leading-relaxed">
-                                             {aiSummary || 'AI 요약을 생성하는 중입니다...'}
-                                         </div>
-                                     </div>
-                                 </div>
-                             )}
-                         </div>
+                        {/* 성별 필터 */}
+                        <div className="relative">
+                            <button 
+                                onClick={() => setShowGenderMenu(!showGenderMenu)}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                                    genderFilter.length > 0 
+                                        ? 'bg-green-50 text-green-700 border-green-200' 
+                                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                }`}
+                            >
+                                <Users size={16}/>
+                                성별
+                                {genderFilter.length > 0 && (
+                                    <span className="ml-1 px-1.5 py-0.5 bg-green-600 text-white rounded-full text-xs font-bold">
+                                        {genderFilter.length}
+                                    </span>
+                                )}
+                                <ChevronDown size={14} />
+                            </button>
+                            
+                            {showGenderMenu && (
+                                <div className="absolute top-12 left-0 bg-white border-gray-200 rounded-lg shadow-lg z-10 py-2 w-32">
+                                    {genderOptions.map(gender => (
+                                        <label
+                                            key={gender}
+                                            className="flex items-center gap-2 px-4 py-2 hover:bg-gray-50 cursor-pointer"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={genderFilter.includes(gender)}
+                                                onChange={() => toggleGenderFilter(gender)}
+                                                className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                            />
+                                            <span className="text-sm text-gray-700">{gender}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
-                         {/* 전체 답변 내용 섹션 */}
-                         <div>
-                             <div className="flex items-center gap-2 mb-4">
-                                 <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                                     <FileText size={18} className="text-gray-600" />
-                                 </div>
-                                 <h3 className="text-lg font-bold text-gray-900">전체 답변 내용</h3>
-                             </div>
-                             
-                             <div className="space-y-6">
-                                 {/* 자격 요건 */}
-                                 {selectedApplicant.requirementAnswers && selectedApplicant.requirementAnswers.length > 0 && (
-                                     <div className="bg-white rounded-xl p-5 border border-gray-200">
-                                         <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
-                                             <span className="text-blue-600">✓</span> 자격 요건
-                                         </h4>
-                                         <div className="space-y-2">
-                                             {selectedApplicant.requirementAnswers.map((answer, index) => (
-                                                 <div key={index} className="flex items-start gap-2">
-                                                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
-                                                         answer.checked ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
-                                                     }`}>
-                                                         {answer.checked ? '✓' : '✗'}
-                                                     </span>
-                                                     <div>
-                                                         <p className="text-gray-700">{answer.question}</p>
-                                                         {answer.detail && <p className="text-xs text-gray-500 mt-0.5">{answer.detail}</p>}
-                                                     </div>
-                                                 </div>
-                                             ))}
-                                         </div>
-                                     </div>
-                                 )}
+                        {/* 날짜 필터 */}
+                        <div className="relative">
+                            <button 
+                                onClick={() => setShowDateMenu(!showDateMenu)}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                                    (dateRange.start || dateRange.end)
+                                        ? 'bg-orange-50 text-orange-700 border-orange-200' 
+                                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                }`}
+                            >
+                                <Calendar size={16}/>
+                                기간
+                                {(dateRange.start || dateRange.end) && (
+                                    <span className="ml-1 px-1.5 py-0.5 bg-orange-600 text-white rounded-full text-xs font-bold">
+                                        1
+                                    </span>
+                                )}
+                                <ChevronDown size={14} />
+                            </button>
+                            
+                            {showDateMenu && (
+                                <div className="absolute top-12 left-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-2 w-64">
+                                    <div className="px-4 py-2 border-b border-gray-100">
+                                        <p className="text-xs font-semibold text-gray-500 mb-2">빠른 선택</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                onClick={() => setQuickDateFilter('today')}
+                                                className="px-3 py-1.5 text-xs bg-gray-50 hover:bg-gray-100 rounded text-gray-700 font-medium"
+                                            >
+                                                오늘
+                                            </button>
+                                            <button
+                                                onClick={() => setQuickDateFilter('week')}
+                                                className="px-3 py-1.5 text-xs bg-gray-50 hover:bg-gray-100 rounded text-gray-700 font-medium"
+                                            >
+                                                최근 7일
+                                            </button>
+                                            <button
+                                                onClick={() => setQuickDateFilter('month')}
+                                                className="px-3 py-1.5 text-xs bg-gray-50 hover:bg-gray-100 rounded text-gray-700 font-medium"
+                                            >
+                                                최근 30일
+                                            </button>
+                                            <button
+                                                onClick={() => setQuickDateFilter('all')}
+                                                className="px-3 py-1.5 text-xs bg-gray-50 hover:bg-gray-100 rounded text-gray-700 font-medium"
+                                            >
+                                                전체
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="px-4 py-3">
+                                        <p className="text-xs font-semibold text-gray-500 mb-2">사용자 지정</p>
+                                        <div className="space-y-2">
+                                            <div>
+                                                <label className="text-xs text-gray-600 mb-1 block">시작일</label>
+                                                <input
+                                                    type="date"
+                                                    value={dateRange.start}
+                                                    onChange={(e) => setDateRange(prev => ({...prev, start: e.target.value}))}
+                                                    className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:border-orange-500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs text-gray-600 mb-1 block">종료일</label>
+                                                <input
+                                                    type="date"
+                                                    value={dateRange.end}
+                                                    onChange={(e) => setDateRange(prev => ({...prev, end: e.target.value}))}
+                                                    className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:border-orange-500"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
 
-                                 {/* 우대 사항 */}
-                                 {selectedApplicant.preferredAnswers && selectedApplicant.preferredAnswers.length > 0 && (
-                                     <div className="bg-white rounded-xl p-5 border border-gray-200">
-                                         <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
-                                             <span className="text-purple-600">★</span> 우대 사항
-                                         </h4>
-                                         <div className="space-y-2">
-                                             {selectedApplicant.preferredAnswers.map((answer, index) => (
-                                                 <div key={index} className="flex items-start gap-2">
-                                                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
-                                                         answer.checked ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-400'
-                                                     }`}>
-                                                         {answer.checked ? '✓' : '✗'}
-                                                     </span>
-                                                     <div>
-                                                         <p className="text-gray-700">{answer.question}</p>
-                                                         {answer.detail && <p className="text-xs text-gray-500 mt-0.5">{answer.detail}</p>}
-                                                     </div>
-                                                 </div>
-                                             ))}
-                                         </div>
-                                     </div>
-                                 )}
-                             </div>
-                         </div>
-                     </div>
+                        {/* 필터 초기화 버튼 */}
+                        {(statusFilter.length > 0 || jdFilter.length > 0 || genderFilter.length > 0 || searchQuery || dateRange.start || dateRange.end) && (
+                            <button
+                                onClick={clearAllFilters}
+                                className="flex items-center gap-1 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors"
+                            >
+                                <X size={16} />
+                                필터 초기화
+                            </button>
+                        )}
+                    </div>
+                    
+                    {/* 활성 필터 태그 */}
+                    {(statusFilter.length > 0 || jdFilter.length > 0 || genderFilter.length > 0 || searchQuery || dateRange.start || dateRange.end) && (
+                        <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-gray-100">
+                            <span className="text-xs text-gray-500 font-medium">활성 필터:</span>
+                            
+                            {searchQuery && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                                    검색: "{searchQuery}"
+                                    <button onClick={() => setSearchQuery('')} className="hover:text-red-600">
+                                        <X size={12} />
+                                    </button>
+                                </span>
+                            )}
+                            
+                            {statusFilter.map(status => (
+                                <span key={status} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
+                                    {status}
+                                    <button onClick={() => toggleStatusFilter(status)} className="hover:text-red-600">
+                                        <X size={12} />
+                                    </button>
+                                </span>
+                            ))}
+                            
+                            {jdFilter.map(jd => (
+                                <span key={jd} className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs">
+                                    {jd}
+                                    <button onClick={() => toggleJdFilter(jd)} className="hover:text-red-600">
+                                        <X size={12} />
+                                    </button>
+                                </span>
+                            ))}
+                            
+                            {genderFilter.map(gender => (
+                                <span key={gender} className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
+                                    {gender}
+                                    <button onClick={() => toggleGenderFilter(gender)} className="hover:text-red-600">
+                                        <X size={12} />
+                                    </button>
+                                </span>
+                            ))}
+                            
+                            {(dateRange.start || dateRange.end) && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs">
+                                    {dateRange.start && dateRange.end 
+                                        ? `${dateRange.start} ~ ${dateRange.end}`
+                                        : dateRange.start 
+                                        ? `${dateRange.start} 이후`
+                                        : `${dateRange.end} 이전`
+                                    }
+                                    <button onClick={() => setDateRange({start: '', end: ''})} className="hover:text-red-600">
+                                        <X size={12} />
+                                    </button>
+                                </span>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
 
-                     {/* 모달 푸터 */}
-                     <div className="border-t border-gray-100 p-6 bg-gray-50">
-                         <div className="flex justify-between items-center">
-                             <div className="text-sm text-gray-500">
-                                 <span className="font-medium">지원일:</span> {formatDate(selectedApplicant.appliedAt)}
-                             </div>
-                             <button onClick={closeModal} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
-                                 닫기
-                             </button>
-                         </div>
-                     </div>
-                 </div>
-             </div>
-         )}
-     </div>
+            <div className="flex-1 overflow-auto">
+                <table className="w-full text-left text-sm text-gray-600">
+                    <thead className="bg-[#F8FAFC] text-[11px] uppercase font-bold text-gray-400 tracking-wider sticky top-0">
+                        <tr>
+                            <th className="px-6 py-4 w-12"><input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"/></th>
+                            <th className="px-6 py-4">이름</th>
+                            <th className="px-6 py-4">이메일</th>
+                            <th className="px-6 py-4">전화번호</th>
+                            <th className="px-6 py-4">성별</th>
+                            <th className="px-6 py-4">지원 포지션</th>
+                            <th className="px-6 py-4">지원 일시</th>
+                            <th className="px-6 py-4 text-center">작성 내용</th>
+                            <th className="px-6 py-4 text-center">상태</th>
+                            <th className="px-6 py-4 text-center">관리</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {filteredApplications.length === 0 ? (
+                            <tr>
+                                <td colSpan={10} className="px-6 py-20 text-center text-gray-400">
+                                    {statusFilter.length > 0 || jdFilter.length > 0 || genderFilter.length > 0 || searchQuery || dateRange.start || dateRange.end
+                                        ? '조건에 맞는 지원자가 없습니다.'
+                                        : '아직 지원자가 없습니다.'
+                                    }
+                                </td>
+                            </tr>
+                        ) : (
+                            filteredApplications.map((application) => (
+                                <tr key={application.id} className="hover:bg-blue-50/30 transition-colors group cursor-pointer">
+                                    <td className="px-6 py-5"><input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" onClick={(e) => e.stopPropagation()}/></td>
+                                    <td className="px-6 py-5" onClick={() => handleApplicantClick(application)}>
+                                        <div className="font-bold text-[14px] text-gray-900">
+                                            {application.applicantName}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-5" onClick={() => handleApplicantClick(application)}>
+                                        <div className="text-[13px] text-gray-600">
+                                            {application.applicantEmail}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-5 text-[13px] text-gray-600" onClick={() => handleApplicantClick(application)}>
+                                        {application.applicantPhone || '-'}
+                                    </td>
+                                    <td className="px-6 py-5 text-[13px] text-gray-600" onClick={() => handleApplicantClick(application)}>{application.applicantGender || '-'}</td>
+                                    <td className="px-6 py-5" onClick={() => handleApplicantClick(application)}>
+                                        <div className="text-[13px] font-medium text-gray-700">{application.jdTitle}</div>
+                                    </td>
+                                    <td className="px-6 py-5 text-[13px] text-gray-400" onClick={() => handleApplicantClick(application)}>{formatDate(application.appliedAt)}</td>
+                                    <td className="px-6 py-5">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleApplicantClick(application);
+                                            }}
+                                            className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-[12px] font-medium mx-auto"
+                                        >
+                                            <Sparkles size={14} />
+                                            AI 분석
+                                        </button>
+                                    </td>
+                                    <td className="px-6 py-5">
+                                        <div className="flex justify-center gap-1">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleStatusChange(application.id, '합격');
+                                                }}
+                                                className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all ${
+                                                    application.status === '합격' 
+                                                        ? 'bg-green-500 text-white shadow-md' 
+                                                        : 'bg-gray-100 text-gray-500 hover:bg-green-100 hover:text-green-600'
+                                                }`}
+                                            >
+                                                합격
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleStatusChange(application.id, '불합격');
+                                                }}
+                                                className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all ${
+                                                    application.status === '불합격' 
+                                                        ? 'bg-red-500 text-white shadow-md' 
+                                                        : 'bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-600'
+                                                }`}
+                                            >
+                                                불합격
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-5">
+                                        <div className="flex justify-center">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteApplicant(application.id, application.applicantName);
+                                                }}
+                                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                title="지원자 삭제"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* AI 스크리닝 리포트 모달 */}
+            {selectedApplicant && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeModal}>
+                    <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        {/* 모달 헤더 */}
+                        <div className="bg-gradient-to-r from-blue-600 to-blue-500 p-6 text-white">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Sparkles size={24} className="fill-white" />
+                                        <h2 className="text-2xl font-bold">AI 스크리닝 리포트</h2>
+                                    </div>
+                                    <p className="text-blue-100 text-sm">
+                                        {selectedApplicant.applicantName} · {selectedApplicant.jdTitle}
+                                    </p>
+                                </div>
+                                <button onClick={closeModal} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+                                    <X size={24} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* 모달 본문 */}
+                        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                            {/* AI 요약 섹션 */}
+                            <div className="mb-8">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                        <Sparkles size={18} className="text-blue-600" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-gray-900">AI 자동 요약</h3>
+                                </div>
+                                
+                                {summaryLoading ? (
+                                    <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
+                                        <div className="flex items-center gap-3">
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                                            <p className="text-gray-600">AI가 지원자 답변을 분석하고 있습니다...</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
+                                        <div className="prose prose-sm max-w-none">
+                                            <div className="text-gray-800 whitespace-pre-wrap leading-relaxed">
+                                                {aiSummary || 'AI 요약을 생성하는 중입니다...'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 전체 답변 내용 섹션 */}
+                            <div>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                                        <FileText size={18} className="text-gray-600" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-gray-900">전체 답변 내용</h3>
+                                </div>
+                                
+                                <div className="space-y-6">
+                                    {/* 자격 요건 */}
+                                    {selectedApplicant.requirementAnswers && selectedApplicant.requirementAnswers.length > 0 && (
+                                        <div className="bg-white rounded-xl p-5 border border-gray-200">
+                                            <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                                <span className="text-blue-600">✓</span> 자격 요건
+                                            </h4>
+                                            <div className="space-y-2">
+                                                {selectedApplicant.requirementAnswers.map((answer: any, index: number) => (
+                                                    <div key={index} className="flex items-center gap-2">
+                                                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                                                            answer.checked ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+                                                        }`}>
+                                                            {answer.checked ? '✓' : '✗'}
+                                                        </span>
+                                                        <p className="text-gray-700">{answer.question}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* 우대 사항 */}
+                                    {selectedApplicant.preferredAnswers && selectedApplicant.preferredAnswers.length > 0 && (
+                                        <div className="bg-white rounded-xl p-5 border border-gray-200">
+                                            <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                                <span className="text-purple-600">★</span> 우대 사항
+                                            </h4>
+                                            <div className="space-y-2">
+                                                {selectedApplicant.preferredAnswers.map((answer: any, index: number) => (
+                                                    <div key={index} className="flex items-center gap-2">
+                                                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                                                            answer.checked ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-400'
+                                                        }`}>
+                                                            {answer.checked ? '✓' : '✗'}
+                                                        </span>
+                                                        <p className="text-gray-700">{answer.question}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 모달 푸터 */}
+                        <div className="border-t border-gray-100 p-6 bg-gray-50">
+                            <div className="flex justify-between items-center">
+                                <div className="text-sm text-gray-500">
+                                    <span className="font-medium">지원일:</span> {formatDate(selectedApplicant.appliedAt)}
+                                </div>
+                                <button onClick={closeModal} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                                    닫기
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 };
-
