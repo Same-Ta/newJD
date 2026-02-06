@@ -570,19 +570,30 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
 
                 <div className="p-4 bg-white border-t border-gray-100">
                     <div className="relative">
-                        <input 
-                            type="text" 
+                        <textarea 
                             placeholder="답변을 입력하세요..." 
                             value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                            onChange={(e) => {
+                                setInput(e.target.value);
+                                // 자동 높이 조절
+                                e.target.style.height = 'auto';
+                                e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px';
+                            }}
+                            onKeyPress={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSend();
+                                }
+                            }}
                             disabled={isLoading}
-                            className="w-full pl-4 pr-12 py-3.5 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:border-blue-500 focus:bg-white transition-all text-[13px] font-medium placeholder:text-gray-400 shadow-inner"
+                            rows={1}
+                            className="w-full pl-4 pr-12 py-3.5 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:border-blue-500 focus:bg-white transition-all text-[13px] font-medium placeholder:text-gray-400 shadow-inner resize-none overflow-y-auto"
+                            style={{ minHeight: '52px', maxHeight: '150px' }}
                         />
                         <button 
                             onClick={() => handleSend()}
                             disabled={isLoading}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white hover:bg-blue-700 transition-colors shadow-md disabled:opacity-50"
+                            className="absolute right-2 bottom-2 w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white hover:bg-blue-700 transition-colors shadow-md disabled:opacity-50"
                         >
                             <ChevronRight size={18}/>
                         </button>

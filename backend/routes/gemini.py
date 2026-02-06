@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException
 import google.generativeai as genai
+import json
+import re
 
 from config.gemini import GEMINI_API_KEY
 from models.schemas import GeminiChatRequest
@@ -25,11 +27,28 @@ async def gemini_chat(request: GeminiChatRequest):
 2. 답변이 추상적이면(예: "열정적인 사람") 반드시 추가 질문을 통해 구체화(예: "밤샘 작업이 가능한 사람인가요?")해라.
 3. 모든 결과물은 '허수 지원자 차단'과 '동아리 매력 극대화'에 초점을 맞춘다.
 
+[중요] 사용자의 답변에서 동아리 정보를 파악하면 반드시 응답 끝에 JSON 형식으로 추가해라:
+```json
+{
+  "title": "동아리 이름",
+  "companyName": "동아리 이름",
+  "teamName": "팀 이름",
+  "location": "위치",
+  "scale": "규모",
+  "vision": "비전",
+  "mission": "미션",
+  "responsibilities": ["역할1", "역할2"],
+  "requirements": ["필수조건1", "필수조건2"],
+  "preferred": ["우대사항1"],
+  "benefits": ["혜택1", "혜택2"]
+}
+```
+
 대화를 자연스럽고 친근하게 진행하며, 사용자의 답변에 따라 적절한 추가 질문을 던져라.
 """
 
         model = genai.GenerativeModel(
-            'gemini-2.5-flash',
+            'gemini-2.0-flash-exp',  # 최신 고성능 실험 모델
             system_instruction=system_instruction
         )
 
@@ -46,12 +65,27 @@ async def gemini_chat(request: GeminiChatRequest):
 
         chat = model.start_chat(history=history)
         response = chat.send_message(request.message)
-
-        return {
-            "aiResponse": response.text,
-            "options": [],
-            "jdData": {}
-        }
+        
+        # AI 응답 파싱 (순수 JSON 형식 기대)
+        response_text = response.text.strip()
+        
+        try:
+            # JSON 응답 파싱 시도
+            parsed_response = json.loads(response_text)
+            
+            return {
+                "aiResponse": parsed_response.get("aiResponse", response_text),
+                "options": parsed_response.get("options", []),
+                "jdData": parsed_response.get("jdData", {})
+            }
+        except json.JSONDecodeError:
+            # JSON이 아닌 경우 기본 응답 반환
+            print("⚠️ AI가 JSON 형식으로 응답하지 않음")
+            return {
+                "aiResponse": response_text,
+                "options": [],
+                "jdData": {}
+            }
     except Exception as e:
         print(f"❌ Gemini Chat Error: {str(e)}")
         raise HTTPException(
