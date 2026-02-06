@@ -12,6 +12,7 @@ interface CurrentJD {
     teamName?: string;
     location?: string;
     scale?: string;
+    description?: string;  // 동아리 소개글 (활동, 분위기 등)
     vision?: string;
     mission?: string;
     techStacks?: { name: string; level: number }[];
@@ -19,6 +20,9 @@ interface CurrentJD {
     requirements: string[];
     preferred: string[];
     benefits: string[];
+    // 필수 체크 개수 설정
+    requiredCheckCount?: number;  // 자격요건 중 최소 체크 개수
+    preferredCheckCount?: number; // 우대사항 중 최소 체크 개수
     // 지원 양식 커스텀 필드
     applicationFields?: {
         name: boolean;
@@ -65,7 +69,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
             role: 'ai',
-            text: '안녕하세요! WINNOW 채용 매니저입니다. 저희가 최고의 채용 공고(JD)를 작성해 드릴게요. 어떤 포지션을 찾고 계신가요?',
+            text: '안녕하세요! WINNOW 채용 마스터입니다 🎯 동아리의 정체성을 브랜딩하고, 최고의 신입 부원을 찾는 채용 공고를 함께 만들어볼게요! 먼저, 어떤 동아리이신가요?',
             timestamp: '오전 10:23'
         }
     ]);
@@ -78,6 +82,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         teamName: '',
         location: '',
         scale: '',
+        description: '',
         vision: '',
         mission: '',
         techStacks: [],
@@ -94,6 +99,8 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     
     // 지원 양식 커스터마이징 모달 상태
     const [showApplicationFieldsModal, setShowApplicationFieldsModal] = useState(false);
+    const [requiredCheckCount, setRequiredCheckCount] = useState(0);
+    const [preferredCheckCount, setPreferredCheckCount] = useState(0);
     const [applicationFieldsConfig, setApplicationFieldsConfig] = useState({
         name: true,        // 필수 (비활성화 불가)
         email: true,       // 필수 (비활성화 불가)
@@ -107,10 +114,47 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     });
     const [newCustomQuestion, setNewCustomQuestion] = useState('');
 
-    // 페이지 로드 시 임시저장 데이터 불러오기 (비활성화 - API 미지원)
+    // 페이지 로드 시 localStorage에서 데이터 복원
     useEffect(() => {
-        // TODO: 백엔드에 drafts API 구현 후 활성화
+        const savedJD = localStorage.getItem('currentJD');
+        const savedMessages = localStorage.getItem('chatMessages');
+        
+        if (savedJD) {
+            try {
+                const parsedJD = JSON.parse(savedJD);
+                setCurrentJD(parsedJD);
+                console.log('✅ 저장된 JD 데이터 복원:', parsedJD);
+            } catch (e) {
+                console.error('JD 데이터 복원 실패:', e);
+            }
+        }
+        
+        if (savedMessages) {
+            try {
+                const parsedMessages = JSON.parse(savedMessages);
+                setMessages(parsedMessages);
+                console.log('✅ 저장된 채팅 내역 복원:', parsedMessages.length, '개 메시지');
+            } catch (e) {
+                console.error('채팅 내역 복원 실패:', e);
+            }
+        }
     }, []);
+
+    // currentJD가 변경될 때마다 자동 저장
+    useEffect(() => {
+        if (currentJD.title || currentJD.companyName || currentJD.requirements.length > 0) {
+            localStorage.setItem('currentJD', JSON.stringify(currentJD));
+            console.log('💾 JD 데이터 자동 저장됨');
+        }
+    }, [currentJD]);
+
+    // 메시지가 변경될 때마다 자동 저장
+    useEffect(() => {
+        if (messages.length > 1) { // 초기 메시지 제외
+            localStorage.setItem('chatMessages', JSON.stringify(messages));
+            console.log('💾 채팅 내역 자동 저장됨:', messages.length, '개 메시지');
+        }
+    }, [messages]);
 
     // 자동 스크롤
     useEffect(() => {
@@ -183,9 +227,40 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         setEditedJD({ ...editedJD, [field]: newArray });
     };
 
-    const saveDraft = async () => {
-        alert('임시저장 기능은 현재 준비 중입니다.');
-        // TODO: 백엔드에 drafts API 구현 후 활성화
+    // 공고 초기화 함수
+    const resetJD = () => {
+        const confirmed = window.confirm('모든 작성 내용을 초기화하시겠습니까?\n\n이 작업은 취소할 수 없습니다.');
+        if (!confirmed) return;
+        
+        setCurrentJD({
+            title: '',
+            jobRole: '',
+            company: '',
+            companyName: '',
+            teamName: '',
+            location: '',
+            scale: '',
+            description: '',
+            vision: '',
+            mission: '',
+            techStacks: [],
+            responsibilities: [],
+            requirements: [],
+            preferred: [],
+            benefits: []
+        });
+        setMessages([
+            {
+                role: 'ai',
+                text: '안녕하세요! WINNOW 채용 마스터입니다 🎯 동아리의 정체성을 브랜딩하고, 최고의 신입 부원을 찾는 채용 공고를 함께 만들어볼게요! 먼저, 어떤 동아리이신가요?',
+                timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+            }
+        ]);
+        localStorage.removeItem('currentJD');
+        localStorage.removeItem('chatMessages');
+        setRequiredCheckCount(0);
+        setPreferredCheckCount(0);
+        alert('공고 작성이 초기화되었습니다.');
     };
 
     // 공고 게시 버튼 클릭 시 -> 지원양식 설정 모달 표시
@@ -249,6 +324,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 teamName: currentJD.teamName || '',
                 location: currentJD.location || '',
                 scale: currentJD.scale || '',
+                description: currentJD.description || '',
                 vision: currentJD.vision || '',
                 mission: currentJD.mission || '',
                 techStacks: currentJD.techStacks || [],
@@ -256,6 +332,8 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 requirements: currentJD.requirements || [],
                 preferred: currentJD.preferred || [],
                 benefits: currentJD.benefits || [],
+                requiredCheckCount: requiredCheckCount || 0,
+                preferredCheckCount: preferredCheckCount || 0,
                 // 지원 양식 설정 추가
                 applicationFields: applicationFieldsConfig
             };
@@ -279,6 +357,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 teamName: '',
                 location: '',
                 scale: '',
+                description: '',
                 vision: '',
                 mission: '',
                 techStacks: [],
@@ -301,14 +380,23 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 customQuestions: []
             });
             
+            // 체크 개수 초기화
+            setRequiredCheckCount(0);
+            setPreferredCheckCount(0);
+            
             // 채팅 내역 초기화
             setMessages([
                 {
                     role: 'ai',
-                    text: '안녕하세요! WINNOW 채용 매니저입니다. 저희가 최고의 채용 공고(JD)를 작성해 드릴게요. 어떤 포지션을 찾고 계신가요?',
+                    text: '안녕하세요! WINNOW 채용 마스터입니다 🎯 동아리의 정체성을 브랜딩하고, 최고의 신입 부원을 찾는 채용 공고를 함께 만들어볼게요! 먼저, 어떤 동아리이신가요?',
                     timestamp: '오전 10:23'
                 }
             ]);
+            
+            // localStorage 초기화
+            localStorage.removeItem('currentJD');
+            localStorage.removeItem('chatMessages');
+            console.log('💾 localStorage 데이터 삭제됨');
             
             // 임시저장 데이터 초기화는 비활성화 (API 미지원)
             // TODO: 백엔드에 drafts API 구현 후 활성화
@@ -408,6 +496,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                     teamName: response.jdData.teamName || currentJD.teamName || '',
                     location: response.jdData.location || currentJD.location || '',
                     scale: response.jdData.scale || currentJD.scale || '',
+                    description: response.jdData.description || currentJD.description || '',
                     vision: response.jdData.vision || currentJD.vision || '',
                     mission: response.jdData.mission || currentJD.mission || '',
                     techStacks: (response.jdData.techStacks && response.jdData.techStacks.length > 0)
@@ -433,6 +522,9 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 }
                 if (response.jdData.companyName && response.jdData.companyName !== currentJD.companyName) {
                     typeText('companyName', response.jdData.companyName, 20);
+                }
+                if (response.jdData.description && response.jdData.description !== currentJD.description) {
+                    typeText('description', response.jdData.description, 20);
                 }
                 if (response.jdData.vision && response.jdData.vision !== currentJD.vision) {
                     typeText('vision', response.jdData.vision, 20);
@@ -477,7 +569,45 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                         <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-sm"><MessageSquare size={14} fill="white"/></div>
                         JD 생성 매니저
                     </div>
-                    <X size={18} className="text-gray-400 cursor-pointer hover:text-gray-600"/>
+                    <button 
+                        onClick={() => {
+                            if (currentJD.title || messages.length > 1) {
+                                const confirmed = window.confirm('작성 중인 내용이 있습니다. 새로 시작하시겠습니까?\n\n현재 내용은 자동으로 저장되어 다음에 다시 불러올 수 있습니다.');
+                                if (!confirmed) return;
+                            }
+                            // 새로운 채팅 시작 (localStorage는 유지)
+                            setCurrentJD({
+                                title: '',
+                                jobRole: '',
+                                company: '',
+                                companyName: '',
+                                teamName: '',
+                                location: '',
+                                scale: '',
+                                description: '',
+                                vision: '',
+                                mission: '',
+                                techStacks: [],
+                                responsibilities: [],
+                                requirements: [],
+                                preferred: [],
+                                benefits: []
+                            });
+                            setMessages([
+                                {
+                                    role: 'ai',
+                                    text: '안녕하세요! WINNOW 채용 마스터입니다 🎯 동아리의 정체성을 브랜딩하고, 최고의 신입 부원을 찾는 채용 공고를 함께 만들어볼게요! 먼저, 어떤 동아리이신가요?',
+                                    timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+                                }
+                            ]);
+                            localStorage.removeItem('currentJD');
+                            localStorage.removeItem('chatMessages');
+                        }}
+                        className="text-gray-400 cursor-pointer hover:text-gray-600 transition-colors"
+                        title="새로 시작"
+                    >
+                        <X size={18} />
+                    </button>
                 </div>
                 
                 <div className="flex-1 p-5 space-y-6 overflow-y-auto scrollbar-hide bg-[#F8FAFC]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
@@ -593,7 +723,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                         <button 
                             onClick={() => handleSend()}
                             disabled={isLoading}
-                            className="absolute right-2 bottom-2 w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white hover:bg-blue-700 transition-colors shadow-md disabled:opacity-50"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white hover:bg-blue-700 transition-colors shadow-md disabled:opacity-50"
                         >
                             <ChevronRight size={18}/>
                         </button>
@@ -616,7 +746,16 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                             />
                         </div>
                         <h3 className="font-bold text-[17px] text-gray-900 mb-1">
-                            {currentJD.teamName || <span className="text-gray-400">동아리 이름</span>}
+                            {currentJD.companyName || currentJD.teamName ? (
+                                <span>
+                                    {typingText['companyName'] !== undefined 
+                                        ? typingText['companyName'] 
+                                        : (currentJD.companyName || currentJD.teamName)}
+                                    {typingText['companyName'] !== undefined && <span className="animate-pulse">|</span>}
+                                </span>
+                            ) : (
+                                <span className="text-gray-400">동아리 이름</span>
+                            )}
                         </h3>
                         <p className="text-[12px] text-gray-500 font-semibold mb-6">
                             {currentJD.jobRole || <span className="text-gray-400">모집 분야</span>}
@@ -724,22 +863,81 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                             <span className="text-gray-400">공고 제목이 여기에 표시됩니다</span>
                                         )}
                                     </h1>
-                                    {(currentJD.companyName || isEditMode) && (
-                                        <div className="text-[14px] text-gray-600 leading-relaxed">
-                                            {isEditMode ? (
+                                    
+                                    {/* 편집 모드 전용: 기본 정보 입력 필드 */}
+                                    {isEditMode && (
+                                        <div className="space-y-3 mb-6 bg-blue-50/30 p-4 rounded-lg border border-blue-200">
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-600 mb-1.5">동아리명</label>
                                                 <input
                                                     type="text"
                                                     value={editedJD.companyName}
                                                     onChange={(e) => setEditedJD({ ...editedJD, companyName: e.target.value })}
-                                                    placeholder="회사명을 입력하세요"
-                                                    className="w-full px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[14px]"
+                                                    placeholder="동아리 이름을 입력하세요"
+                                                    className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
                                                 />
-                                            ) : (
-                                                <p>{currentJD.companyName}의 디자인 시스템을 고도화하고, 사용자 중심의 UI/UX를 설계합니다. 복잡한 제품 데이터를 직관적인 시각화로 풀어내는 것이 핵심 과제입니다.</p>
-                                            )}
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-600 mb-1.5">모집 분야</label>
+                                                <input
+                                                    type="text"
+                                                    value={editedJD.jobRole}
+                                                    onChange={(e) => setEditedJD({ ...editedJD, jobRole: e.target.value })}
+                                                    placeholder="모집 분야를 입력하세요"
+                                                    className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-600 mb-1.5">활동 장소</label>
+                                                <input
+                                                    type="text"
+                                                    value={editedJD.location}
+                                                    onChange={(e) => setEditedJD({ ...editedJD, location: e.target.value })}
+                                                    placeholder="활동 장소를 입력하세요"
+                                                    className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-600 mb-1.5">동아리 규모</label>
+                                                <input
+                                                    type="text"
+                                                    value={editedJD.scale}
+                                                    onChange={(e) => setEditedJD({ ...editedJD, scale: e.target.value })}
+                                                    placeholder="동아리 규모를 입력하세요 (예: 소규모/중규모 동아리)"
+                                                    className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
+                                                />
+                                            </div>
                                         </div>
                                     )}
                                 </div>
+
+                                {/* 동아리 소개 (ABOUT US) */}
+                                {(currentJD.description || isEditMode) && (
+                                    <div className="space-y-3">
+                                        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-100 rounded-lg p-5">
+                                            <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M10 2a8 8 0 100 16 8 8 0 000-16zM9 9a1 1 0 112 0v4a1 1 0 11-2 0V9zm1-5a1 1 0 100 2 1 1 0 000-2z"/>
+                                                </svg>
+                                                동아리 소개
+                                            </h4>
+                                            {isEditMode ? (
+                                                <textarea
+                                                    value={editedJD.description}
+                                                    onChange={(e) => setEditedJD({ ...editedJD, description: e.target.value })}
+                                                    placeholder="동아리의 활동, 분위기, 특징 등을 소개하는 글을 입력하세요"
+                                                    className="w-full px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
+                                                    rows={4}
+                                                />
+                                            ) : (
+                                                <p className="text-[14px] text-gray-700 leading-relaxed">
+                                                    {typingText['description'] !== undefined ? typingText['description'] : currentJD.description}
+                                                    {typingText['description'] !== undefined && <span className="animate-pulse">|</span>}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* VISION & MISSION */}
                                 {((currentJD.vision || currentJD.mission) || isEditMode) && (
@@ -892,8 +1090,8 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                 <div className="pt-6 border-t border-gray-100 flex justify-end items-center gap-2">
                                     {!isEditMode ? (
                                         <>
+                                            <button onClick={resetJD} className="px-4 py-2.5 border border-red-300 text-red-600 rounded-lg text-[13px] font-bold hover:bg-red-50 transition-colors">초기화</button>
                                             <button onClick={startEdit} className="px-4 py-2.5 border border-blue-500 text-blue-600 rounded-lg text-[13px] font-bold hover:bg-blue-50 transition-colors">편집</button>
-                                            <button onClick={saveDraft} className="px-4 py-2.5 border border-gray-200 rounded-lg text-[13px] font-bold text-gray-600 hover:bg-gray-50 transition-colors">임시 저장</button>
                                             <button onClick={handlePublishClick} className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-[13px] font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all">공고 게시</button>
                                         </>
                                     ) : (
@@ -1019,6 +1217,58 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                     </label>
                                 </div>
                             </div>
+                            
+                            {/* 자격요건 체크 설정 */}
+                            {currentJD.requirements && currentJD.requirements.length > 0 && (
+                                <div className="mb-6">
+                                    <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">자격요건 체크 설정</h3>
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                        <p className="text-[12px] text-gray-600 mb-3">
+                                            지원자가 최소한 몇 개의 자격요건을 충족해야 하는지 설정하세요.
+                                        </p>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-[13px] font-semibold text-gray-700">총 {currentJD.requirements.length}개 중</span>
+                                            <select
+                                                value={requiredCheckCount}
+                                                onChange={(e) => setRequiredCheckCount(Number(e.target.value))}
+                                                className="flex-1 px-3 py-2 border border-blue-300 rounded-lg text-[13px] font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                                            >
+                                                <option value={0}>체크 필수 없음</option>
+                                                {Array.from({ length: currentJD.requirements.length }, (_, i) => i + 1).map(num => (
+                                                    <option key={num} value={num}>최소 {num}개 필수</option>
+                                                ))}
+                                            </select>
+                                            <span className="text-[13px] text-gray-600">체크 필요</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 우대사항 체크 설정 */}
+                            {currentJD.preferred && currentJD.preferred.length > 0 && (
+                                <div className="mb-6">
+                                    <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">우대사항 체크 설정</h3>
+                                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                        <p className="text-[12px] text-gray-600 mb-3">
+                                            지원자가 최소한 몇 개의 우대사항을 충족해야 하는지 설정하세요.
+                                        </p>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-[13px] font-semibold text-gray-700">총 {currentJD.preferred.length}개 중</span>
+                                            <select
+                                                value={preferredCheckCount}
+                                                onChange={(e) => setPreferredCheckCount(Number(e.target.value))}
+                                                className="flex-1 px-3 py-2 border border-purple-300 rounded-lg text-[13px] font-semibold focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
+                                            >
+                                                <option value={0}>체크 필수 없음</option>
+                                                {Array.from({ length: currentJD.preferred.length }, (_, i) => i + 1).map(num => (
+                                                    <option key={num} value={num}>최소 {num}개 필수</option>
+                                                ))}
+                                            </select>
+                                            <span className="text-[13px] text-gray-600">체크 필요</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             
                             {/* 커스텀 질문 */}
                             <div>
