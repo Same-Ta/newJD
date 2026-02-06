@@ -15,6 +15,8 @@ from routes.auth import router as auth_router
 from routes.jds import router as jds_router
 from routes.applications import router as applications_router
 from routes.gemini import router as gemini_router
+from routes.comments import router as comments_router
+from routes.team import router as team_router
 
 app = FastAPI(title="Winnow API", version="1.0.0")
 
@@ -22,6 +24,8 @@ app = FastAPI(title="Winnow API", version="1.0.0")
 import os
 allowed_origins = [
     "http://localhost:5173",  # 로컬 개발
+    "http://localhost:5176",  # Vite 대체 포트
+    "http://localhost:5177",  # Vite 대체 포트
     "http://localhost:3000",
     "https://www.winnow.kr",  # 프로덕션 도메인
     "https://winnow.kr",      # 도메인 리다이렉트 대비
@@ -41,6 +45,8 @@ app.include_router(auth_router)
 app.include_router(jds_router)
 app.include_router(applications_router)
 app.include_router(gemini_router)
+app.include_router(comments_router)
+app.include_router(team_router)
 
 
 # ==================== Health Check ====================

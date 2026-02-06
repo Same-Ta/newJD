@@ -6,6 +6,7 @@ import {
   LogOut, 
   CheckCircle2, 
   MessageSquare,
+  Users,
 } from 'lucide-react';
 import { FONTS } from '@/constants/fonts';
 import { FunnelCSS } from '@/components/common/FunnelCSS';
@@ -16,9 +17,11 @@ import { SignUpPage } from '@/pages/SignUpPage';
 import { DashboardHome } from '@/pages/Dashboard/DashboardHome';
 import { JDDetail } from '@/pages/Dashboard/JDDetail';
 import { ApplicantList } from '@/pages/Dashboard/ApplicantList';
+import { ApplicantDetail } from '@/pages/Dashboard/ApplicantDetail';
 import { ChatInterface } from '@/pages/Dashboard/ChatInterface';
 import { MyJDsPage } from '@/pages/Dashboard/MyJDsPage';
 import { AccountSettings } from '@/pages/Dashboard/AccountSettings';
+import { TeamManagement } from '@/pages/Dashboard/TeamManagement';
 import { auth } from '@/config/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
@@ -51,6 +54,7 @@ const App = () => {
   const [currentPage, setCurrentPage] = useState('landing');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedJdId, setSelectedJdId] = useState<string | undefined>(undefined);
+  const [selectedApplicationId, setSelectedApplicationId] = useState<string | undefined>(undefined);
   const [init, setInit] = useState(false);
   const [userName, setUserName] = useState('채용 담당자');
   const [userEmail, setUserEmail] = useState('');
@@ -155,14 +159,25 @@ const App = () => {
         case 'dashboard': return <DashboardHome onNavigate={setCurrentPage} onNavigateToJD={handleNavigateToJD} />;
         case 'my-jds': return <MyJDsPage onNavigate={setCurrentPage} onNavigateToJD={handleNavigateToJD} />;
         case 'jd-detail': return <JDDetail jdId={selectedJdId} onNavigate={setCurrentPage} />;
+        case 'applicant-detail':
+          return (
+            <ApplicantDetail
+              applicationId={selectedApplicationId!}
+              onBack={() => setCurrentPage('applicants')}
+            />
+          );
         case 'applicants': 
           return (
             <div className="space-y-4 max-w-[1200px] mx-auto">
               <h2 className="text-2xl font-bold mb-4">지원자 관리</h2>
-              <ApplicantList />
+              <ApplicantList onNavigateToApplicant={(id) => {
+                setSelectedApplicationId(id);
+                setCurrentPage('applicant-detail');
+              }} />
             </div>
           );
         case 'chat': return <ChatInterface onNavigate={setCurrentPage} />;
+        case 'team': return <TeamManagement onNavigate={setCurrentPage} />;
         case 'settings': return <AccountSettings />;
         default: return <DashboardHome onNavigate={setCurrentPage} onNavigateToJD={(jdId) => console.log('Navigate to JD:', jdId)} />;
     }
@@ -273,6 +288,7 @@ const App = () => {
 
         <div className="px-3 pb-6">
              <div className="text-[11px] font-bold text-gray-400 px-4 mb-2 uppercase tracking-wider">내 정보</div>
+             <SidebarItem icon={Users} label="팀 관리" active={currentPage === 'team'} onClick={() => setCurrentPage('team')} />
              <SidebarItem icon={Settings} label="계정 설정" active={currentPage === 'settings'} onClick={() => setCurrentPage('settings')} />
              <div className="mt-4 px-4 pt-5 border-t border-gray-50">
                  <div className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition-colors cursor-pointer group">

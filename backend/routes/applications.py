@@ -39,14 +39,31 @@ async def create_application(application: ApplicationCreate):
 
 @router.get("")
 async def get_applications(user_data: dict = Depends(verify_token)):
-    """현재 사용자의 모든 지원서를 반환합니다."""
+    """현재 사용자의 모든 지원서를 반환합니다 (소유 + 협업 JD 포함)."""
     try:
-        apps_ref = db.collection('applications').where('recruiterId', '==', user_data['uid'])
+        uid = user_data['uid']
         applications = []
-        for doc in apps_ref.stream():
+        seen_ids = set()
+
+        # 1. 자신이 recruiterId인 지원서
+        own_ref = db.collection('applications').where('recruiterId', '==', uid)
+        for doc in own_ref.stream():
             app_data = doc.to_dict()
             app_data['id'] = doc.id
             applications.append(app_data)
+            seen_ids.add(doc.id)
+
+        # 2. 협업자로 초대된 JD의 지원서
+        collab_jds_ref = db.collection('jds').where('collaboratorIds', 'array_contains', uid)
+        for jd_doc in collab_jds_ref.stream():
+            jd_apps_ref = db.collection('applications').where('jdId', '==', jd_doc.id)
+            for doc in jd_apps_ref.stream():
+                if doc.id not in seen_ids:
+                    app_data = doc.to_dict()
+                    app_data['id'] = doc.id
+                    applications.append(app_data)
+                    seen_ids.add(doc.id)
+
         return applications
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -56,12 +73,21 @@ async def get_applications(user_data: dict = Depends(verify_token)):
 async def get_application(application_id: str, user_data: dict = Depends(verify_token)):
     """특정 지원서를 반환합니다."""
     try:
+        uid = user_data['uid']
         doc = db.collection('applications').document(application_id).get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Application not found")
 
         app_data = doc.to_dict()
-        if app_data.get('recruiterId') != user_data['uid']:
+
+        # 소유자 또는 해당 JD 협업자인지 확인
+        is_authorized = app_data.get('recruiterId') == uid
+        if not is_authorized and app_data.get('jdId'):
+            jd_doc = db.collection('jds').document(app_data['jdId']).get()
+            if jd_doc.exists:
+                jd_data = jd_doc.to_dict()
+                is_authorized = uid in (jd_data.get('collaboratorIds') or [])
+        if not is_authorized:
             raise HTTPException(status_code=403, detail="Not authorized")
 
         app_data['id'] = doc.id
@@ -76,6 +102,7 @@ async def get_application(application_id: str, user_data: dict = Depends(verify_
 async def update_application(application_id: str, application: ApplicationUpdate, user_data: dict = Depends(verify_token)):
     """지원서 상태를 수정합니다."""
     try:
+        uid = user_data['uid']
         doc_ref = db.collection('applications').document(application_id)
         doc = doc_ref.get()
 
@@ -83,7 +110,15 @@ async def update_application(application_id: str, application: ApplicationUpdate
             raise HTTPException(status_code=404, detail="Application not found")
 
         app_data = doc.to_dict()
-        if app_data.get('recruiterId') != user_data['uid']:
+
+        # 소유자 또는 해당 JD 협업자인지 확인
+        is_authorized = app_data.get('recruiterId') == uid
+        if not is_authorized and app_data.get('jdId'):
+            jd_doc = db.collection('jds').document(app_data['jdId']).get()
+            if jd_doc.exists:
+                jd_data = jd_doc.to_dict()
+                is_authorized = uid in (jd_data.get('collaboratorIds') or [])
+        if not is_authorized:
             raise HTTPException(status_code=403, detail="Not authorized")
 
         doc_ref.update({
@@ -129,10 +164,32 @@ async def analyze_application(request: AIAnalysisRequest, user_data: dict = Depe
 
         applicant = request.applicantData
 
-        prompt = f"""당신은 채용 전문가입니다. 다음 지원자를 냉정하게 분석하고 평가해주세요.
+        prompt = f"""[시스템 역할]
+당신은 초기 스타트업의 생존을 결정짓는 전문 채용 컨설턴트입니다. 지원자의 답변에서 미사여구를 제거하고, 오직 [데이터, 방법론, 행동 패턴]만을 근거로 역량(Skill)과 의지(Will)를 냉정하게 판별합니다.
 
-지원자 정보:
-- 이름: {applicant.get('applicantName', 'N/A')}
+[분석 원칙]
+- 냉정한 상/중/하: 수치와 구체적 방법론이 없으면 무조건 '중' 이하로 판정합니다.
+- 팩트 위주: 지원자의 답변을 짧게 인용(Quote)하여 평가의 객관성을 확보합니다.
+
+---
+
+🔍 지원자 분석 리포트: {applicant.get('applicantName', 'N/A')}
+
+---
+
+[0. 서류 지원 현황 및 프로필]
+
+지원 트랙 : {applicant.get('track', '')} (Android, iOS, Web, Spring, Node, Design, Plan 중 택1)
+
+전공 정보 : {applicant.get('major', '')} ([전공 / 비전공])
+
+인적 사항 : {applicant.get('grade', '')}학년 / {applicant.get('age', '')}세 ({applicant.get('applicantGender', '')})
+
+현재 상태 : {applicant.get('status', '')} (재학 / 휴학 / 졸업예정)
+
+---
+
+지원자 세부 정보:
 - 이메일: {applicant.get('applicantEmail', 'N/A')}
 - 전화번호: {applicant.get('applicantPhone', 'N/A')}
 - 공고: {applicant.get('jdTitle', 'N/A')}
@@ -143,52 +200,95 @@ async def analyze_application(request: AIAnalysisRequest, user_data: dict = Depe
 우대 사항 답변:
 {json.dumps(applicant.get('preferredAnswers', []), ensure_ascii=False, indent=2)}
 
-다음 형식으로 평가해주세요:
+---
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎯 종합 평가
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+위 정보를 바탕으로 아래 형식에 맞춰 분석 리포트를 작성하세요:
 
-💡 인재 유형:
-[완성형 리더 / 직무 전문가 / 성장형 유망주 중 하나]
+[1. 종합 진단 결과]
 
-📊 역량 평가:
-• 직무 역량: ⭐️ [1-5점]
-• 문제 해결: ⭐️ [1-5점]
-• 성장 잠재력: ⭐️ [1-5점]
-• 협업 태도: ⭐️ [1-5점]
+최종 분류 : [완성형 리더 / 직무 중심 전문가 / 성장형 유망주 / 신중 검토 대상]
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✨ 핵심 강점
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+역량(Skill) 수준 : [높음 / 보통 / 낮음]
 
-[2-3줄로 요약]
+의지(Will) 수준 : [높음 / 보통 / 낮음]
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ 리스크 요인
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+---
 
-[2-3줄로 요약]
+[2. 세부 역량 평가] (냉정 평가 모드)
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💬 추천 질문
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+직무 역량 | [상 / 중 / 하]
 
-1. [질문 1]
-2. [질문 2]
-3. [질문 3]
+근거: " " (답변 발췌)
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 최종 의견
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+판정: (JD 기준 대비 실무 전문성 및 숙련도 분석)
 
-[합격 추천 / 보류 추천 / 불합격 추천] - 사유 2줄 이내
+---
 
-중요 규칙:
-- 냉정하고 객관적으로 평가
-- 답변이 부족할 경우 낮음/미흡으로 처리
-- 절대 JSON 형식으로 출력하지 마세요
-- 위 형식 그대로 작성하세요"""
+문제 해결 | [상 / 중 / 하]
+
+근거: " " (답변 발췌)
+
+판정: (장애물 돌파를 위한 논리적 사고 및 실행력 분석)
+
+---
+
+성장 잠재력 | [상 / 중 / 하]
+
+근거: " " (답변 발췌)
+
+판정: (실제 학습 성과 및 팀 성장에 대한 기여 의지 분석)
+
+---
+
+협업 태도 | [상 / 중 / 하]
+
+근거: " " (답변 발췌)
+
+판정: (전략적 협업 관점 및 목표 중심적 소통 능력 분석)
+
+---
+
+[3. 조직 적합도 (Culture Fit)]
+
+[ ] 스타트업 마인드셋 : [확인됨 / 미흡] (MVP 사고방식 및 리소스 제한 극복 경험)
+
+[ ] 자기 주도성 : [확인됨 / 미흡] (지시 대기 여부 및 스스로 과업 정의 능력)
+
+[ ] 커뮤니케이션 : [확인됨 / 미흡] (피드백 수용성 및 결론 중심의 논리력)
+
+---
+
+[4. 채용 가이드]
+
+💡 핵심 강점
+
+1.
+
+2.
+
+⚠️ 주의 사항 (Risk)
+
+(치명적인 결함 혹은 리스크 요소)
+
+(관리 시 유의해야 할 매니징 포인트)
+
+🙋 면접 질문 추천
+
+(답변의 허점을 찌르는 압박 질문)
+
+(실무 역량의 바닥을 확인하는 기술 질문)
+
+---
+
+[중요 지시 사항]
+
+가독성 최우선: 들여쓰기와 구분선(---)을 사용하여 섹션을 명확히 분리하세요.
+
+간결성: 각 항목은 2줄 이내로 핵심만 찌르듯 작성하세요.
+
+엄격함: 답변이 기준에 미달하면 가차 없이 '낮음' 또는 '미흡'으로 평가하세요.
+
+금지: 절대 JSON이나 코드 블록으로 답변을 감싸지 마세요."""
 
         model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(prompt)

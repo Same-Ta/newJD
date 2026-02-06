@@ -153,9 +153,9 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
         setSubmitting(true);
 
         try {
-            // 체크리스트 응답 데이터 변환
+            // 체크리스트 응답 데이터 변환 (viewRequirementChecks/viewPreferredChecks 사용)
             const requirementResponses = jdData.requirements?.map((item, idx) => {
-                const answer = applicationForm.requirementAnswers[idx];
+                const answer = viewRequirementChecks[idx];
                 return {
                     question: item,
                     checked: answer?.checked || false,
@@ -164,7 +164,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
             }) || [];
 
             const preferredResponses = jdData.preferred?.map((item, idx) => {
-                const answer = applicationForm.preferredAnswers[idx];
+                const answer = viewPreferredChecks[idx];
                 return {
                     question: item,
                     checked: answer?.checked || false,

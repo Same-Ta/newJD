@@ -152,3 +152,50 @@ export const geminiAPI = {
     });
   },
 };
+
+// ==================== Comment API ====================
+export const commentAPI = {
+  getByApplicationId: async (applicationId: string) => {
+    return await apiRequest(`/api/comments/${applicationId}`);
+  },
+
+  create: async (applicationId: string, content: string) => {
+    return await apiRequest('/api/comments', {
+      method: 'POST',
+      body: JSON.stringify({ applicationId, content }),
+    });
+  },
+
+  update: async (commentId: string, content: string) => {
+    return await apiRequest(`/api/comments/${commentId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    });
+  },
+
+  delete: async (commentId: string) => {
+    return await apiRequest(`/api/comments/${commentId}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+// ==================== Team API ====================
+export const teamAPI = {
+  getCollaborators: async (jdId: string) => {
+    return await apiRequest(`/api/team/collaborators/${jdId}`);
+  },
+
+  invite: async (jdId: string, email: string) => {
+    return await apiRequest('/api/team/invite', {
+      method: 'POST',
+      body: JSON.stringify({ jdId, email }),
+    });
+  },
+
+  removeCollaborator: async (jdId: string, memberEmail: string) => {
+    return await apiRequest(`/api/team/collaborators/${jdId}/${encodeURIComponent(memberEmail)}`, {
+      method: 'DELETE',
+    });
+  },
+};

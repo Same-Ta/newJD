@@ -27,14 +27,31 @@ async def create_jd(jd: JDCreate, user_data: dict = Depends(verify_token)):
 
 @router.get("")
 async def get_jds(user_data: dict = Depends(verify_token)):
-    """현재 사용자의 모든 JD를 반환합니다."""
+    """현재 사용자의 모든 JD를 반환합니다 (소유 + 협업 포함)."""
     try:
-        jds_ref = db.collection('jds').where('userId', '==', user_data['uid'])
+        uid = user_data['uid']
         jds = []
-        for doc in jds_ref.stream():
+        seen_ids = set()
+
+        # 1. 자신이 소유한 JD
+        own_ref = db.collection('jds').where('userId', '==', uid)
+        for doc in own_ref.stream():
             jd_data = doc.to_dict()
             jd_data['id'] = doc.id
+            jd_data['_role'] = 'owner'
             jds.append(jd_data)
+            seen_ids.add(doc.id)
+
+        # 2. 협업자로 초대된 JD
+        collab_ref = db.collection('jds').where('collaboratorIds', 'array_contains', uid)
+        for doc in collab_ref.stream():
+            if doc.id not in seen_ids:
+                jd_data = doc.to_dict()
+                jd_data['id'] = doc.id
+                jd_data['_role'] = 'collaborator'
+                jds.append(jd_data)
+                seen_ids.add(doc.id)
+
         return jds
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

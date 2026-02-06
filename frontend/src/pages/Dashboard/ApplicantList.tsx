@@ -18,7 +18,7 @@ interface Application {
     status: string;
 }
 
-export const ApplicantList = () => {
+export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant?: (id: string) => void }) => {
     const [applications, setApplications] = useState<Application[]>([]);
     const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -148,9 +148,13 @@ export const ApplicantList = () => {
 
     // 지원자 클릭 핸들러
     const handleApplicantClick = (application: Application) => {
-        setSelectedApplicant(application);
-        setAiSummary('');
-        generateAISummary(application);
+        if (onNavigateToApplicant) {
+            onNavigateToApplicant(application.id);
+        } else {
+            setSelectedApplicant(application);
+            setAiSummary('');
+            generateAISummary(application);
+        }
     };
 
     // 모달 닫기
@@ -536,13 +540,16 @@ export const ApplicantList = () => {
                                          </h4>
                                          <div className="space-y-2">
                                              {selectedApplicant.requirementAnswers.map((answer, index) => (
-                                                 <div key={index} className="flex items-center gap-2">
-                                                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                                                         answer.answer === 'Y' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+                                                 <div key={index} className="flex items-start gap-2">
+                                                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
+                                                         answer.checked ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
                                                      }`}>
-                                                         {answer.answer === 'Y' ? '✓' : '✗'}
+                                                         {answer.checked ? '✓' : '✗'}
                                                      </span>
-                                                     <p className="text-gray-700">{answer.question}</p>
+                                                     <div>
+                                                         <p className="text-gray-700">{answer.question}</p>
+                                                         {answer.detail && <p className="text-xs text-gray-500 mt-0.5">{answer.detail}</p>}
+                                                     </div>
                                                  </div>
                                              ))}
                                          </div>
@@ -557,13 +564,16 @@ export const ApplicantList = () => {
                                          </h4>
                                          <div className="space-y-2">
                                              {selectedApplicant.preferredAnswers.map((answer, index) => (
-                                                 <div key={index} className="flex items-center gap-2">
-                                                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                                                         answer.answer === 'Y' ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-400'
+                                                 <div key={index} className="flex items-start gap-2">
+                                                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
+                                                         answer.checked ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-400'
                                                      }`}>
-                                                         {answer.answer === 'Y' ? '✓' : '✗'}
+                                                         {answer.checked ? '✓' : '✗'}
                                                      </span>
-                                                     <p className="text-gray-700">{answer.question}</p>
+                                                     <div>
+                                                         <p className="text-gray-700">{answer.question}</p>
+                                                         {answer.detail && <p className="text-xs text-gray-500 mt-0.5">{answer.detail}</p>}
+                                                     </div>
                                                  </div>
                                              ))}
                                          </div>
