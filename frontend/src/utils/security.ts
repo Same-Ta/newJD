@@ -13,8 +13,6 @@ const SENSITIVE_PATTERNS = {
     ssn: /(\d{6}[-\s]?\d{7})/g,
     // 카드번호 패턴
     creditCard: /(\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4})/g,
-    // 계좌번호 패턴 (일반적인 형태)
-    bankAccount: /(\d{3,6}[-\s]?\d{2,6}[-\s]?\d{2,6}[-\s]?\d{0,6})/g,
 };
 
 /**
@@ -94,113 +92,6 @@ export const maskName = (name: string): string => {
 };
 
 /**
- * AES-GCM을 사용한 데이터 암호화
- * Web Crypto API 사용
- */
-export const encryptData = async (data: string, key: CryptoKey): Promise<string> => {
-    const encoder = new TextEncoder();
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    
-    const encryptedData = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        encoder.encode(data)
-    );
-    
-    // IV + 암호화된 데이터를 base64로 인코딩
-    const combined = new Uint8Array(iv.length + new Uint8Array(encryptedData).length);
-    combined.set(iv);
-    combined.set(new Uint8Array(encryptedData), iv.length);
-    
-    return btoa(String.fromCharCode(...combined));
-};
-
-/**
- * AES-GCM을 사용한 데이터 복호화
- */
-export const decryptData = async (encryptedString: string, key: CryptoKey): Promise<string> => {
-    const combined = new Uint8Array(
-        atob(encryptedString).split('').map(c => c.charCodeAt(0))
-    );
-    
-    const iv = combined.slice(0, 12);
-    const encryptedData = combined.slice(12);
-    
-    const decryptedData = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        encryptedData
-    );
-    
-    const decoder = new TextDecoder();
-    return decoder.decode(decryptedData);
-};
-
-/**
- * 암호화 키 생성
- */
-export const generateEncryptionKey = async (): Promise<CryptoKey> => {
-    return crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
-    );
-};
-
-/**
- * 패스워드 기반 암호화 키 생성 (PBKDF2)
- */
-export const deriveKeyFromPassword = async (password: string, salt: Uint8Array): Promise<CryptoKey> => {
-    const encoder = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-        'raw',
-        encoder.encode(password),
-        'PBKDF2',
-        false,
-        ['deriveBits', 'deriveKey']
-    );
-    
-    return crypto.subtle.deriveKey(
-        {
-            name: 'PBKDF2',
-            salt: salt.buffer as ArrayBuffer,
-            iterations: 100000,
-            hash: 'SHA-256'
-        },
-        keyMaterial,
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
-    );
-};
-
-/**
- * 민감 데이터 검출 여부 확인
- */
-export const containsSensitiveData = (text: string): boolean => {
-    if (!text) return false;
-    
-    return Object.values(SENSITIVE_PATTERNS).some(pattern => {
-        pattern.lastIndex = 0; // Reset regex state
-        return pattern.test(text);
-    });
-};
-
-/**
- * 입력 값 검증 (XSS 방지)
- */
-export const sanitizeInput = (input: string): string => {
-    if (!input) return '';
-    
-    return input
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#x27;')
-        .replace(/\//g, '&#x2F;');
-};
-
-/**
  * API 요청 시 민감 정보 로깅 방지
  */
 export const safeLog = (label: string, data: any): void => {
@@ -220,44 +111,3 @@ export const safeLog = (label: string, data: any): void => {
         console.log(label, safeData);
     }
 };
-
-/**
- * 세션 타임아웃 설정 (밀리초)
- */
-export const SESSION_TIMEOUT = 30 * 60 * 1000; // 30분
-
-/**
- * 비활성 상태 감지 및 자동 로그아웃
- */
-export class SessionManager {
-    private timeoutId: NodeJS.Timeout | null = null;
-    private onTimeout: () => void;
-    
-    constructor(onTimeout: () => void) {
-        this.onTimeout = onTimeout;
-        this.resetTimer();
-        this.setupActivityListeners();
-    }
-    
-    private resetTimer(): void {
-        if (this.timeoutId) {
-            clearTimeout(this.timeoutId);
-        }
-        this.timeoutId = setTimeout(() => {
-            this.onTimeout();
-        }, SESSION_TIMEOUT);
-    }
-    
-    private setupActivityListeners(): void {
-        const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
-        events.forEach(event => {
-            document.addEventListener(event, () => this.resetTimer(), { passive: true });
-        });
-    }
-    
-    public destroy(): void {
-        if (this.timeoutId) {
-            clearTimeout(this.timeoutId);
-        }
-    }
-}

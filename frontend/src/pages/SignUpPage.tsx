@@ -1,6 +1,6 @@
 import { FONTS } from '@/constants/fonts';
 import { auth } from '@/config/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { authAPI } from '@/services/api';
 import { useState } from 'react';
 
@@ -41,8 +41,8 @@ export const SignUpPage = ({ onNavigateToLogin }: SignUpPageProps) => {
                         // 백엔드 API로 회원가입 (Firebase Auth + Firestore 모두 처리)
                         await authAPI.register(email, password, nickname);
                         
-                        // Firebase 클라이언트 로그인 (백엔드에서 생성한 계정으로)
-                        await createUserWithEmailAndPassword(auth, email, password);
+                        // 백엔드에서 생성된 계정으로 클라이언트 로그인
+                        await signInWithEmailAndPassword(auth, email, password);
                         
                         console.log('회원가입 성공!');
                         setLoading(false);

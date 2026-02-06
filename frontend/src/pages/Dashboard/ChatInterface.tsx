@@ -1,8 +1,8 @@
 import { ChevronRight, MessageSquare, X, FileText } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
-import { generateJD } from '../../utils/gemini';
+import { maskSensitiveData } from '../../utils/security';
 import { auth } from '../../config/firebase';
-import { jdAPI } from '@/services/api';
+import { jdAPI, geminiAPI } from '@/services/api';
 
 interface CurrentJD {
     title: string;
@@ -359,11 +359,12 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             // messages 상태를 Gemini API 형식으로 변환 (options 필드 제외)
             const conversationHistory = messages.map(msg => ({
                 role: (msg.role === 'ai' ? 'model' : 'user') as 'user' | 'model',
-                parts: [{ text: msg.text }]
+                text: maskSensitiveData(msg.parts?.[0]?.text || msg.text || '')
             }));
 
-            // generateJD 호출 - 항상 { aiResponse, options, jdData } 형태로 반환됨
-            const response = await generateJD(currentInput, conversationHistory);
+            // 민감 정보 마스킹 후 API 호출
+            const sanitizedMessage = maskSensitiveData(currentInput);
+            const response = await geminiAPI.chat(sanitizedMessage, conversationHistory);
             
             // 응답 검증
             if (!response || typeof response !== 'object') {
