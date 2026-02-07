@@ -1,16 +1,17 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 import google.generativeai as genai
 import json
 import re
 
 from config.gemini import GEMINI_API_KEY
+from dependencies.auth import verify_token
 from models.schemas import GeminiChatRequest
 
 router = APIRouter(prefix="/api/gemini", tags=["Gemini AI"])
 
 
 @router.post("/chat")
-async def gemini_chat(request: GeminiChatRequest):
+async def gemini_chat(request: GeminiChatRequest, user_data: dict = Depends(verify_token)):
     """Gemini AI와 채팅하여 JD를 생성합니다."""
     try:
         if not GEMINI_API_KEY:
