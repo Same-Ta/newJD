@@ -227,7 +227,7 @@ export const applicationAPI = {
 // ==================== Gemini API ====================
 export const geminiAPI = {
   chat: async (message: string, chatHistory: any[] = [], type: string = 'club') => {
-    return await publicApiRequest('/api/gemini/chat', {
+    return await apiRequest('/api/gemini/chat', {
       method: 'POST',
       body: JSON.stringify({ message, chatHistory, type }),
     });
