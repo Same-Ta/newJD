@@ -27,6 +27,7 @@ interface UseApplicantStatsResult {
     dailyData: DailyCount[];
     recentApplicants: RecentApplicant[];
     loading: boolean;
+    applications: any[];
 }
 
 /**
@@ -44,6 +45,7 @@ export const useApplicantStats = (): UseApplicantStatsResult => {
     });
     const [dailyData, setDailyData] = useState<DailyCount[]>([]);
     const [recentApplicants, setRecentApplicants] = useState<RecentApplicant[]>([]);
+    const [applications, setApplications] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -56,6 +58,7 @@ export const useApplicantStats = (): UseApplicantStatsResult => {
                 }
 
                 const applications = await applicationAPI.getAll();
+                setApplications(applications);
 
                 let passed = 0;
                 let pending = 0;
@@ -137,7 +140,7 @@ export const useApplicantStats = (): UseApplicantStatsResult => {
         fetchAnalytics();
     }, []);
 
-    return { stats, dailyData, recentApplicants, loading };
+    return { stats, dailyData, recentApplicants, loading, applications };
 };
 
 /**
