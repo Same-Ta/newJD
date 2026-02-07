@@ -31,7 +31,13 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
     
     // 위젯 관리 상태
     const [showWidgetSelector, setShowWidgetSelector] = useState(false);
-    const [activeWidgets, setActiveWidgets] = useState<string[]>(['gender', 'grade']);
+    const [activeWidgets, setActiveWidgets] = useState<string[]>(() => {
+      try {
+        const saved = localStorage.getItem('winnow_active_widgets');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+      return ['gender', 'grade'];
+    });
 
     // 사용 가능한 위젯 목록
     const availableWidgets = [
@@ -53,11 +59,13 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
     }, []);
     
     const toggleWidget = (widgetId: string) => {
-        setActiveWidgets(prev => 
-            prev.includes(widgetId) 
+        setActiveWidgets(prev => {
+            const next = prev.includes(widgetId) 
                 ? prev.filter(id => id !== widgetId)
-                : [...prev, widgetId]
-        );
+                : [...prev, widgetId];
+            localStorage.setItem('winnow_active_widgets', JSON.stringify(next));
+            return next;
+        });
     };
     
     // 위젯별 데이터 계산

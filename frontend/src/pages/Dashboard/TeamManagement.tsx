@@ -229,14 +229,14 @@ export const TeamManagement = (_props: TeamManagementProps) => {
             <div className="space-y-4">
               {/* 선택된 공고 헤더 */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-base">{selectedJD?.title || '제목 없음'}</h3>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-gray-900 text-base break-words">{selectedJD?.title || '제목 없음'}</h3>
                     <p className="text-xs text-gray-400 mt-1">이 공고의 협업자를 관리합니다</p>
                   </div>
                   <button
                     onClick={() => setShowInviteModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold text-sm shadow-md shadow-blue-500/20"
+                    className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold text-sm shadow-md shadow-blue-500/20 whitespace-nowrap"
                   >
                     <UserPlus size={14} />
                     초대

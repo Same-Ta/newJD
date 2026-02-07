@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import { applicationAPI, jdAPI } from '@/services/api';
 import { FONTS } from '@/constants/fonts';
 import { AIAnalysisDashboard } from '@/components/ai/AIAnalysisComponents';
+import { FigmaComments } from '@/components/common/FigmaComments';
 
 interface Application {
     id: string;
@@ -177,6 +178,7 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
             </div>
 
             {/* 메인 콘텐츠 - 1컬럼 레이아웃 */}
+            <FigmaComments applicationId={applicationId}>
             <div className="grid grid-cols-1 gap-6">
                 {/* 지원서 내용 */}
                 <div className="space-y-6">
@@ -296,6 +298,7 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
                     )}
                 </div>
             </div>
+            </FigmaComments>
         </div>
     );
 };

@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from firebase_admin import firestore as firebase_firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 from pydantic import BaseModel
+from typing import Optional
+import logging
 
 from config.firebase import db
 from dependencies.auth import verify_token
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/comments", tags=["Comments"])
 
@@ -11,6 +16,9 @@ router = APIRouter(prefix="/api/comments", tags=["Comments"])
 class CommentCreate(BaseModel):
     applicationId: str
     content: str
+    posX: Optional[float] = None
+    posY: Optional[float] = None
+    parentId: Optional[str] = None  # 답글인 경우 부모 코멘트 ID
 
 
 class CommentUpdate(BaseModel):
@@ -27,15 +35,23 @@ async def create_comment(comment: CommentCreate, user_data: dict = Depends(verif
             "authorId": user_data["uid"],
             "authorEmail": user_data.get("email", ""),
             "authorName": user_data.get("name", user_data.get("email", "").split("@")[0]),
+            "posX": comment.posX,
+            "posY": comment.posY,
+            "parentId": comment.parentId,
+            "resolved": False,
             "createdAt": firebase_firestore.SERVER_TIMESTAMP,
             "updatedAt": firebase_firestore.SERVER_TIMESTAMP,
         }
 
+        logger.info(f"[Comment] Creating comment for app={comment.applicationId}, posX={comment.posX}, posY={comment.posY}, parentId={comment.parentId}")
+
         doc_ref = db.collection("comments").document()
         doc_ref.set(comment_data)
 
+        logger.info(f"[Comment] Saved successfully with id={doc_ref.id}")
         return {"id": doc_ref.id, "message": "Comment created successfully"}
     except Exception as e:
+        logger.error(f"[Comment] Failed to create: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -45,7 +61,7 @@ async def get_comments(application_id: str, user_data: dict = Depends(verify_tok
     try:
         comments_ref = (
             db.collection("comments")
-            .where("applicationId", "==", application_id)
+            .where(filter=FieldFilter("applicationId", "==", application_id))
         )
         comments = []
         for doc in comments_ref.stream():
@@ -110,6 +126,27 @@ async def delete_comment(comment_id: str, user_data: dict = Depends(verify_token
 
         doc_ref.delete()
         return {"message": "Comment deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/{comment_id}/resolve")
+async def resolve_comment(comment_id: str, user_data: dict = Depends(verify_token)):
+    """코멘트 스레드를 해결 처리합니다."""
+    try:
+        doc_ref = db.collection("comments").document(comment_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Comment not found")
+
+        current = doc.to_dict()
+        doc_ref.update({
+            "resolved": not current.get("resolved", False),
+            "updatedAt": firebase_firestore.SERVER_TIMESTAMP,
+        })
+        return {"message": "Comment resolved status toggled"}
     except HTTPException:
         raise
     except Exception as e:

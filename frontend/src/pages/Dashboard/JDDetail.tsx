@@ -55,6 +55,8 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     const [error, setError] = useState(false);
     const [showApplicationModal, setShowApplicationModal] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editedData, setEditedData] = useState<JDData | null>(null);
     
     // 지원서 폼 데이터
     const [applicationForm, setApplicationForm] = useState({
@@ -94,6 +96,40 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     
     const currentUserId = auth.currentUser?.uid;
     const isOwner = currentUserId && jdData?.userId === currentUserId;
+
+    // 수정 관련 함수
+    const handleEdit = () => {
+        setEditedData({ ...jdData } as JDData);
+        setIsEditing(true);
+    };
+
+    const handleCancel = () => {
+        setEditedData(null);
+        setIsEditing(false);
+    };
+
+    const handleSave = async () => {
+        if (!editedData || !jdId) return;
+        
+        try {
+            setSubmitting(true);
+            await jdAPI.update(jdId, editedData);
+            setJdData(editedData);
+            setIsEditing(false);
+            setEditedData(null);
+            alert('공고가 성공적으로 수정되었습니다.');
+        } catch (error) {
+            console.error('공고 수정 실패:', error);
+            alert('공고 수정에 실패했습니다.');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const updateEditedField = (field: keyof JDData, value: any) => {
+        if (!editedData) return;
+        setEditedData({ ...editedData, [field]: value });
+    };
 
     useEffect(() => {
         const fetchJD = async () => {
@@ -334,22 +370,50 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
             {/* Right Content Section */}
             <div className="flex-1 flex flex-col">
                 <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white">
-                    <h3 className="font-bold text-lg text-gray-800">공고 상세</h3>
+                    <h3 className="font-bold text-lg text-gray-800">{isEditing ? '공고 수정' : '공고 상세'}</h3>
                     <div className="flex gap-2">
-                        {isOwner && (
-                            <button
-                                onClick={handleShare}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-[12px] font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                        {isOwner && !isEditing && (
+                            <>
+                                <button
+                                    onClick={handleEdit}
+                                    className="px-4 py-2 bg-white border border-blue-600 text-blue-600 rounded-lg text-[12px] font-bold hover:bg-blue-50 transition-all"
+                                >
+                                    수정
+                                </button>
+                                <button
+                                    onClick={handleShare}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-[12px] font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                                >
+                                    🔗 링크 공유
+                                </button>
+                            </>
+                        )}
+                        {isEditing && (
+                            <>
+                                <button
+                                    onClick={handleSave}
+                                    disabled={submitting}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-[12px] font-bold hover:bg-blue-700 disabled:bg-gray-400 transition-all"
+                                >
+                                    {submitting ? '저장 중...' : '저장'}
+                                </button>
+                                <button
+                                    onClick={handleCancel}
+                                    disabled={submitting}
+                                    className="px-4 py-2 bg-gray-500 text-white rounded-lg text-[12px] font-bold hover:bg-gray-600 disabled:bg-gray-300 transition-all"
+                                >
+                                    취소
+                                </button>
+                            </>
+                        )}
+                        {!isEditing && (
+                            <button 
+                                onClick={() => onNavigate('my-jds')}
+                                className="px-4 py-2 border border-gray-200 rounded-lg text-[12px] font-bold text-gray-600 hover:bg-gray-50 transition-colors"
                             >
-                                🔗 링크 공유
+                                목록으로
                             </button>
                         )}
-                        <button 
-                            onClick={() => onNavigate('my-jds')}
-                            className="px-4 py-2 border border-gray-200 rounded-lg text-[12px] font-bold text-gray-600 hover:bg-gray-50 transition-colors"
-                        >
-                            목록으로
-                        </button>
                     </div>
                 </div>
                 
@@ -357,13 +421,23 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                     <div className="p-8 space-y-8">
                         {/* 공고 제목 */}
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-900 mb-4">
-                                {jdData.title || '제목 없음'}
-                            </h1>
+                            {isEditing ? (
+                                <input
+                                    type="text"
+                                    value={editedData?.title || ''}
+                                    onChange={(e) => updateEditedField('title', e.target.value)}
+                                    className="text-2xl font-bold text-gray-900 mb-4 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    placeholder="공고 제목을 입력하세요"
+                                />
+                            ) : (
+                                <h1 className="text-2xl font-bold text-gray-900 mb-4">
+                                    {jdData.title || '제목 없음'}
+                                </h1>
+                            )}
                         </div>
 
                         {/* 소개 (ABOUT US) */}
-                        {jdData.description && (
+                        {(jdData.description || isEditing) && (
                             <div className="space-y-3">
                                 <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-100 rounded-lg p-5">
                                     <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -372,7 +446,17 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                         </svg>
                                         {(jdData.type || 'club') === 'company' ? '회사 소개' : '동아리 소개'}
                                     </h4>
-                                    <p className="text-[14px] text-gray-700 leading-relaxed">{jdData.description}</p>
+                                    {isEditing ? (
+                                        <textarea
+                                            value={editedData?.description || ''}
+                                            onChange={(e) => updateEditedField('description', e.target.value)}
+                                            rows={4}
+                                            className="w-full text-[14px] text-gray-700 leading-relaxed px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
+                                            placeholder="회사/동아리 소개를 입력하세요"
+                                        />
+                                    ) : (
+                                        <p className="text-[14px] text-gray-700 leading-relaxed">{jdData.description}</p>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -441,23 +525,39 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                         )}
 
                         {/* VISION & MISSION */}
-                        {(jdData.vision || jdData.mission) && (
+                        {(jdData.vision || jdData.mission || isEditing) && (
                             <div className="space-y-4">
                                 <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-5">
                                     <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-2">VISION & MISSION</h4>
                                     <div className="space-y-3">
-                                        {jdData.vision && (
-                                            <div>
-                                                <h5 className="font-bold text-[13px] text-gray-800 mb-1">우리의 비전</h5>
-                                                <p className="text-[13px] text-gray-700 leading-relaxed">{jdData.vision}</p>
-                                            </div>
-                                        )}
-                                        {jdData.mission && (
-                                            <div>
-                                                <h5 className="font-bold text-[13px] text-gray-800 mb-1">우리의 미션</h5>
-                                                <p className="text-[13px] text-gray-700 leading-relaxed">{jdData.mission}</p>
-                                            </div>
-                                        )}
+                                        <div>
+                                            <h5 className="font-bold text-[13px] text-gray-800 mb-1">우리의 비전</h5>
+                                            {isEditing ? (
+                                                <textarea
+                                                    value={editedData?.vision || ''}
+                                                    onChange={(e) => updateEditedField('vision', e.target.value)}
+                                                    rows={3}
+                                                    className="w-full text-[13px] text-gray-700 leading-relaxed px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
+                                                    placeholder="비전을 입력하세요"
+                                                />
+                                            ) : (
+                                                jdData.vision && <p className="text-[13px] text-gray-700 leading-relaxed">{jdData.vision}</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <h5 className="font-bold text-[13px] text-gray-800 mb-1">우리의 미션</h5>
+                                            {isEditing ? (
+                                                <textarea
+                                                    value={editedData?.mission || ''}
+                                                    onChange={(e) => updateEditedField('mission', e.target.value)}
+                                                    rows={3}
+                                                    className="w-full text-[13px] text-gray-700 leading-relaxed px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
+                                                    placeholder="미션을 입력하세요"
+                                                />
+                                            ) : (
+                                                jdData.mission && <p className="text-[13px] text-gray-700 leading-relaxed">{jdData.mission}</p>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -466,101 +566,183 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                         {/* 자격 요건 / 지원자 체크리스트 */}
                         <div className="space-y-3">
                             <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{(jdData.type || 'club') === 'company' ? '자격 요건 (CHECKLIST)' : '지원자 체크리스트 (필수)'}</h4>
-                            <div className="space-y-2">
-                                {jdData.requirements && jdData.requirements.length > 0 ? jdData.requirements.map((item, idx) => (
-                                    <div key={idx} className="space-y-2">
-                                        <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={viewRequirementChecks[idx]?.checked || false}
+                            {isEditing ? (
+                                <div className="space-y-2">
+                                    {((editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : ['']).map((item, idx) => (
+                                        <div key={idx} className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={item}
                                                 onChange={(e) => {
-                                                    if (!isOwner) {
-                                                        setViewRequirementChecks({
+                                                    const current = (editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : [''];
+                                                    const newRequirements = [...current];
+                                                    newRequirements[idx] = e.target.value;
+                                                    updateEditedField('requirements', newRequirements);
+                                                }}
+                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500"
+                                                placeholder="자격 요건 입력"
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    const current = (editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : [''];
+                                                    const newRequirements = current.filter((_, i) => i !== idx);
+                                                    updateEditedField('requirements', newRequirements.length ? newRequirements : ['']);
+                                                }}
+                                                className="px-3 py-2 bg-red-500 text-white rounded-lg text-[12px] hover:bg-red-600"
+                                            >
+                                                삭제
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <button
+                                        onClick={() => {
+                                            const current = (editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : [''];
+                                            const newRequirements = [...current, ''];
+                                            updateEditedField('requirements', newRequirements);
+                                        }}
+                                        className="px-4 py-2 bg-blue-500 text-white rounded-lg text-[12px] hover:bg-blue-600"
+                                    >
+                                        + 항목 추가
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {jdData.requirements && jdData.requirements.length > 0 ? jdData.requirements.map((item, idx) => (
+                                        <div key={idx} className="space-y-2">
+                                            <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={viewRequirementChecks[idx]?.checked || false}
+                                                    onChange={(e) => {
+                                                        if (!isOwner) {
+                                                            setViewRequirementChecks({
+                                                                ...viewRequirementChecks,
+                                                                [idx]: {
+                                                                    checked: e.target.checked,
+                                                                    detail: viewRequirementChecks[idx]?.detail || ''
+                                                                }
+                                                            });
+                                                        }
+                                                    }}
+                                                    disabled={!!isOwner}
+                                                    className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
+                                                />
+                                                <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
+                                            </label>
+                                            {!isOwner && viewRequirementChecks[idx]?.checked && (
+                                                <div className="ml-10 mt-2">
+                                                    <textarea
+                                                        value={viewRequirementChecks[idx]?.detail || ''}
+                                                        onChange={(e) => setViewRequirementChecks({
                                                             ...viewRequirementChecks,
                                                             [idx]: {
-                                                                checked: e.target.checked,
-                                                                detail: viewRequirementChecks[idx]?.detail || ''
+                                                                checked: true,
+                                                                detail: e.target.value
                                                             }
-                                                        });
-                                                    }
-                                                }}
-                                                disabled={!!isOwner}
-                                                className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
-                                            />
-                                            <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
-                                        </label>
-                                        {!isOwner && viewRequirementChecks[idx]?.checked && (
-                                            <div className="ml-10 mt-2">
-                                                <textarea
-                                                    value={viewRequirementChecks[idx]?.detail || ''}
-                                                    onChange={(e) => setViewRequirementChecks({
-                                                        ...viewRequirementChecks,
-                                                        [idx]: {
-                                                            checked: true,
-                                                            detail: e.target.value
-                                                        }
-                                                    })}
-                                                    placeholder="관련 경험이나 역량을 구체적으로 작성해주세요"
-                                                    rows={3}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-                                )) : (
-                                    <p className="text-[13px] text-gray-400 p-3">{(jdData.type || 'club') === 'company' ? '자격 요건이 설정되지 않았습니다.' : '체크리스트가 설정되지 않았습니다.'}</p>
-                                )}
-                            </div>
+                                                        })}
+                                                        placeholder="관련 경험이나 역량을 구체적으로 작성해주세요"
+                                                        rows={3}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    )) : (
+                                        <p className="text-[13px] text-gray-400 p-3">{(jdData.type || 'club') === 'company' ? '자격 요건이 설정되지 않았습니다.' : '체크리스트가 설정되지 않았습니다.'}</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* 우대 사항 / 우대 체크리스트 */}
                         <div className="space-y-3">
                             <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{(jdData.type || 'club') === 'company' ? '우대 사항 (PREFERRED)' : '지원자 체크리스트 (우대)'}</h4>
-                            <div className="space-y-2">
-                                {jdData.preferred && jdData.preferred.length > 0 ? jdData.preferred.map((item, idx) => (
-                                    <div key={idx} className="space-y-2">
-                                        <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={viewPreferredChecks[idx]?.checked || false}
+                            {isEditing ? (
+                                <div className="space-y-2">
+                                    {((editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : ['']).map((item, idx) => (
+                                        <div key={idx} className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={item}
                                                 onChange={(e) => {
-                                                    if (!isOwner) {
-                                                        setViewPreferredChecks({
+                                                    const current = (editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : [''];
+                                                    const newPreferred = [...current];
+                                                    newPreferred[idx] = e.target.value;
+                                                    updateEditedField('preferred', newPreferred);
+                                                }}
+                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500"
+                                                placeholder="우대 사항 입력"
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    const current = (editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : [''];
+                                                    const newPreferred = current.filter((_, i) => i !== idx);
+                                                    updateEditedField('preferred', newPreferred.length ? newPreferred : ['']);
+                                                }}
+                                                className="px-3 py-2 bg-red-500 text-white rounded-lg text-[12px] hover:bg-red-600"
+                                            >
+                                                삭제
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <button
+                                        onClick={() => {
+                                            const current = (editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : [''];
+                                            const newPreferred = [...current, ''];
+                                            updateEditedField('preferred', newPreferred);
+                                        }}
+                                        className="px-4 py-2 bg-blue-500 text-white rounded-lg text-[12px] hover:bg-blue-600"
+                                    >
+                                        + 항목 추가
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {jdData.preferred && jdData.preferred.length > 0 ? jdData.preferred.map((item, idx) => (
+                                        <div key={idx} className="space-y-2">
+                                            <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={viewPreferredChecks[idx]?.checked || false}
+                                                    onChange={(e) => {
+                                                        if (!isOwner) {
+                                                            setViewPreferredChecks({
+                                                                ...viewPreferredChecks,
+                                                                [idx]: {
+                                                                    checked: e.target.checked,
+                                                                    detail: viewPreferredChecks[idx]?.detail || ''
+                                                                }
+                                                            });
+                                                        }
+                                                    }}
+                                                    disabled={!!isOwner}
+                                                    className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
+                                                />
+                                                <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
+                                            </label>
+                                            {!isOwner && viewPreferredChecks[idx]?.checked && (
+                                                <div className="ml-10 mt-2">
+                                                    <textarea
+                                                        value={viewPreferredChecks[idx]?.detail || ''}
+                                                        onChange={(e) => setViewPreferredChecks({
                                                             ...viewPreferredChecks,
                                                             [idx]: {
-                                                                checked: e.target.checked,
-                                                                detail: viewPreferredChecks[idx]?.detail || ''
+                                                                checked: true,
+                                                                detail: e.target.value
                                                             }
-                                                        });
-                                                    }
-                                                }}
-                                                disabled={!!isOwner}
-                                                className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
-                                            />
-                                            <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
-                                        </label>
-                                        {!isOwner && viewPreferredChecks[idx]?.checked && (
-                                            <div className="ml-10 mt-2">
-                                                <textarea
-                                                    value={viewPreferredChecks[idx]?.detail || ''}
-                                                    onChange={(e) => setViewPreferredChecks({
-                                                        ...viewPreferredChecks,
-                                                        [idx]: {
-                                                            checked: true,
-                                                            detail: e.target.value
-                                                        }
-                                                    })}
-                                                    placeholder="관련 경험이나 역량을 구체적으로 작성해주세요"
-                                                    rows={3}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-                                )) : (
-                                    <p className="text-[13px] text-gray-400 p-3">{(jdData.type || 'club') === 'company' ? '우대 사항이 설정되지 않았습니다.' : '우대 체크리스트가 설정되지 않았습니다.'}</p>
-                                )}
-                            </div>
+                                                        })}
+                                                        placeholder="관련 경험이나 역량을 구체적으로 작성해주세요"
+                                                        rows={3}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    )) : (
+                                        <p className="text-[13px] text-gray-400 p-3">{(jdData.type || 'club') === 'company' ? '우대 사항이 설정되지 않았습니다.' : '우대 체크리스트가 설정되지 않았습니다.'}</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* Footer */}
@@ -596,98 +778,93 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
 
             {/* 지원서 작성 모달 */}
             {showApplicationModal && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto scrollbar-hide">
-                        {/* 모달 헤더 - 드래그 가능하지만 아이콘 없음 */}
-                        <div 
-                            className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center cursor-move"
-                            draggable={true}
-                            onDragStart={(e) => {
-                                e.dataTransfer.effectAllowed = 'move';
-                            }}
-                        >
-                            <h3 className="text-xl font-bold text-gray-900 select-none">지원서 작성</h3>
-                            <button 
-                                onClick={() => setShowApplicationModal(false)}
-                                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                            >
-                                <X size={20} className="text-gray-500" />
-                            </button>
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowApplicationModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                        {/* 모달 헤더 */}
+                        <div className="px-7 pt-7 pb-5">
+                            <div className="flex items-center justify-between mb-1">
+                                <h3 className="text-lg font-bold text-gray-900">지원서 작성</h3>
+                                <button 
+                                    onClick={() => setShowApplicationModal(false)}
+                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600 text-lg"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                            <p className="text-[13px] text-gray-400">아래 정보를 입력하고 지원해주세요</p>
                         </div>
 
                         {/* 모달 본문 */}
-                        <div className="p-6 space-y-6">
-                            {/* 기본 정보 - 항상 표시되는 필수 필드 */}
+                        <div className="flex-1 overflow-y-auto px-7 pb-4 space-y-6 scrollbar-hide">
+                            {/* 기본 정보 */}
                             <div className="space-y-4">
-                                <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
-                                    <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                                    필수 정보
-                                </h4>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                    <span className="text-[13px] font-bold text-gray-800">필수 정보</span>
+                                </div>
                                 
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">이름 *</label>
+                                    <label className="block text-[13px] font-semibold text-gray-600 mb-1.5">이름 <span className="text-red-400">*</span></label>
                                     <input
                                         type="text"
                                         value={applicationForm.name}
                                         onChange={(e) => setApplicationForm({ ...applicationForm, name: e.target.value })}
                                         placeholder="홍길동"
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all placeholder:text-gray-300"
                                         required
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">이메일 *</label>
+                                    <label className="block text-[13px] font-semibold text-gray-600 mb-1.5">이메일 <span className="text-red-400">*</span></label>
                                     <input
                                         type="email"
                                         value={applicationForm.email}
                                         onChange={(e) => setApplicationForm({ ...applicationForm, email: e.target.value })}
                                         placeholder="example@email.com"
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all placeholder:text-gray-300"
                                         required
                                     />
                                 </div>
                             </div>
 
-                            {/* 선택 정보 - applicationFields 설정에 따라 표시 */}
+                            {/* 선택 정보 */}
                             {(jdData?.applicationFields?.phone || 
                               jdData?.applicationFields?.gender || 
                               jdData?.applicationFields?.birthDate ||
                               jdData?.applicationFields?.university ||
                               jdData?.applicationFields?.major ||
                               jdData?.applicationFields?.portfolio ||
-                              // 기존 공고 호환성: applicationFields가 없으면 기본값 표시
                               !jdData?.applicationFields) && (
                                 <div className="space-y-4">
-                                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
-                                        <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                                        추가 정보
-                                    </h4>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                        <span className="text-[13px] font-bold text-gray-800">추가 정보</span>
+                                    </div>
                                     
-                                    {/* 전화번호 - 기본 표시 또는 설정된 경우 */}
                                     {(jdData?.applicationFields?.phone || !jdData?.applicationFields) && (
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                                연락처 {jdData?.applicationFields?.phone && '*'}
+                                            <label className="block text-[13px] font-semibold text-gray-600 mb-1.5">
+                                                연락처 {jdData?.applicationFields?.phone && <span className="text-red-400">*</span>}
                                             </label>
                                             <input
                                                 type="tel"
                                                 value={applicationForm.phone}
                                                 onChange={(e) => setApplicationForm({ ...applicationForm, phone: e.target.value })}
                                                 placeholder="010-0000-0000"
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all placeholder:text-gray-300"
                                             />
                                         </div>
                                     )}
 
-                                    {/* 성별 */}
                                     {(jdData?.applicationFields?.gender || !jdData?.applicationFields) && (
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">성별</label>
+                                            <label className="block text-[13px] font-semibold text-gray-600 mb-1.5">성별</label>
                                             <select
                                                 value={applicationForm.gender}
                                                 onChange={(e) => setApplicationForm({ ...applicationForm, gender: e.target.value })}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all appearance-none"
+                                                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 16px center' }}
                                             >
                                                 <option value="">선택 안 함</option>
                                                 <option value="남성">남성</option>
@@ -697,57 +874,53 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                         </div>
                                     )}
                                     
-                                    {/* 생년월일 */}
                                     {jdData?.applicationFields?.birthDate && (
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">생년월일</label>
+                                            <label className="block text-[13px] font-semibold text-gray-600 mb-1.5">생년월일</label>
                                             <input
                                                 type="date"
                                                 value={applicationForm.birthDate}
                                                 onChange={(e) => setApplicationForm({ ...applicationForm, birthDate: e.target.value })}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all"
                                             />
                                         </div>
                                     )}
                                     
-                                    {/* 학교 */}
                                     {jdData?.applicationFields?.university && (
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">학교</label>
+                                            <label className="block text-[13px] font-semibold text-gray-600 mb-1.5">학교</label>
                                             <input
                                                 type="text"
                                                 value={applicationForm.university}
                                                 onChange={(e) => setApplicationForm({ ...applicationForm, university: e.target.value })}
                                                 placeholder="OO대학교"
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all placeholder:text-gray-300"
                                             />
                                         </div>
                                     )}
                                     
-                                    {/* 전공 */}
                                     {jdData?.applicationFields?.major && (
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">전공</label>
+                                            <label className="block text-[13px] font-semibold text-gray-600 mb-1.5">전공</label>
                                             <input
                                                 type="text"
                                                 value={applicationForm.major}
                                                 onChange={(e) => setApplicationForm({ ...applicationForm, major: e.target.value })}
                                                 placeholder="컴퓨터공학과"
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all placeholder:text-gray-300"
                                             />
                                         </div>
                                     )}
                                     
-                                    {/* 포트폴리오 */}
                                     {jdData?.applicationFields?.portfolio && (
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">포트폴리오 링크</label>
+                                            <label className="block text-[13px] font-semibold text-gray-600 mb-1.5">포트폴리오 링크</label>
                                             <input
                                                 type="url"
                                                 value={applicationForm.portfolio}
                                                 onChange={(e) => setApplicationForm({ ...applicationForm, portfolio: e.target.value })}
                                                 placeholder="https://..."
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all placeholder:text-gray-300"
                                             />
                                         </div>
                                     )}
@@ -757,14 +930,14 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                             {/* 커스텀 질문 */}
                             {jdData?.applicationFields?.customQuestions && jdData.applicationFields.customQuestions.length > 0 && (
                                 <div className="space-y-4">
-                                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
-                                        <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-                                        추가 질문
-                                    </h4>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                                        <span className="text-[13px] font-bold text-gray-800">추가 질문</span>
+                                    </div>
                                     
                                     {jdData.applicationFields.customQuestions.map((question, idx) => (
                                         <div key={idx}>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            <label className="block text-[13px] font-semibold text-gray-600 mb-1.5">
                                                 Q{idx + 1}. {question}
                                             </label>
                                             <textarea
@@ -778,7 +951,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                 })}
                                                 placeholder="답변을 입력해주세요"
                                                 rows={3}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all resize-none placeholder:text-gray-300"
                                             />
                                         </div>
                                     ))}
@@ -787,18 +960,18 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                         </div>
 
                         {/* 모달 푸터 */}
-                        <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 flex justify-end gap-3">
+                        <div className="px-7 py-5 border-t border-gray-100 flex justify-end gap-3">
                             <button
                                 onClick={() => setShowApplicationModal(false)}
-                                className="px-6 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                                className="px-5 py-2.5 rounded-xl text-[13px] font-bold text-gray-500 hover:bg-gray-100 transition-colors"
                                 disabled={submitting}
                             >
                                 취소
                             </button>
                             <button
                                 onClick={handleApplicationSubmit}
-                                disabled={submitting}
-                                className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={submitting || !applicationForm.name.trim() || !applicationForm.email.trim()}
+                                className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-bold hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                                 {submitting ? '제출 중...' : '지원하기'}
                             </button>

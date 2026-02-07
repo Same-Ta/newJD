@@ -227,7 +227,7 @@ export const applicationAPI = {
 // ==================== Gemini API ====================
 export const geminiAPI = {
   chat: async (message: string, chatHistory: any[] = [], type: string = 'club') => {
-    return await publicApiRequest('/api/gemini/chat', {
+    return await apiRequest('/api/gemini/chat', {
       method: 'POST',
       body: JSON.stringify({ message, chatHistory, type }),
     });
@@ -240,10 +240,14 @@ export const commentAPI = {
     return await apiRequest(`/api/comments/${applicationId}`);
   },
 
-  create: async (applicationId: string, content: string) => {
+  create: async (applicationId: string, content: string, posX?: number, posY?: number, parentId?: string) => {
+    const body: any = { applicationId, content };
+    if (posX !== undefined) body.posX = posX;
+    if (posY !== undefined) body.posY = posY;
+    if (parentId !== undefined) body.parentId = parentId;
     return await apiRequest('/api/comments', {
       method: 'POST',
-      body: JSON.stringify({ applicationId, content }),
+      body: JSON.stringify(body),
     });
   },
 
@@ -257,6 +261,12 @@ export const commentAPI = {
   delete: async (commentId: string) => {
     return await apiRequest(`/api/comments/${commentId}`, {
       method: 'DELETE',
+    });
+  },
+
+  resolve: async (commentId: string) => {
+    return await apiRequest(`/api/comments/${commentId}/resolve`, {
+      method: 'PUT',
     });
   },
 };
