@@ -6,13 +6,14 @@ import { jdAPI, geminiAPI } from '@/services/api';
 
 interface CurrentJD {
     title: string;
+    type?: 'company' | 'club';
     jobRole?: string;
     company?: string;
     companyName?: string;
     teamName?: string;
     location?: string;
     scale?: string;
-    description?: string;  // 동아리 소개글 (활동, 분위기 등)
+    description?: string;
     vision?: string;
     mission?: string;
     techStacks?: { name: string; level: number }[];
@@ -21,8 +22,8 @@ interface CurrentJD {
     preferred: string[];
     benefits: string[];
     // 필수 체크 개수 설정
-    requiredCheckCount?: number;  // 자격요건 중 최소 체크 개수
-    preferredCheckCount?: number; // 우대사항 중 최소 체크 개수
+    requiredCheckCount?: number;
+    preferredCheckCount?: number;
     // 지원 양식 커스텀 필드
     applicationFields?: {
         name: boolean;
@@ -35,6 +36,13 @@ interface CurrentJD {
         portfolio: boolean;
         customQuestions: string[];
     };
+    // 동아리 모집 일정 필드
+    recruitmentPeriod?: string;
+    recruitmentTarget?: string;
+    recruitmentCount?: string;
+    recruitmentProcess?: string[];
+    activitySchedule?: string;
+    membershipFee?: string;
 }
 
 interface ChatMessage {
@@ -50,6 +58,32 @@ interface ChatInterfaceProps {
 }
 
 export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
+    // 기본 JD 초기값
+    const getDefaultJD = (type: 'company' | 'club' = 'club'): CurrentJD => ({
+        title: '', type, jobRole: '', company: '', companyName: '', teamName: '',
+        location: '', scale: '', description: '', vision: '', mission: '', techStacks: [],
+        responsibilities: [], requirements: [], preferred: [], benefits: [],
+        recruitmentPeriod: '', recruitmentTarget: '', recruitmentCount: '',
+        recruitmentProcess: [], activitySchedule: '', membershipFee: ''
+    });
+
+    const getTypeSelectionMessage = (): ChatMessage => ({
+        role: 'ai',
+        text: '안녕하세요! WINNOW 채용 마스터입니다 🎯\n어떤 유형의 공고를 만들어 볼까요?',
+        timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+        options: ['회사 채용공고', '동아리 모집공고']
+    });
+
+    const getDefaultMessage = (type: 'company' | 'club' = 'club'): ChatMessage => ({
+        role: 'ai',
+        text: type === 'club'
+            ? '동아리 모집공고를 만들어 볼게요! 🎯 동아리의 정체성을 브랜딩하고, 최고의 신입 부원을 찾는 공고를 함께 만들어볼게요! 먼저, 어떤 동아리이신가요?'
+            : '회사 채용공고를 만들어 볼게요! 🎯 기업의 핵심 인재를 찾는 채용 공고를 함께 만들어볼게요! 먼저, 어떤 회사이신가요?',
+        timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+    });
+
+    // 공고 유형 상태
+    const [jdType, setJdType] = useState<'company' | 'club'>('club');
     // 사무적인 이미지 배열
     const officeImages = [
         'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=400&h=400&fit=crop',
@@ -66,31 +100,9 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     const [selectedImage] = useState(officeImages[Math.floor(Math.random() * officeImages.length)]);
     
     const [input, setInput] = useState('');
-    const [messages, setMessages] = useState<ChatMessage[]>([
-        {
-            role: 'ai',
-            text: '안녕하세요! WINNOW 채용 마스터입니다 🎯 동아리의 정체성을 브랜딩하고, 최고의 신입 부원을 찾는 채용 공고를 함께 만들어볼게요! 먼저, 어떤 동아리이신가요?',
-            timestamp: '오전 10:23'
-        }
-    ]);
+    const [messages, setMessages] = useState<ChatMessage[]>([getTypeSelectionMessage()]);
     const [waitingForCustomInput, setWaitingForCustomInput] = useState(false);
-    const [currentJD, setCurrentJD] = useState<CurrentJD>({
-        title: '',
-        jobRole: '',
-        company: '',
-        companyName: '',
-        teamName: '',
-        location: '',
-        scale: '',
-        description: '',
-        vision: '',
-        mission: '',
-        techStacks: [],
-        responsibilities: [],
-        requirements: [],
-        preferred: [],
-        benefits: []
-    });
+    const [currentJD, setCurrentJD] = useState<CurrentJD>(getDefaultJD('club'));
     const [isLoading, setIsLoading] = useState(false);
     const [typingText, setTypingText] = useState<{ [key: string]: string }>({});
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -123,9 +135,10 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             try {
                 const parsedJD = JSON.parse(savedJD);
                 setCurrentJD(parsedJD);
-                console.log('✅ 저장된 JD 데이터 복원:', parsedJD);
+                if (parsedJD.type) setJdType(parsedJD.type);
+                console.log('✅ 저장된 공고 데이터 복원:', parsedJD);
             } catch (e) {
-                console.error('JD 데이터 복원 실패:', e);
+                console.error('공고 데이터 복원 실패:', e);
             }
         }
         
@@ -140,11 +153,11 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         }
     }, []);
 
-    // currentJD가 변경될 때마다 자동 저장
+    // 공고 데이터가 변경될 때마다 자동 저장
     useEffect(() => {
         if (currentJD.title || currentJD.companyName || currentJD.requirements.length > 0) {
             localStorage.setItem('currentJD', JSON.stringify(currentJD));
-            console.log('💾 JD 데이터 자동 저장됨');
+            console.log('💾 공고 데이터 자동 저장됨');
         }
     }, [currentJD]);
 
@@ -232,30 +245,9 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         const confirmed = window.confirm('모든 작성 내용을 초기화하시겠습니까?\n\n이 작업은 취소할 수 없습니다.');
         if (!confirmed) return;
         
-        setCurrentJD({
-            title: '',
-            jobRole: '',
-            company: '',
-            companyName: '',
-            teamName: '',
-            location: '',
-            scale: '',
-            description: '',
-            vision: '',
-            mission: '',
-            techStacks: [],
-            responsibilities: [],
-            requirements: [],
-            preferred: [],
-            benefits: []
-        });
-        setMessages([
-            {
-                role: 'ai',
-                text: '안녕하세요! WINNOW 채용 마스터입니다 🎯 동아리의 정체성을 브랜딩하고, 최고의 신입 부원을 찾는 채용 공고를 함께 만들어볼게요! 먼저, 어떤 동아리이신가요?',
-                timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-            }
-        ]);
+        setCurrentJD(getDefaultJD('club'));
+        setJdType('club');
+        setMessages([getTypeSelectionMessage()]);
         localStorage.removeItem('currentJD');
         localStorage.removeItem('chatMessages');
         setRequiredCheckCount(0);
@@ -317,6 +309,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             // undefined 값을 빈 문자열이나 빈 배열로 변환
             const jobData = {
                 status: 'published',
+                type: jdType,
                 title: currentJD.title || '',
                 jobRole: currentJD.jobRole || '',
                 company: currentJD.company || '',
@@ -332,6 +325,12 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 requirements: currentJD.requirements || [],
                 preferred: currentJD.preferred || [],
                 benefits: currentJD.benefits || [],
+                recruitmentPeriod: currentJD.recruitmentPeriod || '',
+                recruitmentTarget: currentJD.recruitmentTarget || '',
+                recruitmentCount: currentJD.recruitmentCount || '',
+                recruitmentProcess: currentJD.recruitmentProcess || [],
+                activitySchedule: currentJD.activitySchedule || '',
+                membershipFee: currentJD.membershipFee || '',
                 requiredCheckCount: requiredCheckCount || 0,
                 preferredCheckCount: preferredCheckCount || 0,
                 // 지원 양식 설정 추가
@@ -340,32 +339,16 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
 
             console.log('저장할 데이터:', jobData);
 
-            // 백엔드 API로 JD 저장
+            // 백엔드 API로 공고 저장
             const savedJD = await jdAPI.create(jobData);
             
-            console.log('JD 저장 완료:', savedJD);
+            console.log('공고 저장 완료:', savedJD);
             
             // 모달 닫기
             setShowApplicationFieldsModal(false);
             
             // 화면 초기화
-            setCurrentJD({
-                title: '',
-                jobRole: '',
-                company: '',
-                companyName: '',
-                teamName: '',
-                location: '',
-                scale: '',
-                description: '',
-                vision: '',
-                mission: '',
-                techStacks: [],
-                responsibilities: [],
-                requirements: [],
-                preferred: [],
-                benefits: []
-            });
+            setCurrentJD(getDefaultJD(jdType));
             
             // 지원 양식 설정 초기화
             setApplicationFieldsConfig({
@@ -385,13 +368,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             setPreferredCheckCount(0);
             
             // 채팅 내역 초기화
-            setMessages([
-                {
-                    role: 'ai',
-                    text: '안녕하세요! WINNOW 채용 마스터입니다 🎯 동아리의 정체성을 브랜딩하고, 최고의 신입 부원을 찾는 채용 공고를 함께 만들어볼게요! 먼저, 어떤 동아리이신가요?',
-                    timestamp: '오전 10:23'
-                }
-            ]);
+            setMessages([getTypeSelectionMessage()]);
             
             // localStorage 초기화
             localStorage.removeItem('currentJD');
@@ -426,6 +403,17 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         if (!selectedOption) setInput('');
         setIsLoading(true);
 
+        // 회사/동아리 유형 선택 처리
+        if (selectedOption === '회사 채용공고' || selectedOption === '동아리 모집공고') {
+            const newType = selectedOption === '회사 채용공고' ? 'company' : 'club';
+            setJdType(newType);
+            setCurrentJD(getDefaultJD(newType));
+            const followUpMessage = getDefaultMessage(newType);
+            setMessages(prev => [...prev, followUpMessage]);
+            setIsLoading(false);
+            return;
+        }
+
         // "기타" 선택 시 추가 입력 대기
         if (selectedOption === '기타') {
             const followUpMessage: ChatMessage = {
@@ -453,7 +441,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
 
             // 민감 정보 마스킹 후 API 호출
             const sanitizedMessage = maskSensitiveData(currentInput);
-            const response = await geminiAPI.chat(sanitizedMessage, conversationHistory);
+            const response = await geminiAPI.chat(sanitizedMessage, conversationHistory, jdType);
             
             // 응답 검증
             if (!response || typeof response !== 'object') {
@@ -486,7 +474,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             
             setMessages(prev => [...prev, aiMessage]);
             
-            // 2. 미리보기 업데이트: jdData가 있으면 기존 상태와 병합
+            // 2. 미리보기 업데이트: 공고 데이터가 있으면 기존 상태와 병합
             if (response.jdData && typeof response.jdData === 'object') {
                 const newJD = {
                     title: response.jdData.title || currentJD.title || '',
@@ -513,7 +501,16 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                         : currentJD.preferred || [],
                     benefits: (response.jdData.benefits && response.jdData.benefits.length > 0) 
                         ? response.jdData.benefits 
-                        : currentJD.benefits || []
+                        : currentJD.benefits || [],
+                    // 동아리 모집 일정 필드
+                    recruitmentPeriod: response.jdData.recruitmentPeriod || currentJD.recruitmentPeriod || '',
+                    recruitmentTarget: response.jdData.recruitmentTarget || currentJD.recruitmentTarget || '',
+                    recruitmentCount: response.jdData.recruitmentCount || currentJD.recruitmentCount || '',
+                    recruitmentProcess: (response.jdData.recruitmentProcess && response.jdData.recruitmentProcess.length > 0)
+                        ? response.jdData.recruitmentProcess
+                        : currentJD.recruitmentProcess || [],
+                    activitySchedule: response.jdData.activitySchedule || currentJD.activitySchedule || '',
+                    membershipFee: response.jdData.membershipFee || currentJD.membershipFee || '',
                 };
                 
                 // 타이핑 애니메이션 적용 - 새로운 값이 있을 때만
@@ -539,7 +536,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                     typeText('scale', response.jdData.scale, 15);
                 }
                 
-                console.log('JD 업데이트:', newJD);
+                console.log('공고 업데이트:', newJD);
                 setCurrentJD(prev => ({ ...prev, ...newJD }));
                 
                 // 배열 필드들도 즉시 반영되도록 보장
@@ -548,7 +545,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 }, 100);
             }
         } catch (error) {
-            console.error('Error generating JD:', error);
+            console.error('공고 생성 오류:', error);
             const errorMessage: ChatMessage = {
                 role: 'ai',
                 text: '죄송합니다. 오류가 발생했습니다. 다시 시도해주세요.',
@@ -561,13 +558,13 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     };
 
     return (
-        <div className="flex bg-gray-100 rounded-2xl border border-gray-200 shadow-xl overflow-hidden w-full gap-3" style={{ height: 'calc(100% - 0px)', zoom: '0.75'}}>
+        <div className="flex bg-gray-100 rounded-2xl border border-gray-200 shadow-xl overflow-hidden w-full gap-3" style={{ height: 'calc(100% - 0px)', zoom: '0.95'}}>
             {/* Chat Area - Left */}
             <div className="w-[35%] flex flex-col bg-white rounded-l-2xl border border-gray-200 shadow-sm">
                 <div className="p-5 border-b border-gray-200 bg-white flex justify-between items-center h-[70px]">
                     <div className="flex items-center gap-2.5 font-bold text-[15px] text-gray-800">
                         <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-sm"><MessageSquare size={14} fill="white"/></div>
-                        JD 생성 매니저
+                        공고 생성 매니저
                     </div>
                     <button 
                         onClick={() => {
@@ -576,30 +573,9 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                 if (!confirmed) return;
                             }
                             // 새로운 채팅 시작 (localStorage는 유지)
-                            setCurrentJD({
-                                title: '',
-                                jobRole: '',
-                                company: '',
-                                companyName: '',
-                                teamName: '',
-                                location: '',
-                                scale: '',
-                                description: '',
-                                vision: '',
-                                mission: '',
-                                techStacks: [],
-                                responsibilities: [],
-                                requirements: [],
-                                preferred: [],
-                                benefits: []
-                            });
-                            setMessages([
-                                {
-                                    role: 'ai',
-                                    text: '안녕하세요! WINNOW 채용 마스터입니다 🎯 동아리의 정체성을 브랜딩하고, 최고의 신입 부원을 찾는 채용 공고를 함께 만들어볼게요! 먼저, 어떤 동아리이신가요?',
-                                    timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-                                }
-                            ]);
+                            setCurrentJD(getDefaultJD('club'));
+                            setJdType('club');
+                            setMessages([getTypeSelectionMessage()]);
                             localStorage.removeItem('currentJD');
                             localStorage.removeItem('chatMessages');
                         }}
@@ -754,7 +730,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                     {typingText['companyName'] !== undefined && <span className="animate-pulse">|</span>}
                                 </span>
                             ) : (
-                                <span className="text-gray-400">동아리 이름</span>
+                                <span className="text-gray-400">{jdType === 'company' ? '회사 이름' : '동아리 이름'}</span>
                             )}
                         </h3>
                         <p className="text-[12px] text-gray-500 font-semibold mb-6">
@@ -868,42 +844,42 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                     {isEditMode && (
                                         <div className="space-y-3 mb-6 bg-blue-50/30 p-4 rounded-lg border border-blue-200">
                                             <div>
-                                                <label className="block text-[11px] font-bold text-gray-600 mb-1.5">동아리명</label>
+                                                <label className="block text-[11px] font-bold text-gray-600 mb-1.5">{jdType === 'company' ? '회사명' : '동아리명'}</label>
                                                 <input
                                                     type="text"
                                                     value={editedJD.companyName}
                                                     onChange={(e) => setEditedJD({ ...editedJD, companyName: e.target.value })}
-                                                    placeholder="동아리 이름을 입력하세요"
+                                                    placeholder={jdType === 'company' ? '회사 이름을 입력하세요' : '동아리 이름을 입력하세요'}
                                                     className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-[11px] font-bold text-gray-600 mb-1.5">모집 분야</label>
+                                                <label className="block text-[11px] font-bold text-gray-600 mb-1.5">{jdType === 'company' ? '채용 직무' : '모집 분야'}</label>
                                                 <input
                                                     type="text"
                                                     value={editedJD.jobRole}
                                                     onChange={(e) => setEditedJD({ ...editedJD, jobRole: e.target.value })}
-                                                    placeholder="모집 분야를 입력하세요"
+                                                    placeholder={jdType === 'company' ? '채용 직무를 입력하세요' : '모집 분야를 입력하세요'}
                                                     className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-[11px] font-bold text-gray-600 mb-1.5">활동 장소</label>
+                                                <label className="block text-[11px] font-bold text-gray-600 mb-1.5">{jdType === 'company' ? '근무지' : '활동 장소'}</label>
                                                 <input
                                                     type="text"
                                                     value={editedJD.location}
                                                     onChange={(e) => setEditedJD({ ...editedJD, location: e.target.value })}
-                                                    placeholder="활동 장소를 입력하세요"
+                                                    placeholder={jdType === 'company' ? '근무지를 입력하세요' : '활동 장소를 입력하세요'}
                                                     className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-[11px] font-bold text-gray-600 mb-1.5">동아리 규모</label>
+                                                <label className="block text-[11px] font-bold text-gray-600 mb-1.5">{jdType === 'company' ? '회사 규모' : '동아리 규모'}</label>
                                                 <input
                                                     type="text"
                                                     value={editedJD.scale}
                                                     onChange={(e) => setEditedJD({ ...editedJD, scale: e.target.value })}
-                                                    placeholder="동아리 규모를 입력하세요 (예: 소규모/중규모 동아리)"
+                                                    placeholder={jdType === 'company' ? '회사 규모를 입력하세요 (예: 스타트업/중소기업/대기업)' : '동아리 규모를 입력하세요 (예: 소규모/중규모 동아리)'}
                                                     className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
                                                 />
                                             </div>
@@ -919,13 +895,13 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                                     <path d="M10 2a8 8 0 100 16 8 8 0 000-16zM9 9a1 1 0 112 0v4a1 1 0 11-2 0V9zm1-5a1 1 0 100 2 1 1 0 000-2z"/>
                                                 </svg>
-                                                동아리 소개
+                                                {jdType === 'company' ? '회사 소개' : '동아리 소개'}
                                             </h4>
                                             {isEditMode ? (
                                                 <textarea
                                                     value={editedJD.description}
                                                     onChange={(e) => setEditedJD({ ...editedJD, description: e.target.value })}
-                                                    placeholder="동아리의 활동, 분위기, 특징 등을 소개하는 글을 입력하세요"
+                                                    placeholder={jdType === 'company' ? '회사의 사업 분야, 문화, 특징 등을 소개하는 글을 입력하세요' : '동아리의 활동, 분위기, 특징 등을 소개하는 글을 입력하세요'}
                                                     className="w-full px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
                                                     rows={4}
                                                 />
@@ -938,6 +914,89 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                         </div>
                                     </div>
                                 )}
+
+                                {/* 모집 일정 및 정보 (동아리 모드 전용) */}
+                                {jdType === 'club' && (
+                                    (currentJD.recruitmentPeriod || currentJD.recruitmentTarget || currentJD.recruitmentCount || 
+                                     (currentJD.recruitmentProcess && currentJD.recruitmentProcess.length > 0) ||
+                                     currentJD.activitySchedule || currentJD.membershipFee || isEditMode) && (
+                                    <div className="space-y-3">
+                                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-lg p-5">
+                                            <h4 className="text-[11px] font-bold text-green-600 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                                                </svg>
+                                                모집 일정 및 정보
+                                            </h4>
+                                            <div className="space-y-3">
+                                                {/* 모집 기간 */}
+                                                <div className="flex items-start gap-3">
+                                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 기간</span>
+                                                    {isEditMode ? (
+                                                        <input type="text" value={editedJD.recruitmentPeriod || ''} onChange={(e) => setEditedJD({ ...editedJD, recruitmentPeriod: e.target.value })} placeholder="예: 2025.03.01 ~ 2025.03.15" className="flex-1 px-3 py-1.5 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-[13px]" />
+                                                    ) : (
+                                                        <span className="text-[13px] text-gray-700">{currentJD.recruitmentPeriod || <span className="text-gray-400">미정</span>}</span>
+                                                    )}
+                                                </div>
+                                                {/* 모집 대상 */}
+                                                <div className="flex items-start gap-3">
+                                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 대상</span>
+                                                    {isEditMode ? (
+                                                        <input type="text" value={editedJD.recruitmentTarget || ''} onChange={(e) => setEditedJD({ ...editedJD, recruitmentTarget: e.target.value })} placeholder="예: 전 학년 재학생" className="flex-1 px-3 py-1.5 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-[13px]" />
+                                                    ) : (
+                                                        <span className="text-[13px] text-gray-700">{currentJD.recruitmentTarget || <span className="text-gray-400">미정</span>}</span>
+                                                    )}
+                                                </div>
+                                                {/* 모집 인원 */}
+                                                <div className="flex items-start gap-3">
+                                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 인원</span>
+                                                    {isEditMode ? (
+                                                        <input type="text" value={editedJD.recruitmentCount || ''} onChange={(e) => setEditedJD({ ...editedJD, recruitmentCount: e.target.value })} placeholder="예: 00명 내외" className="flex-1 px-3 py-1.5 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-[13px]" />
+                                                    ) : (
+                                                        <span className="text-[13px] text-gray-700">{currentJD.recruitmentCount || <span className="text-gray-400">미정</span>}</span>
+                                                    )}
+                                                </div>
+                                                {/* 모집 절차 */}
+                                                <div className="flex items-start gap-3">
+                                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 절차</span>
+                                                    {isEditMode ? (
+                                                        <input type="text" value={(editedJD.recruitmentProcess || []).join(', ')} onChange={(e) => setEditedJD({ ...editedJD, recruitmentProcess: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} placeholder="예: 서류 접수, 면접, 최종 합격 발표" className="flex-1 px-3 py-1.5 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-[13px]" />
+                                                    ) : (
+                                                        <span className="text-[13px] text-gray-700">
+                                                            {currentJD.recruitmentProcess && currentJD.recruitmentProcess.length > 0 
+                                                                ? currentJD.recruitmentProcess.map((step, i) => (
+                                                                    <span key={i}>
+                                                                        {i > 0 && <span className="text-green-400 mx-1">→</span>}
+                                                                        {step}
+                                                                    </span>
+                                                                ))
+                                                                : <span className="text-gray-400">미정</span>
+                                                            }
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {/* 활동 일정 */}
+                                                <div className="flex items-start gap-3">
+                                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">활동 일정</span>
+                                                    {isEditMode ? (
+                                                        <input type="text" value={editedJD.activitySchedule || ''} onChange={(e) => setEditedJD({ ...editedJD, activitySchedule: e.target.value })} placeholder="예: 매주 수요일 18:00 정기 모임" className="flex-1 px-3 py-1.5 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-[13px]" />
+                                                    ) : (
+                                                        <span className="text-[13px] text-gray-700">{currentJD.activitySchedule || <span className="text-gray-400">미정</span>}</span>
+                                                    )}
+                                                </div>
+                                                {/* 회비 */}
+                                                <div className="flex items-start gap-3">
+                                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">회비</span>
+                                                    {isEditMode ? (
+                                                        <input type="text" value={editedJD.membershipFee || ''} onChange={(e) => setEditedJD({ ...editedJD, membershipFee: e.target.value })} placeholder="예: 학기당 3만원" className="flex-1 px-3 py-1.5 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-[13px]" />
+                                                    ) : (
+                                                        <span className="text-[13px] text-gray-700">{currentJD.membershipFee || <span className="text-gray-400">미정</span>}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
 
                                 {/* VISION & MISSION */}
                                 {((currentJD.vision || currentJD.mission) || isEditMode) && (
@@ -988,10 +1047,10 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                     </div>
                                 )}
 
-                                {/* 자격 요건 (CHECKLIST) */}
+                                {/* 자격 요건 / 지원자 체크리스트 */}
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center">
-                                        <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">자격 요건 (CHECKLIST)</h4>
+                                        <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{jdType === 'company' ? '자격 요건 (CHECKLIST)' : '지원자 체크리스트 (필수)'}</h4>
                                         {isEditMode && (
                                             <button
                                                 onClick={() => addArrayItem('requirements')}
@@ -1010,7 +1069,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                                             type="text"
                                                             value={item}
                                                             onChange={(e) => updateArrayItem('requirements', idx, e.target.value)}
-                                                            placeholder="자격 요건을 입력하세요"
+                                                            placeholder={jdType === 'company' ? '자격 요건을 입력하세요' : '체크리스트 항목을 입력하세요'}
                                                             className="flex-1 px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
                                                         />
                                                         <button
@@ -1037,10 +1096,10 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                     </div>
                                 </div>
 
-                                {/* 우대 사항 (PREFERRED) */}
+                                {/* 우대 사항 / 우대 체크리스트 */}
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center">
-                                        <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">우대 사항 (PREFERRED)</h4>
+                                        <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{jdType === 'company' ? '우대 사항 (PREFERRED)' : '지원자 체크리스트 (우대)'}</h4>
                                         {isEditMode && (
                                             <button
                                                 onClick={() => addArrayItem('preferred')}
@@ -1059,7 +1118,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                                             type="text"
                                                             value={item}
                                                             onChange={(e) => updateArrayItem('preferred', idx, e.target.value)}
-                                                            placeholder="우대 사항을 입력하세요"
+                                                            placeholder={jdType === 'company' ? '우대 사항을 입력하세요' : '우대 체크리스트 항목을 입력하세요'}
                                                             className="flex-1 px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
                                                         />
                                                         <button

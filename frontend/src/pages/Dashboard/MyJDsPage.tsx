@@ -1,7 +1,7 @@
 import { Badge } from '@/components/common/Badge';
 import { useState, useEffect } from 'react';
 import { auth } from '@/config/firebase';
-import { jdAPI } from '@/services/api';
+import { jdAPI, applicationAPI } from '@/services/api';
 
 interface MyJDsPageProps {
   onNavigate: (page: string) => void;
@@ -15,11 +15,13 @@ interface JDItem {
   company?: string;
   createdAt: any;
   status?: string;
+  recruitmentPeriod?: string;
 }
 
 export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
   const [jdList, setJdList] = useState<JDItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [applicantCounts, setApplicantCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const fetchJDs = async () => {
@@ -31,8 +33,11 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
       }
 
       try {
-        console.log('사용자 JD 목록 불러오는 중...');
-        const jds = await jdAPI.getAll();
+        console.log('사용자 공고 목록 불러오는 중...');
+        const [jds, apps] = await Promise.all([
+          jdAPI.getAll(),
+          applicationAPI.getAll().catch(() => [] as any[])
+        ]);
         
         // 클라이언트 사이드 정렬 (createdAt 기준 내림차순)
         const sortedJds = jds.sort((a: any, b: any) => {
@@ -41,11 +46,19 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
           return bTime - aTime;
         });
 
-        console.log(`${sortedJds.length}개의 JD를 불러왔습니다.`);
+        console.log(`${sortedJds.length}개의 공고를 불러왔습니다.`);
         setJdList(sortedJds);
+
+        // 지원자 수 계산
+        const counts: Record<string, number> = {};
+        apps.forEach((app: any) => {
+          const id = app.jdId;
+          if (id) counts[id] = (counts[id] || 0) + 1;
+        });
+        setApplicantCounts(counts);
       } catch (error) {
-        console.error('JD 목록 불러오기 실패:', error);
-        alert('JD 목록을 불러오는데 실패했습니다.');
+        console.error('공고 목록 불러오기 실패:', error);
+        alert('공고 목록을 불러오는데 실패했습니다.');
       } finally {
         setLoading(false);
       }
@@ -61,16 +74,16 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
     if (!confirmed) return;
 
     try {
-      console.log('JD 삭제 중...', jdId);
+      console.log('공고 삭제 중...', jdId);
       await jdAPI.delete(jdId);
       
       // 상태에서 해당 아이템 제거 (즉시 UI 반영)
       setJdList(prevList => prevList.filter(jd => jd.id !== jdId));
       
-      console.log('JD 삭제 완료');
+      console.log('공고 삭제 완료');
       alert('공고가 삭제되었습니다.');
     } catch (error) {
-      console.error('JD 삭제 실패:', error);
+      console.error('공고 삭제 실패:', error);
       alert('삭제 중 오류가 발생했습니다.');
     }
   };
@@ -78,7 +91,7 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
   if (loading) {
     return (
       <div className="space-y-6 max-w-[1200px] mx-auto">
-        <h2 className="text-2xl font-bold">내 채용 공고 (JD)</h2>
+        <h2 className="text-2xl font-bold">내 채용 공고</h2>
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -91,8 +104,8 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
 
   return (
   <div className="space-y-6 max-w-[1200px] mx-auto">
-    <h2 className="text-2xl font-bold">내 채용 공고 (JD)</h2>
-    <p className="text-sm text-gray-500 -mt-5 mb-5">작성한 JD를 수정하거나 새로운 공고를 작성하세요.</p>
+    <h2 className="text-2xl font-bold">내 채용 공고</h2>
+    <p className="text-sm text-gray-500 -mt-5 mb-5">작성한 공고를 수정하거나 새로운 공고를 작성하세요.</p>
     
     {jdList.length === 0 ? (
       <div className="bg-white rounded-2xl border border-gray-100 p-20 text-center">
@@ -107,17 +120,26 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
     ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {jdList.map((job) => {
-          // Firestore Timestamp를 yyyy.mm.dd 형식으로 변환
+          // D-day 계산: recruitmentPeriod에서 마감일 파싱, 없으면 생성일+30일
           let dDay = '';
-          if (job.createdAt) {
+          const today = new Date();
+          if (job.recruitmentPeriod) {
+            // "2025.03.01 ~ 2025.03.15" 형식에서 마감일 추출
+            const parts = job.recruitmentPeriod.split('~');
+            if (parts.length >= 2) {
+              const endStr = parts[1].trim().replace(/\./g, '-');
+              const deadline = new Date(endStr);
+              if (!isNaN(deadline.getTime())) {
+                const diffDays = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                dDay = diffDays > 0 ? `D-${diffDays}` : diffDays === 0 ? 'D-Day' : '마감';
+              }
+            }
+          }
+          if (!dDay && job.createdAt) {
             const date = job.createdAt?.toDate ? job.createdAt.toDate() : new Date(job.createdAt);
-            
-            // D-day 계산 (30일 후 마감으로 가정)
             const deadline = new Date(date);
             deadline.setDate(deadline.getDate() + 30);
-            const today = new Date();
-            const diffTime = deadline.getTime() - today.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const diffDays = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
             dDay = diffDays > 0 ? `D-${diffDays}` : '마감';
           }
 
@@ -171,12 +193,10 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
                 
                 <div className="flex items-center justify-between text-[12px] text-gray-500 font-medium">
                   <div className="flex items-center gap-1">
-                    <span className="text-yellow-500">★</span>
-                    <span className="text-gray-700 font-semibold">4.8</span>
-                    <span className="mx-1.5 text-gray-300">|</span>
                     <span className="text-blue-600 font-bold">{dDay}</span>
+                    <span className="mx-1.5 text-gray-300">|</span>
                     <span className="mx-1 text-gray-400">지원자</span>
-                    <span className="font-semibold text-gray-700">{Math.floor(Math.random() * 30) + 5}명</span>
+                    <span className="font-semibold text-gray-700">{applicantCounts[job.id] || 0}명</span>
                   </div>
                 </div>
               </div>

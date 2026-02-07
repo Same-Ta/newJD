@@ -26,22 +26,22 @@ import { auth } from '@/config/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 const App = () => {
-  // URL에서 JD ID 추출 함수
+  // URL에서 공고 ID 추출 함수
   const getJdIdFromUrl = () => {
-    // 1. 해시 라우팅 확인: #/jd/[id]
+    // 1. 해시 라우팅 확인
     const hash = window.location.hash;
     if (hash.startsWith('#/jd/')) {
       return hash.replace('#/jd/', '');
     }
     
-    // 2. 경로 라우팅 확인: /jd/[id]
+    // 2. 경로 라우팅 확인
     const pathname = window.location.pathname;
     const pathMatch = pathname.match(/^\/jd\/([^\/]+)/);
     if (pathMatch) {
       return pathMatch[1];
     }
     
-    // 3. 쿼리 파라미터 확인: ?jdId=[id]
+    // 3. 쿼리 파라미터 확인
     const params = new URLSearchParams(window.location.search);
     const jdIdParam = params.get('jdId');
     if (jdIdParam) {
@@ -89,7 +89,7 @@ const App = () => {
           setUserInitials(user.email.substring(0, 2).toUpperCase());
         }
         
-        // 로그인되어 있고 landing 페이지에 있으며 JD 상세 페이지가 아닐 때만 dashboard로 이동
+        // 로그인되어 있고 landing 페이지에 있으며 공고 상세 페이지가 아닐 때만 dashboard로 이동
         if (currentPage === 'landing' && !getJdIdFromUrl()) {
           setCurrentPage('dashboard');
         }
@@ -98,7 +98,7 @@ const App = () => {
         setIsLoggedIn(false);
         setUserName('');
         setUserEmail('');
-        // JD 상세 페이지가 아닌 경우에만 landing으로 이동
+        // 공고 상세 페이지가 아닌 경우에만 landing으로 이동
         if (currentPage !== 'jd-detail' && currentPage !== 'login' && currentPage !== 'signup') {
           setCurrentPage('landing');
         }
@@ -114,7 +114,7 @@ const App = () => {
     const handleUrlChange = () => {
       const jdId = getJdIdFromUrl();
       if (jdId) {
-        console.log('공개 JD 링크 접근:', jdId);
+        console.log('공개 공고 링크 접근:', jdId);
         setSelectedJdId(jdId);
         setCurrentPage('jd-detail');
       }
@@ -179,7 +179,7 @@ const App = () => {
         case 'chat': return <ChatInterface onNavigate={setCurrentPage} />;
         case 'team': return <TeamManagement onNavigate={setCurrentPage} />;
         case 'settings': return <AccountSettings />;
-        default: return <DashboardHome onNavigate={setCurrentPage} onNavigateToJD={(jdId) => console.log('Navigate to JD:', jdId)} />;
+        default: return <DashboardHome onNavigate={setCurrentPage} onNavigateToJD={(jdId) => console.log('Navigate to 공고:', jdId)} />;
     }
   };
 
@@ -196,7 +196,7 @@ const App = () => {
     );
   }
 
-  // 공개 라우트: JD 상세 페이지 (로그인 불필요)
+  // 공개 라우트: 공고 상세 페이지 (로그인 불필요)
   if (currentPage === 'jd-detail') {
     return (
       <div className="min-h-screen bg-[#F8FAFC]" style={{ fontFamily: FONTS.sans }}>
@@ -268,7 +268,7 @@ const App = () => {
             />
             <SidebarItem 
                 icon={FileText} 
-                label="내 JD 목록" 
+                label="내 공고 목록" 
                 active={currentPage === 'my-jds'} 
                 onClick={() => setCurrentPage('my-jds')} 
             />
@@ -280,7 +280,7 @@ const App = () => {
             />
              <SidebarItem 
                 icon={MessageSquare} 
-                label="JD 생성 (AI)" 
+                label="공고 생성 (AI)" 
                 active={currentPage === 'chat'} 
                 onClick={() => setCurrentPage('chat')} 
             />

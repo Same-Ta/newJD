@@ -51,8 +51,8 @@ export const TeamManagement = (_props: TeamManagementProps) => {
       const data = await jdAPI.getAll();
       setJds(data || []);
     } catch (error: any) {
-      console.error('JD 목록 로드 실패:', error);
-      setToast({ type: 'error', message: 'JD 목록을 불러오는데 실패했습니다.' });
+      console.error('공고 목록 로드 실패:', error);
+      setToast({ type: 'error', message: '공고 목록을 불러오는데 실패했습니다.' });
     } finally {
       setLoading(false);
     }
@@ -172,7 +172,7 @@ export const TeamManagement = (_props: TeamManagementProps) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* 좌측: JD 목록 */}
+        {/* 좌측: 공고 목록 */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-50 flex items-center gap-2">
@@ -217,7 +217,7 @@ export const TeamManagement = (_props: TeamManagementProps) => {
           </div>
         </div>
 
-        {/* 우측: 선택된 JD의 협업자 관리 */}
+        {/* 우측: 선택된 공고의 협업자 관리 */}
         <div className="lg:col-span-3">
           {!selectedJdId ? (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
@@ -227,7 +227,7 @@ export const TeamManagement = (_props: TeamManagementProps) => {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* 선택된 JD 헤더 */}
+              {/* 선택된 공고 헤더 */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                 <div className="flex items-center justify-between">
                   <div>

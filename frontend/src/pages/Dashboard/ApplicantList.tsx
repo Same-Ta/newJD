@@ -3,6 +3,7 @@ import { Filter, Download, X, Sparkles, FileText, Trash2, Search, Calendar, Chev
 import { auth } from '@/config/firebase';
 import * as XLSX from 'xlsx';
 import { applicationAPI, jdAPI } from '@/services/api';
+import { AIAnalysisDashboard } from '@/components/ai/AIAnalysisComponents';
 
 interface Application {
     id: string;
@@ -16,6 +17,7 @@ interface Application {
     appliedAt: any;
     status: string;
 }
+
 
 export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant?: (id: string) => void }) => {
     const [applications, setApplications] = useState<Application[]>([]);
@@ -35,7 +37,7 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
     const [showDateMenu, setShowDateMenu] = useState(false);
     
     // 공고 목록
-    const [jdList, setJdList] = useState<Array<{ id: string; title: string }>>([]);
+    const [jdList, setJdList] = useState<Array<{ id: string; title: string; type?: string }>>([]);
     
     // AI 스크리닝 리포트 관련 상태
     const [selectedApplicant, setSelectedApplicant] = useState<Application | null>(null);
@@ -84,7 +86,8 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
             const jdsData = await jdAPI.getAll();
             const jdsList = jdsData.map((jd: any) => ({
                 id: jd.id,
-                title: jd.title || '제목 없음'
+                title: jd.title || '제목 없음',
+                type: jd.type || 'club'
             }));
 
             setJdList(jdsList);
@@ -137,15 +140,40 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
         return `${year}.${month}.${day}`;
     };
 
-    // AI 요약 생성 함수
-    const generateAISummary = async (application: Application) => {
+    // AI 분석 로드 또는 생성 (캐싱)
+    const loadOrGenerateAnalysis = async (application: Application) => {
         setSummaryLoading(true);
+        try {
+            const saved = await applicationAPI.getAnalysis(application.id);
+            if (saved && saved.analysis) {
+                setAiSummary(saved.analysis);
+                return;
+            }
+            await runAnalysis(application);
+        } catch (error) {
+            console.error('분석 로드 실패:', error);
+            await runAnalysis(application);
+        } finally {
+            setSummaryLoading(false);
+        }
+    };
+
+    const runAnalysis = async (application: Application) => {
         try {
             const result = await applicationAPI.analyze(application);
             setAiSummary(result.analysis);
+            await applicationAPI.saveAnalysis(application.id, result.analysis);
         } catch (error) {
             console.error('AI 분석 실패:', error);
             setAiSummary('AI 분석에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        }
+    };
+
+    const handleRefreshAnalysis = async () => {
+        if (!selectedApplicant) return;
+        setSummaryLoading(true);
+        try {
+            await runAnalysis(selectedApplicant);
         } finally {
             setSummaryLoading(false);
         }
@@ -158,7 +186,7 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
         } else {
             setSelectedApplicant(application);
             setAiSummary('');
-            generateAISummary(application);
+            loadOrGenerateAnalysis(application);
         }
     };
 
@@ -680,19 +708,19 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
             </div>
 
             <div className="flex-1 overflow-auto">
-                <table className="w-full text-left text-sm text-gray-600">
-                    <thead className="bg-[#F8FAFC] text-[11px] uppercase font-bold text-gray-400 tracking-wider sticky top-0">
+                <table className="w-full text-left text-sm text-gray-600" style={{fontSize: '0.85rem'}}>
+                    <thead className="bg-[#F8FAFC] text-[10px] uppercase font-bold text-gray-400 tracking-wider sticky top-0">
                         <tr>
-                            <th className="px-6 py-4 w-12"><input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"/></th>
-                            <th className="px-6 py-4">이름</th>
-                            <th className="px-6 py-4">이메일</th>
-                            <th className="px-6 py-4">전화번호</th>
-                            <th className="px-6 py-4">성별</th>
-                            <th className="px-6 py-4">지원 포지션</th>
-                            <th className="px-6 py-4">지원 일시</th>
-                            <th className="px-6 py-4 text-center">작성 내용</th>
-                            <th className="px-6 py-4 text-center">상태</th>
-                            <th className="px-6 py-4 text-center">관리</th>
+                            <th className="px-3 py-3 w-10"><input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"/></th>
+                            <th className="px-3 py-3 whitespace-nowrap">이름</th>
+                            <th className="px-3 py-3 whitespace-nowrap">이메일</th>
+                            <th className="px-3 py-3 whitespace-nowrap">전화번호</th>
+                            <th className="px-3 py-3 whitespace-nowrap">성별</th>
+                            <th className="px-3 py-3 whitespace-nowrap">지원 포지션</th>
+                            <th className="px-3 py-3 whitespace-nowrap">지원 일시</th>
+                            <th className="px-3 py-3 text-center whitespace-nowrap">작성 내용</th>
+                            <th className="px-3 py-3 text-center whitespace-nowrap min-w-[110px]">상태</th>
+                            <th className="px-3 py-3 text-center whitespace-nowrap">관리</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
@@ -708,45 +736,45 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                         ) : (
                             filteredApplications.map((application) => (
                                 <tr key={application.id} className="hover:bg-blue-50/30 transition-colors group cursor-pointer">
-                                    <td className="px-6 py-5"><input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" onClick={(e) => e.stopPropagation()}/></td>
-                                    <td className="px-6 py-5" onClick={() => handleApplicantClick(application)}>
-                                        <div className="font-bold text-[14px] text-gray-900">
+                                    <td className="px-3 py-3"><input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" onClick={(e) => e.stopPropagation()}/></td>
+                                    <td className="px-3 py-3 whitespace-nowrap" onClick={() => handleApplicantClick(application)}>
+                                        <div className="font-bold text-[13px] text-gray-900">
                                             {application.applicantName}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-5" onClick={() => handleApplicantClick(application)}>
-                                        <div className="text-[13px] text-gray-600">
+                                    <td className="px-3 py-3 whitespace-nowrap" onClick={() => handleApplicantClick(application)}>
+                                        <div className="text-[12px] text-gray-600">
                                             {application.applicantEmail}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-5 text-[13px] text-gray-600" onClick={() => handleApplicantClick(application)}>
+                                    <td className="px-3 py-3 text-[12px] text-gray-600 whitespace-nowrap" onClick={() => handleApplicantClick(application)}>
                                         {application.applicantPhone || '-'}
                                     </td>
-                                    <td className="px-6 py-5 text-[13px] text-gray-600" onClick={() => handleApplicantClick(application)}>{application.applicantGender || '-'}</td>
-                                    <td className="px-6 py-5" onClick={() => handleApplicantClick(application)}>
-                                        <div className="text-[13px] font-medium text-gray-700">{application.jdTitle}</div>
+                                    <td className="px-3 py-3 text-[12px] text-gray-600 whitespace-nowrap" onClick={() => handleApplicantClick(application)}>{application.applicantGender || '-'}</td>
+                                    <td className="px-3 py-3 whitespace-nowrap" onClick={() => handleApplicantClick(application)}>
+                                        <div className="text-[12px] font-medium text-gray-700">{application.jdTitle}</div>
                                     </td>
-                                    <td className="px-6 py-5 text-[13px] text-gray-400" onClick={() => handleApplicantClick(application)}>{formatDate(application.appliedAt)}</td>
-                                    <td className="px-6 py-5">
+                                    <td className="px-3 py-3 text-[12px] text-gray-400 whitespace-nowrap" onClick={() => handleApplicantClick(application)}>{formatDate(application.appliedAt)}</td>
+                                    <td className="px-3 py-3">
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 handleApplicantClick(application);
                                             }}
-                                            className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-[12px] font-medium mx-auto"
+                                            className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-[11px] font-medium mx-auto whitespace-nowrap"
                                         >
-                                            <Sparkles size={14} />
+                                            <Sparkles size={13} />
                                             AI 분석
                                         </button>
                                     </td>
-                                    <td className="px-6 py-5">
-                                        <div className="flex justify-center gap-1">
+                                    <td className="px-3 py-3">
+                                        <div className="flex justify-center gap-1.5">
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleStatusChange(application.id, '합격');
                                                 }}
-                                                className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all ${
+                                                className={`px-2.5 py-1 rounded text-[10px] font-bold transition-all whitespace-nowrap min-w-[46px] ${
                                                     application.status === '합격' 
                                                         ? 'bg-green-500 text-white shadow-md' 
                                                         : 'bg-gray-100 text-gray-500 hover:bg-green-100 hover:text-green-600'
@@ -759,7 +787,7 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                                                     e.stopPropagation();
                                                     handleStatusChange(application.id, '불합격');
                                                 }}
-                                                className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all ${
+                                                className={`px-2.5 py-1 rounded text-[10px] font-bold transition-all whitespace-nowrap min-w-[46px] ${
                                                     application.status === '불합격' 
                                                         ? 'bg-red-500 text-white shadow-md' 
                                                         : 'bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-600'
@@ -769,17 +797,17 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                                             </button>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-5">
+                                    <td className="px-3 py-3">
                                         <div className="flex justify-center">
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleDeleteApplicant(application.id, application.applicantName);
                                                 }}
-                                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                                                 title="지원자 삭제"
                                             >
-                                                <Trash2 size={16} />
+                                                <Trash2 size={15} />
                                             </button>
                                         </div>
                                     </td>
@@ -798,10 +826,7 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                         <div className="bg-gradient-to-r from-blue-600 to-blue-500 p-6 text-white">
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Sparkles size={24} className="fill-white" />
-                                        <h2 className="text-2xl font-bold">AI 스크리닝 리포트</h2>
-                                    </div>
+                                    <h2 className="text-2xl font-bold mb-2">AI 스크리닝 리포트</h2>
                                     <p className="text-blue-100 text-sm">
                                         {selectedApplicant.applicantName} · {selectedApplicant.jdTitle}
                                     </p>
@@ -816,11 +841,15 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                         <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                             {/* AI 요약 섹션 */}
                             <div className="mb-8">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                                        <Sparkles size={18} className="text-blue-600" />
-                                    </div>
+                                <div className="flex items-center justify-between mb-4">
                                     <h3 className="text-lg font-bold text-gray-900">AI 자동 요약</h3>
+                                    <button
+                                        onClick={handleRefreshAnalysis}
+                                        disabled={summaryLoading}
+                                        className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
+                                    >
+                                        {summaryLoading ? '분석 중...' : '다시 분석'}
+                                    </button>
                                 </div>
                                 
                                 {summaryLoading ? (
@@ -831,31 +860,22 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
-                                        <div className="prose prose-sm max-w-none">
-                                            <div className="text-gray-800 whitespace-pre-wrap leading-relaxed">
-                                                {aiSummary || 'AI 요약을 생성하는 중입니다...'}
-                                            </div>
-                                        </div>
-                                    </div>
+                                    <AIAnalysisDashboard content={aiSummary || ''} />
                                 )}
                             </div>
 
                             {/* 전체 답변 내용 섹션 */}
                             <div>
-                                <div className="flex items-center gap-2 mb-4">
-                                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                                        <FileText size={18} className="text-gray-600" />
-                                    </div>
+                                <div className="mb-4">
                                     <h3 className="text-lg font-bold text-gray-900">전체 답변 내용</h3>
                                 </div>
                                 
                                 <div className="space-y-6">
-                                    {/* 자격 요건 */}
+                                    {/* 자격 요건 / 지원자 체크리스트 */}
                                     {selectedApplicant.requirementAnswers && selectedApplicant.requirementAnswers.length > 0 && (
                                         <div className="bg-white rounded-xl p-5 border border-gray-200">
                                             <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
-                                                <span className="text-blue-600">✓</span> 자격 요건
+                                                <span className="text-blue-600">✓</span> {(jdList.find(j => j.title === selectedApplicant.jdTitle)?.type || 'club') === 'company' ? '자격 요건' : '지원자 체크리스트 (필수)'}
                                             </h4>
                                             <div className="space-y-2">
                                                 {selectedApplicant.requirementAnswers.map((answer: any, index: number) => (
@@ -872,11 +892,11 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                                         </div>
                                     )}
 
-                                    {/* 우대 사항 */}
+                                    {/* 우대 사항 / 우대 체크리스트 */}
                                     {selectedApplicant.preferredAnswers && selectedApplicant.preferredAnswers.length > 0 && (
                                         <div className="bg-white rounded-xl p-5 border border-gray-200">
                                             <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
-                                                <span className="text-purple-600">★</span> 우대 사항
+                                                <span className="text-purple-600">★</span> {(jdList.find(j => j.title === selectedApplicant.jdTitle)?.type || 'club') === 'company' ? '우대 사항' : '지원자 체크리스트 (우대)'}
                                             </h4>
                                             <div className="space-y-2">
                                                 {selectedApplicant.preferredAnswers.map((answer: any, index: number) => (

@@ -10,12 +10,14 @@ interface JDDetailProps {
 
 interface JDData {
     title: string;
+    type?: 'company' | 'club';
     company?: string;
     companyName?: string;
     teamName?: string;
     jobRole?: string;
     location?: string;
     scale?: string;
+    description?: string;
     vision?: string;
     mission?: string;
     techStacks?: { name: string; level: number }[];
@@ -26,6 +28,13 @@ interface JDData {
     createdAt: any;
     status?: string;
     userId?: string;
+    // 동아리 모집 일정 필드
+    recruitmentPeriod?: string;
+    recruitmentTarget?: string;
+    recruitmentCount?: string;
+    recruitmentProcess?: string[];
+    activitySchedule?: string;
+    membershipFee?: string;
     // 지원 양식 커스텀 필드
     applicationFields?: {
         name: boolean;
@@ -98,7 +107,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                 const data = await jdAPI.getById(jdId);
                 setJdData(data as JDData);
             } catch (err) {
-                console.error('JD 불러오기 실패:', err);
+                console.error('공고 불러오기 실패:', err);
                 setError(true);
             } finally {
                 setLoading(false);
@@ -116,7 +125,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
             const baseUrl = window.location.origin;
             
             // 공유 링크 생성 - 경로 기반 라우팅 사용 (Vercel 최적화)
-            // 각 JD마다 고유한 URL을 가짐: /jd/[jdId]
+            // 각 공고마다 고유한 URL을 가짐: /jd/[jdId]
             const shareUrl = `${baseUrl}/jd/${jdId}`;
             
             await navigator.clipboard.writeText(shareUrl);
@@ -353,6 +362,84 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                             </h1>
                         </div>
 
+                        {/* 소개 (ABOUT US) */}
+                        {jdData.description && (
+                            <div className="space-y-3">
+                                <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-100 rounded-lg p-5">
+                                    <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M10 2a8 8 0 100 16 8 8 0 000-16zM9 9a1 1 0 112 0v4a1 1 0 11-2 0V9zm1-5a1 1 0 100 2 1 1 0 000-2z"/>
+                                        </svg>
+                                        {(jdData.type || 'club') === 'company' ? '회사 소개' : '동아리 소개'}
+                                    </h4>
+                                    <p className="text-[14px] text-gray-700 leading-relaxed">{jdData.description}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 모집 일정 및 정보 (동아리 모드) */}
+                        {(jdData.type || 'club') === 'club' && (
+                            jdData.recruitmentPeriod || jdData.recruitmentTarget || jdData.recruitmentCount ||
+                            (jdData.recruitmentProcess && jdData.recruitmentProcess.length > 0) ||
+                            jdData.activitySchedule || jdData.membershipFee
+                        ) && (
+                            <div className="space-y-3">
+                                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-lg p-5">
+                                    <h4 className="text-[11px] font-bold text-green-600 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                                        </svg>
+                                        모집 일정 및 정보
+                                    </h4>
+                                    <div className="space-y-3">
+                                        {jdData.recruitmentPeriod && (
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 기간</span>
+                                                <span className="text-[13px] text-gray-700">{jdData.recruitmentPeriod}</span>
+                                            </div>
+                                        )}
+                                        {jdData.recruitmentTarget && (
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 대상</span>
+                                                <span className="text-[13px] text-gray-700">{jdData.recruitmentTarget}</span>
+                                            </div>
+                                        )}
+                                        {jdData.recruitmentCount && (
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 인원</span>
+                                                <span className="text-[13px] text-gray-700">{jdData.recruitmentCount}</span>
+                                            </div>
+                                        )}
+                                        {jdData.recruitmentProcess && jdData.recruitmentProcess.length > 0 && (
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 절차</span>
+                                                <span className="text-[13px] text-gray-700">
+                                                    {jdData.recruitmentProcess.map((step, i) => (
+                                                        <span key={i}>
+                                                            {i > 0 && <span className="text-green-400 mx-1">→</span>}
+                                                            {step}
+                                                        </span>
+                                                    ))}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {jdData.activitySchedule && (
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">활동 일정</span>
+                                                <span className="text-[13px] text-gray-700">{jdData.activitySchedule}</span>
+                                            </div>
+                                        )}
+                                        {jdData.membershipFee && (
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">회비</span>
+                                                <span className="text-[13px] text-gray-700">{jdData.membershipFee}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* VISION & MISSION */}
                         {(jdData.vision || jdData.mission) && (
                             <div className="space-y-4">
@@ -376,9 +463,9 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                             </div>
                         )}
 
-                        {/* 자격 요건 (CHECKLIST) */}
+                        {/* 자격 요건 / 지원자 체크리스트 */}
                         <div className="space-y-3">
-                            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">자격 요건 (CHECKLIST)</h4>
+                            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{(jdData.type || 'club') === 'company' ? '자격 요건 (CHECKLIST)' : '지원자 체크리스트 (필수)'}</h4>
                             <div className="space-y-2">
                                 {jdData.requirements && jdData.requirements.length > 0 ? jdData.requirements.map((item, idx) => (
                                     <div key={idx} className="space-y-2">
@@ -421,14 +508,14 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                         )}
                                     </div>
                                 )) : (
-                                    <p className="text-[13px] text-gray-400 p-3">자격 요건이 설정되지 않았습니다.</p>
+                                    <p className="text-[13px] text-gray-400 p-3">{(jdData.type || 'club') === 'company' ? '자격 요건이 설정되지 않았습니다.' : '체크리스트가 설정되지 않았습니다.'}</p>
                                 )}
                             </div>
                         </div>
 
-                        {/* 우대 사항 (PREFERRED) */}
+                        {/* 우대 사항 / 우대 체크리스트 */}
                         <div className="space-y-3">
-                            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">우대 사항 (PREFERRED)</h4>
+                            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{(jdData.type || 'club') === 'company' ? '우대 사항 (PREFERRED)' : '지원자 체크리스트 (우대)'}</h4>
                             <div className="space-y-2">
                                 {jdData.preferred && jdData.preferred.length > 0 ? jdData.preferred.map((item, idx) => (
                                     <div key={idx} className="space-y-2">
@@ -471,7 +558,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                         )}
                                     </div>
                                 )) : (
-                                    <p className="text-[13px] text-gray-400 p-3">우대 사항이 설정되지 않았습니다.</p>
+                                    <p className="text-[13px] text-gray-400 p-3">{(jdData.type || 'club') === 'company' ? '우대 사항이 설정되지 않았습니다.' : '우대 체크리스트가 설정되지 않았습니다.'}</p>
                                 )}
                             </div>
                         </div>
