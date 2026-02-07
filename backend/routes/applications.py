@@ -6,7 +6,7 @@ import google.generativeai as genai
 from config.firebase import db
 from config.gemini import GEMINI_API_KEY
 from dependencies.auth import verify_token
-from models.schemas import ApplicationCreate, ApplicationUpdate, AIAnalysisRequest
+from models.schemas import ApplicationCreate, ApplicationUpdate, AIAnalysisRequest, SaveAnalysisRequest
 
 router = APIRouter(prefix="/api/applications", tags=["Applications"])
 
@@ -33,6 +33,149 @@ async def create_application(application: ApplicationCreate):
         return {"id": doc_ref.id, "message": "Application submitted successfully"}
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/analyze")
+async def analyze_application(request: AIAnalysisRequest, user_data: dict = Depends(verify_token)):
+    """지원자를 AI로 분석합니다."""
+    try:
+        if not GEMINI_API_KEY:
+            raise HTTPException(status_code=500, detail="Gemini API key not configured")
+
+        applicant = request.applicantData
+
+        prompt = f"""[시스템 역할]
+당신은 초기 스타트업의 생존을 결정짓는 전문 채용 컨설턴트입니다. 지원자의 답변에서 미사여구를 제거하고, 오직 [데이터, 방법론, 행동 패턴]만을 근거로 역량(Skill)과 의지(Will)를 냉정하게 판별합니다.
+
+[분석 원칙]
+- 냉정한 상/중/하: 수치와 구체적 방법론이 없으면 무조건 '중' 이하로 판정합니다.
+- 팩트 위주: 지원자의 답변을 짧게 인용(Quote)하여 평가의 객관성을 확보합니다.
+
+---
+
+🔍 지원자 분석 리포트: {applicant.get('applicantName', 'N/A')}
+
+---
+
+[0. 서류 지원 현황 및 프로필]
+
+지원 트랙 : {applicant.get('track', '')} (Android, iOS, Web, Spring, Node, Design, Plan 중 택1)
+
+전공 정보 : {applicant.get('major', '')} ([전공 / 비전공])
+
+인적 사항 : {applicant.get('grade', '')}학년 / {applicant.get('age', '')}세 ({applicant.get('applicantGender', '')})
+
+현재 상태 : {applicant.get('status', '')} (재학 / 휴학 / 졸업예정)
+
+---
+
+지원자 세부 정보:
+- 이메일: {applicant.get('applicantEmail', 'N/A')}
+- 전화번호: {applicant.get('applicantPhone', 'N/A')}
+- 공고: {applicant.get('jdTitle', 'N/A')}
+
+자격 요건 답변:
+{json.dumps(applicant.get('requirementAnswers', []), ensure_ascii=False, indent=2)}
+
+우대 사항 답변:
+{json.dumps(applicant.get('preferredAnswers', []), ensure_ascii=False, indent=2)}
+
+---
+
+위 정보를 바탕으로 아래 형식에 맞춰 분석 리포트를 작성하세요:
+
+[1. 종합 진단 결과]
+
+최종 분류 : [완성형 리더 / 직무 중심 전문가 / 성장형 유망주 / 신중 검토 대상]
+
+역량(Skill) 수준 : [높음 / 보통 / 낮음]
+
+의지(Will) 수준 : [높음 / 보통 / 낮음]
+
+---
+
+[2. 세부 역량 평가] (냉정 평가 모드)
+
+직무 역량 | [상 / 중 / 하]
+
+근거: " " (답변 발쵼)
+
+판정: (JD 기준 대비 실무 전문성 및 숙련도 분석)
+
+---
+
+문제 해결 | [상 / 중 / 하]
+
+근거: " " (답변 발쵼)
+
+판정: (장애물 돌파를 위한 논리적 사고 및 실행력 분석)
+
+---
+
+성장 잠재력 | [상 / 중 / 하]
+
+근거: " " (답변 발쵼)
+
+판정: (실제 학습 성과 및 팀 성장에 대한 기여 의지 분석)
+
+---
+
+협업 태도 | [상 / 중 / 하]
+
+근거: " " (답변 발쵼)
+
+판정: (전략적 협업 관점 및 목표 중심적 소통 능력 분석)
+
+---
+
+[3. 조직 적합도 (Culture Fit)]
+
+[ ] 스타트업 마인드셋 : [확인됨 / 미흡] (MVP 사고방식 및 리소스 제한 극복 경험)
+
+[ ] 자기 주도성 : [확인됨 / 미흡] (지시 대기 여부 및 스스로 과업 정의 능력)
+
+[ ] 커뮤니케이션 : [확인됨 / 미흡] (피드백 수용성 및 결론 중심의 논리력)
+
+---
+
+[4. 채용 가이드]
+
+💡 핵심 강점
+
+1.
+
+2.
+
+⚠️ 주의 사항 (Risk)
+
+(치명적인 결함 혹은 리스크 요소)
+
+(관리 시 유의해야 할 매니징 포인트)
+
+🙋 면접 질문 추천
+
+(답변의 허점을 짰르는 압박 질문)
+
+(실무 역량의 바닥을 확인하는 기술 질문)
+
+---
+
+[중요 지시 사항]
+
+가독성 최우선: 들여쓰기와 구분선(---)을 사용하여 섹션을 명확히 분리하세요.
+
+간결성: 각 항목은 2줄 이내로 핵심만 짰르듯 작성하세요.
+
+엄격함: 답변이 기준에 미달하면 가차 없이 '낮음' 또는 '미흡'으로 평가하세요.
+
+금지: 절대 JSON이나 코드 블록으로 답변을 감싸지 마세요."""
+
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(prompt)
+
+        return {"analysis": response.text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -155,144 +298,40 @@ async def delete_application(application_id: str, user_data: dict = Depends(veri
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/analyze")
-async def analyze_application(request: AIAnalysisRequest, user_data: dict = Depends(verify_token)):
-    """AI를 이용해 지원자를 분석합니다."""
+@router.post("/{application_id}/analysis")
+async def save_analysis(application_id: str, request: SaveAnalysisRequest, user_data: dict = Depends(verify_token)):
+    """AI 분석 결과를 저장합니다."""
     try:
-        if not GEMINI_API_KEY:
-            raise HTTPException(status_code=500, detail="Gemini API key not configured")
+        doc_ref = db.collection('applications').document(application_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Application not found")
 
-        applicant = request.applicantData
+        doc_ref.update({
+            'aiAnalysis': request.analysis,
+            'aiAnalyzedAt': firebase_firestore.SERVER_TIMESTAMP
+        })
+        return {"message": "Analysis saved successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-        prompt = f"""[시스템 역할]
-당신은 초기 스타트업의 생존을 결정짓는 전문 채용 컨설턴트입니다. 지원자의 답변에서 미사여구를 제거하고, 오직 [데이터, 방법론, 행동 패턴]만을 근거로 역량(Skill)과 의지(Will)를 냉정하게 판별합니다.
 
-[분석 원칙]
-- 냉정한 상/중/하: 수치와 구체적 방법론이 없으면 무조건 '중' 이하로 판정합니다.
-- 팩트 위주: 지원자의 답변을 짧게 인용(Quote)하여 평가의 객관성을 확보합니다.
+@router.get("/{application_id}/analysis")
+async def get_analysis(application_id: str, user_data: dict = Depends(verify_token)):
+    """저장된 AI 분석 결과를 반환합니다."""
+    try:
+        doc = db.collection('applications').document(application_id).get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Application not found")
 
----
-
-🔍 지원자 분석 리포트: {applicant.get('applicantName', 'N/A')}
-
----
-
-[0. 서류 지원 현황 및 프로필]
-
-지원 트랙 : {applicant.get('track', '')} (Android, iOS, Web, Spring, Node, Design, Plan 중 택1)
-
-전공 정보 : {applicant.get('major', '')} ([전공 / 비전공])
-
-인적 사항 : {applicant.get('grade', '')}학년 / {applicant.get('age', '')}세 ({applicant.get('applicantGender', '')})
-
-현재 상태 : {applicant.get('status', '')} (재학 / 휴학 / 졸업예정)
-
----
-
-지원자 세부 정보:
-- 이메일: {applicant.get('applicantEmail', 'N/A')}
-- 전화번호: {applicant.get('applicantPhone', 'N/A')}
-- 공고: {applicant.get('jdTitle', 'N/A')}
-
-자격 요건 답변:
-{json.dumps(applicant.get('requirementAnswers', []), ensure_ascii=False, indent=2)}
-
-우대 사항 답변:
-{json.dumps(applicant.get('preferredAnswers', []), ensure_ascii=False, indent=2)}
-
----
-
-위 정보를 바탕으로 아래 형식에 맞춰 분석 리포트를 작성하세요:
-
-[1. 종합 진단 결과]
-
-최종 분류 : [완성형 리더 / 직무 중심 전문가 / 성장형 유망주 / 신중 검토 대상]
-
-역량(Skill) 수준 : [높음 / 보통 / 낮음]
-
-의지(Will) 수준 : [높음 / 보통 / 낮음]
-
----
-
-[2. 세부 역량 평가] (냉정 평가 모드)
-
-직무 역량 | [상 / 중 / 하]
-
-근거: " " (답변 발췌)
-
-판정: (JD 기준 대비 실무 전문성 및 숙련도 분석)
-
----
-
-문제 해결 | [상 / 중 / 하]
-
-근거: " " (답변 발췌)
-
-판정: (장애물 돌파를 위한 논리적 사고 및 실행력 분석)
-
----
-
-성장 잠재력 | [상 / 중 / 하]
-
-근거: " " (답변 발췌)
-
-판정: (실제 학습 성과 및 팀 성장에 대한 기여 의지 분석)
-
----
-
-협업 태도 | [상 / 중 / 하]
-
-근거: " " (답변 발췌)
-
-판정: (전략적 협업 관점 및 목표 중심적 소통 능력 분석)
-
----
-
-[3. 조직 적합도 (Culture Fit)]
-
-[ ] 스타트업 마인드셋 : [확인됨 / 미흡] (MVP 사고방식 및 리소스 제한 극복 경험)
-
-[ ] 자기 주도성 : [확인됨 / 미흡] (지시 대기 여부 및 스스로 과업 정의 능력)
-
-[ ] 커뮤니케이션 : [확인됨 / 미흡] (피드백 수용성 및 결론 중심의 논리력)
-
----
-
-[4. 채용 가이드]
-
-💡 핵심 강점
-
-1.
-
-2.
-
-⚠️ 주의 사항 (Risk)
-
-(치명적인 결함 혹은 리스크 요소)
-
-(관리 시 유의해야 할 매니징 포인트)
-
-🙋 면접 질문 추천
-
-(답변의 허점을 찌르는 압박 질문)
-
-(실무 역량의 바닥을 확인하는 기술 질문)
-
----
-
-[중요 지시 사항]
-
-가독성 최우선: 들여쓰기와 구분선(---)을 사용하여 섹션을 명확히 분리하세요.
-
-간결성: 각 항목은 2줄 이내로 핵심만 찌르듯 작성하세요.
-
-엄격함: 답변이 기준에 미달하면 가차 없이 '낮음' 또는 '미흡'으로 평가하세요.
-
-금지: 절대 JSON이나 코드 블록으로 답변을 감싸지 마세요."""
-
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content(prompt)
-
-        return {"analysis": response.text}
+        data = doc.to_dict()
+        return {
+            "analysis": data.get('aiAnalysis', ''),
+            "analyzedAt": data.get('aiAnalyzedAt', None)
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -2,7 +2,7 @@ import { ChevronRight, X } from 'lucide-react';
 import { Badge } from '@/components/common/Badge';
 import { useState, useEffect } from 'react';
 import { auth } from '@/config/firebase';
-import { jdAPI, applicationAPI } from '@/services/api';
+import { jdAPI } from '@/services/api';
 import { useApplicantStats, generateChartPath } from '@/hooks/useApplicantStats';
 
 interface DashboardHomeProps {
@@ -19,6 +19,7 @@ interface JD {
   createdAt?: any;
   company?: string;
   jobRole?: string;
+  recruitmentPeriod?: string;
 }
 
 export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps) => {
@@ -26,12 +27,11 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
     const [activeJDs, setActiveJDs] = useState<JD[]>([]);
     
     // 공용 hook 사용
-    const { stats, dailyData, recentApplicants, loading } = useApplicantStats();
+    const { stats, dailyData, recentApplicants, loading, applications: applicantData } = useApplicantStats();
     
     // 위젯 관리 상태
     const [showWidgetSelector, setShowWidgetSelector] = useState(false);
     const [activeWidgets, setActiveWidgets] = useState<string[]>(['gender', 'grade']);
-    const [applicantData, setApplicantData] = useState<any[]>([]);
 
     // 사용 가능한 위젯 목록
     const availableWidgets = [
@@ -49,18 +49,8 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
             setUserName(name);
             
             fetchActiveJDs(currentUser.uid);
-            fetchApplicantData();
         }
     }, []);
-    
-    const fetchApplicantData = async () => {
-        try {
-            const applications = await applicationAPI.getAll();
-            setApplicantData(applications);
-        } catch (error) {
-            console.error('지원자 데이터 로딩 실패:', error);
-        }
-    };
     
     const toggleWidget = (widgetId: string) => {
         setActiveWidgets(prev => 
@@ -115,16 +105,6 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
         }
     };
 
-    useEffect(() => {
-        const currentUser = auth.currentUser;
-        if (currentUser) {
-            const name = currentUser.displayName || currentUser.email?.split('@')[0] || '채용 담당자';
-            setUserName(name);
-            
-            fetchActiveJDs(currentUser.uid);
-        }
-    }, []);
-
     const fetchActiveJDs = async (_userId: string) => {
         try {
             const jds = await jdAPI.getAll();
@@ -136,7 +116,7 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
 
             setActiveJDs(sortedJDs);
         } catch (error) {
-            console.error('JD 로딩 실패:', error);
+            console.error('공고 로딩 실패:', error);
         }
     };
 
@@ -168,7 +148,7 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
                         통계 위젯
                     </button>
                     <button onClick={() => onNavigate('chat')} className="bg-blue-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-lg shadow-blue-500/25 hover:bg-blue-700 transition-all active:scale-95">
-                        새 JD 만들기
+                        새 공고 만들기
                     </button>
                 </div>
             </div>
@@ -564,17 +544,25 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
                         {activeJDs.map((jd) => {
-                            // Firestore Timestamp를 yyyy.mm.dd 형식으로 변환
+                            // D-day 계산: recruitmentPeriod에서 마감일 파싱, 없으면 생성일+30일
                             let dDay = '';
-                            if (jd.createdAt) {
+                            const today = new Date();
+                            if (jd.recruitmentPeriod) {
+                                const parts = jd.recruitmentPeriod.split('~');
+                                if (parts.length >= 2) {
+                                    const endStr = parts[1].trim().replace(/\./g, '-');
+                                    const deadline = new Date(endStr);
+                                    if (!isNaN(deadline.getTime())) {
+                                        const diffDays = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                        dDay = diffDays > 0 ? `D-${diffDays}` : diffDays === 0 ? 'D-Day' : '마감';
+                                    }
+                                }
+                            }
+                            if (!dDay && jd.createdAt) {
                                 const date = jd.createdAt?.toDate ? jd.createdAt.toDate() : new Date(jd.createdAt);
-                                
-                                // D-day 계산 (30일 후 마감으로 가정)
                                 const deadline = new Date(date);
                                 deadline.setDate(deadline.getDate() + 30);
-                                const today = new Date();
-                                const diffTime = deadline.getTime() - today.getTime();
-                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                const diffDays = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                                 dDay = diffDays > 0 ? `D-${diffDays}` : '마감';
                             }
 
@@ -619,12 +607,10 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
                                         
                                         <div className="flex items-center justify-between text-[12px] text-gray-500 font-medium">
                                             <div className="flex items-center gap-1">
-                                                <span className="text-yellow-500">★</span>
-                                                <span className="text-gray-700 font-semibold">4.8</span>
-                                                <span className="mx-1.5 text-gray-300">|</span>
                                                 <span className="text-blue-600 font-bold">{dDay}</span>
+                                                <span className="mx-1.5 text-gray-300">|</span>
                                                 <span className="mx-1 text-gray-400">지원자</span>
-                                                <span className="font-semibold text-gray-700">{Math.floor(Math.random() * 30) + 5}명</span>
+                                                <span className="font-semibold text-gray-700">{applicantData.filter((a: any) => a.jdId === jd.id).length}명</span>
                                             </div>
                                         </div>
                                     </div>

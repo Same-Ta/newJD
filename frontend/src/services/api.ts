@@ -3,13 +3,22 @@ import { auth } from '@/config/firebase';
 // @ts-ignore
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
-// 인증 토큰 가져오기
+// 인증 토큰 캠시로 중복 호출 방지
+let cachedToken: string | null = null;
+let tokenExpiry: number = 0;
+
 const getAuthToken = async (): Promise<string> => {
+  const now = Date.now();
+  if (cachedToken && now < tokenExpiry) {
+    return cachedToken;
+  }
   const user = auth.currentUser;
   if (!user) {
     throw new Error('사용자가 로그인되어 있지 않습니다.');
   }
-  return await user.getIdToken();
+  cachedToken = await user.getIdToken();
+  tokenExpiry = now + 5 * 60 * 1000; // 5분 캐시
+  return cachedToken;
 };
 
 // API 요청 헬퍼
@@ -74,7 +83,7 @@ export const authAPI = {
   },
 };
 
-// ==================== JD API ====================
+// ==================== 공고 API ====================
 export const jdAPI = {
   create: async (jdData: any) => {
     return await apiRequest('/api/jds', {
@@ -141,14 +150,25 @@ export const applicationAPI = {
       body: JSON.stringify({ applicantData }),
     });
   },
+
+  saveAnalysis: async (applicationId: string, analysis: string) => {
+    return await apiRequest(`/api/applications/${applicationId}/analysis`, {
+      method: 'POST',
+      body: JSON.stringify({ analysis }),
+    });
+  },
+
+  getAnalysis: async (applicationId: string) => {
+    return await apiRequest(`/api/applications/${applicationId}/analysis`);
+  },
 };
 
 // ==================== Gemini API ====================
 export const geminiAPI = {
-  chat: async (message: string, chatHistory: any[] = []) => {
+  chat: async (message: string, chatHistory: any[] = [], type: string = 'club') => {
     return await publicApiRequest('/api/gemini/chat', {
       method: 'POST',
-      body: JSON.stringify({ message, chatHistory }),
+      body: JSON.stringify({ message, chatHistory, type }),
     });
   },
 };
