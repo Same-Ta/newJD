@@ -59,7 +59,8 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
             }
 
             console.log('지원서 불러오는 중...');
-            const applicationsData = await applicationAPI.getAll();
+            // 캐시를 사용하지 않고 항상 서버에서 최신 데이터를 가져옴 (복호화된 데이터)
+            const applicationsData = await applicationAPI.getAll(false);
 
             // 클라이언트 측에서 날짜순 정렬
             applicationsData.sort((a: any, b: any) => {
@@ -69,6 +70,7 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
             });
 
             console.log('불러온 지원서:', applicationsData.length, '건');
+            console.log('첫 번째 지원서 샘플:', applicationsData[0]);
             setApplications(applicationsData);
         } catch (error) {
             console.error('지원서 로딩 실패:', error);
