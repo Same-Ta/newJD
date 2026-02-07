@@ -1,0 +1,140 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==================== 헬퍼 함수 ====================
+    
+    // 사용자 인증 확인
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // 사용자 UID 가져오기
+    function getUserId() {
+      return request.auth.uid;
+    }
+    
+    // 사용자 이메일 가져오기
+    function getUserEmail() {
+      return request.auth.token.email;
+    }
+    
+    // 문서 소유자인지 확인
+    function isOwner(userId) {
+      return isAuthenticated() && getUserId() == userId;
+    }
+    
+    // 협업자인지 확인 (UID 또는 이메일)
+    function isCollaborator(collaboratorIds, collaboratorEmails) {
+      return isAuthenticated() && (
+        getUserId() in collaboratorIds ||
+        getUserEmail() in collaboratorEmails
+      );
+    }
+    
+    // ==================== Users Collection ====================
+    match /users/{userId} {
+      // 자신의 프로필만 읽기 가능
+      allow read: if isAuthenticated() && getUserId() == userId;
+      
+      // 자신의 프로필만 생성/수정 가능
+      allow create: if isAuthenticated() && getUserId() == userId;
+      allow update: if isAuthenticated() && getUserId() == userId;
+      
+      // 삭제는 본인만 가능
+      allow delete: if isAuthenticated() && getUserId() == userId;
+    }
+    
+    // ==================== JDs Collection (공고) ====================
+    match /jds/{jdId} {
+      // 모든 인증된 사용자가 공고 목록을 읽을 수 있음 (지원하기 위해)
+      allow read: if isAuthenticated();
+      
+      // 공고 생성은 인증된 사용자만 가능
+      allow create: if isAuthenticated() && 
+                      request.resource.data.userId == getUserId();
+      
+      // 공고 수정은 소유자 또는 협업자만 가능
+      allow update: if isAuthenticated() && (
+        resource.data.userId == getUserId() ||
+        getUserId() in resource.data.get('collaboratorIds', []) ||
+        getUserEmail() in resource.data.get('collaboratorEmails', [])
+      );
+      
+      // 공고 삭제는 소유자만 가능
+      allow delete: if isAuthenticated() && resource.data.userId == getUserId();
+    }
+    
+    // ==================== Applications Collection (지원서) ====================
+    match /applications/{applicationId} {
+      // 지원서 읽기: 리크루터(공고 소유자) 또는 협업자만 가능
+      allow read: if isAuthenticated() && (
+        resource.data.recruiterId == getUserId() ||
+        // 협업자 확인을 위해 JD 문서 조회 필요 (제한적)
+        exists(/databases/$(database)/documents/jds/$(resource.data.jdId)) &&
+        (
+          getUserId() in get(/databases/$(database)/documents/jds/$(resource.data.jdId)).data.get('collaboratorIds', []) ||
+          getUserEmail() in get(/databases/$(database)/documents/jds/$(resource.data.jdId)).data.get('collaboratorEmails', [])
+        )
+      );
+      
+      // 지원서 제출: 인증된 사용자라면 누구나 가능 (지원하기)
+      allow create: if isAuthenticated();
+      
+      // 지원서 수정: 리크루터만 가능 (상태 변경)
+      allow update: if isAuthenticated() && resource.data.recruiterId == getUserId();
+      
+      // 지원서 삭제: 리크루터만 가능
+      allow delete: if isAuthenticated() && resource.data.recruiterId == getUserId();
+    }
+    
+    // ==================== Comments Collection (댓글) ====================
+    match /comments/{commentId} {
+      // 댓글 읽기: 해당 지원서의 리크루터 또는 협업자만 가능
+      allow read: if isAuthenticated() && (
+        // 지원서의 리크루터인지 확인
+        exists(/databases/$(database)/documents/applications/$(resource.data.applicationId)) &&
+        get(/databases/$(database)/documents/applications/$(resource.data.applicationId)).data.recruiterId == getUserId()
+      );
+      
+      // 댓글 생성: 인증된 사용자이고 authorId가 자신인 경우
+      allow create: if isAuthenticated() && 
+                      request.resource.data.authorId == getUserId();
+      
+      // 댓글 수정: 댓글 작성자만 가능
+      allow update: if isAuthenticated() && resource.data.authorId == getUserId();
+      
+      // 댓글 삭제: 댓글 작성자만 가능
+      allow delete: if isAuthenticated() && resource.data.authorId == getUserId();
+    }
+    
+    // ==================== Team Invitations Collection (팀 초대) ====================
+    match /team_invitations/{invitationId} {
+      // 초대 읽기: 초대한 사람 또는 초대받은 사람만 가능
+      allow read: if isAuthenticated() && (
+        resource.data.inviterId == getUserId() ||
+        resource.data.inviteeEmail == getUserEmail()
+      );
+      
+      // 초대 생성: 인증된 사용자만 가능
+      allow create: if isAuthenticated() && 
+                      request.resource.data.inviterId == getUserId();
+      
+      // 초대 수정: 초대한 사람 또는 초대받은 사람만 가능 (상태 변경)
+      allow update: if isAuthenticated() && (
+        resource.data.inviterId == getUserId() ||
+        resource.data.inviteeEmail == getUserEmail()
+      );
+      
+      // 초대 삭제: 초대한 사람만 가능
+      allow delete: if isAuthenticated() && resource.data.inviterId == getUserId();
+    }
+    
+    // ==================== 기타 컬렉션 차단 ====================
+    // 명시적으로 정의되지 않은 모든 컬렉션은 접근 불가
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

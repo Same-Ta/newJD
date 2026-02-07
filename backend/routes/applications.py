@@ -9,7 +9,7 @@ import google.generativeai as genai
 from config.firebase import db, bucket
 from config.gemini import GEMINI_API_KEY
 from dependencies.auth import verify_token
-from models.schemas import ApplicationCreate, ApplicationUpdate, AIAnalysisRequest, SaveAnalysisRequest
+from models.schemas import ApplicationCreate, ApplicationUpdate, ApplicationResponse, AIAnalysisRequest, SaveAnalysisRequest
 
 router = APIRouter(prefix="/api/applications", tags=["Applications"])
 
@@ -270,8 +270,18 @@ async def get_applications(user_data: dict = Depends(verify_token)):
         own_ref = db.collection('applications').where('recruiterId', '==', uid)
         for doc in own_ref.stream():
             app_data = doc.to_dict()
-            app_data['id'] = doc.id
-            applications.append(app_data)
+            app_data['applicationId'] = doc.id
+            
+            # ApplicationResponse 모델을 통해 자동 복호화
+            try:
+                decrypted_app = ApplicationResponse(**app_data)
+                applications.append(decrypted_app.model_dump())
+            except Exception as e:
+                # 복호화 실패 시 원본 데이터 반환 (backward compatibility)
+                print(f"⚠️ Failed to decrypt application {doc.id}: {str(e)}")
+                app_data['id'] = doc.id
+                applications.append(app_data)
+            
             seen_ids.add(doc.id)
 
         # 2. 협업자로 초대된 JD의 지원서
@@ -281,8 +291,18 @@ async def get_applications(user_data: dict = Depends(verify_token)):
             for doc in jd_apps_ref.stream():
                 if doc.id not in seen_ids:
                     app_data = doc.to_dict()
-                    app_data['id'] = doc.id
-                    applications.append(app_data)
+                    app_data['applicationId'] = doc.id
+                    
+                    # ApplicationResponse 모델을 통해 자동 복호화
+                    try:
+                        decrypted_app = ApplicationResponse(**app_data)
+                        applications.append(decrypted_app.model_dump())
+                    except Exception as e:
+                        # 복호화 실패 시 원본 데이터 반환
+                        print(f"⚠️ Failed to decrypt application {doc.id}: {str(e)}")
+                        app_data['id'] = doc.id
+                        applications.append(app_data)
+                    
                     seen_ids.add(doc.id)
 
         return applications
@@ -311,8 +331,17 @@ async def get_application(application_id: str, user_data: dict = Depends(verify_
         if not is_authorized:
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        app_data['id'] = doc.id
-        return app_data
+        app_data['applicationId'] = doc.id
+        
+        # ApplicationResponse 모델을 통해 자동 복호화
+        try:
+            decrypted_app = ApplicationResponse(**app_data)
+            return decrypted_app.model_dump()
+        except Exception as e:
+            # 복호화 실패 시 원본 데이터 반환 (backward compatibility)
+            print(f"⚠️ Failed to decrypt application {doc.id}: {str(e)}")
+            app_data['id'] = doc.id
+            return app_data
     except HTTPException:
         raise
     except Exception as e:

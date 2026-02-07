@@ -24,6 +24,8 @@ app = FastAPI(title="Winnow API", version="1.0.0")
 import os
 allowed_origins = [
     "http://localhost:5173",  # 로컬 개발
+    "http://localhost:5174",  # Vite 대체 포트
+    "http://localhost:5175",  # Vite 대체 포트
     "http://localhost:5176",  # Vite 대체 포트
     "http://localhost:5177",  # Vite 대체 포트
     "http://localhost:3000",

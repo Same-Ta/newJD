@@ -127,7 +127,14 @@ Rules:
                 response_text = re.sub(r'^```(?:json)?\s*|\s*```$', '', response_text, flags=re.MULTILINE).strip()
             
             # JSON 응답 파싱 시도
-            parsed_response = json.loads(response_text)
+            try:
+                parsed_response = json.loads(response_text)
+            except json.JSONDecodeError:
+                # JSON 파싱 실패 시 줄바꿈 문자 제거 후 재시도
+                print(f"⚠️ 첫 번째 JSON 파싱 실패, 줄바꿈 문자 정리 후 재시도...")
+                # 줄바꿈 문자를 공백으로 대체 후 재파싱 시도
+                cleaned_text = response_text.replace('\n', ' ').replace('\r', ' ')
+                parsed_response = json.loads(cleaned_text)
             
             return {
                 "aiResponse": parsed_response.get("aiResponse", response_text),
@@ -135,9 +142,9 @@ Rules:
                 "jdData": parsed_response.get("jdData", {})
             }
         except json.JSONDecodeError as je:
-            # JSON 파싱 실패
-            print(f"⚠️ JSON 파싱 실패: {str(je)}")
-            print(f"⚠️ 원본 응답: {response_text}")
+            # JSON 파싱 완전 실패
+            print(f"❌ JSON 파싱 완전 실패: {str(je)}")
+            print(f"⚠️ 원본 응답: {response_text[:1000]}...")
             return {
                 "aiResponse": response_text,
                 "options": [],
