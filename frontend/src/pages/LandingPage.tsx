@@ -283,7 +283,9 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
               실제 동작을 확인해보세요.
             </p>
           </div>
-          <ChatDemo />
+          <div style={{ transform: 'scale(0.75)', transformOrigin: 'top center' }}>
+            <ChatDemo />
+          </div>
         </div>
       </section>
 
@@ -302,7 +304,9 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
               공고를 게시하고 링크를 공유하면, 지원자가 체크리스트를 작성하고 대시보드에서 바로 확인됩니다.
             </p>
           </div>
-          <ApplicationFlowDemo />
+          <div style={{ transform: 'scale(0.75)', transformOrigin: 'top center' }}>
+            <ApplicationFlowDemo />
+          </div>
         </div>
       </section>
 
@@ -321,7 +325,9 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
               지원자별 역량과 의지를 AI가 자동으로 평가합니다. 한눈에 비교하고 간편하게 합격/불합격을 관리하세요.
             </p>
           </div>
-          <AIEvaluationDemo />
+          <div style={{ transform: 'scale(0.75)', transformOrigin: 'top center' }}>
+            <AIEvaluationDemo />
+          </div>
         </div>
       </section>
 
