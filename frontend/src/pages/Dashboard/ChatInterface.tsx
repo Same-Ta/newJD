@@ -114,7 +114,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     
     // 채팅방 크기 조절 상태
     const [chatWidth, setChatWidth] = useState(35); // 퍼센트 단위
-    const [chatHeight, setChatHeight] = useState(85); // vh 단위
+    const [chatHeight, setChatHeight] = useState(95); // vh 단위
     const [isResizing, setIsResizing] = useState(false);
     const [isCornerResizing, setIsCornerResizing] = useState(false);
     const resizeRef = useRef<HTMLDivElement>(null);
