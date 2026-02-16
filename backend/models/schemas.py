@@ -197,8 +197,17 @@ class ApplicationResponse(BaseModel):
         """
         Automatically decrypt sensitive personal information fields when loading from DB.
         Gracefully handles non-encrypted legacy data.
+        Also converts Firestore DatetimeWithNanoseconds to ISO string.
         """
         if isinstance(data, dict):
+            # Convert Firestore datetime objects to ISO strings
+            datetime_fields = ['createdAt', 'updatedAt', 'appliedAt']
+            for field in datetime_fields:
+                if field in data and data[field] is not None:
+                    val = data[field]
+                    if hasattr(val, 'isoformat'):
+                        data[field] = val.isoformat()
+            
             encryptor = get_encryptor()
             
             # List of fields to decrypt
