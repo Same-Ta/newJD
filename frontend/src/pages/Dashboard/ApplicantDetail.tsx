@@ -150,18 +150,18 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
     return (
         <div className="max-w-[1200px] mx-auto space-y-6" style={{ fontFamily: FONTS.sans }}>
             {/* 상단 헤더 */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                 <button
                     onClick={onBack}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors self-start"
                 >
                     <ArrowLeft size={20} className="text-gray-600" />
                 </button>
-                <div className="flex-1">
-                    <h2 className="text-2xl font-bold text-gray-900">{application.applicantName}</h2>
-                    <p className="text-sm text-gray-500">{application.applicantEmail} · {application.jdTitle}</p>
+                <div className="flex-1 min-w-0">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">{application.applicantName}</h2>
+                    <p className="text-sm text-gray-500 truncate">{application.applicantEmail} · {application.jdTitle}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-shrink-0 flex-wrap">
                     {['검토중', '합격', '불합격'].map(status => (
                         <button
                             key={status}

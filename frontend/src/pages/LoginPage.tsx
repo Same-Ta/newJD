@@ -71,11 +71,11 @@ export const LoginPage = ({ onLogin, onNavigateToSignUp, onBackToLanding }: Logi
         };
 
         return (
-                <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans" style={{ fontFamily: FONTS.sans }}>
+                <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden font-sans" style={{ fontFamily: FONTS.sans }}>
                         {/* Background elements */}
                         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                         
-                        <div className="absolute top-10 left-10 flex items-center gap-2.5">
+                        <div className="absolute top-6 left-4 sm:top-10 sm:left-10 flex items-center gap-2.5">
                                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-extrabold text-sm shadow-lg shadow-blue-600/20">W</div>
                                 <span className="font-extrabold text-xl tracking-tight text-slate-900">WINNOW</span>
                         </div>
@@ -83,7 +83,7 @@ export const LoginPage = ({ onLogin, onNavigateToSignUp, onBackToLanding }: Logi
                         {onBackToLanding && (
                                 <button
                                         onClick={onBackToLanding}
-                                        className="absolute top-10 right-10 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors font-medium text-sm"
+                                        className="absolute top-6 right-4 sm:top-10 sm:right-10 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors font-medium text-sm"
                                 >
                                         <ArrowLeft size={20} />
                                         <span>랜딩페이지로</span>
@@ -91,7 +91,7 @@ export const LoginPage = ({ onLogin, onNavigateToSignUp, onBackToLanding }: Logi
                         )}
 
                         <div className="w-full max-w-[400px] relative z-10">
-                                <h1 className="text-[32px] font-extrabold text-center mb-12 text-slate-900">로그인</h1>
+                                <h1 className="text-[26px] sm:text-[32px] font-extrabold text-center mb-8 sm:mb-12 text-slate-900">로그인</h1>
                                 
                                 <form onSubmit={handleSubmit} className="space-y-5">
                                         {error && <div className="text-red-500 text-sm text-center">{error}</div>}

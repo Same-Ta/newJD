@@ -308,9 +308,9 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     }
 
     return (
-        <div className="flex h-full bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden max-w-[1200px] mx-auto" style={{ height: 'calc(100vh - 140px)'}}>
+        <div className="flex flex-col md:flex-row h-full bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden max-w-[1200px] mx-auto" style={{ height: 'calc(100vh - 140px)'}}>
             {/* Left Profile Section */}
-            <div className="w-[240px] border-r border-gray-100 flex flex-col bg-[#FAFBFC] pt-16 overflow-y-auto scrollbar-hide">
+            <div className="hidden md:flex w-[240px] border-r border-gray-100 flex-col bg-[#FAFBFC] pt-16 overflow-y-auto scrollbar-hide">
                 {/* Profile Image */}
                 <div className="px-6 flex flex-col items-center">
                     <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 mb-4 shadow-lg overflow-hidden">
@@ -387,7 +387,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
 
             {/* Right Content Section */}
             <div className="flex-1 flex flex-col">
-                <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white">
+                <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-white">
                     <h3 className="font-bold text-lg text-gray-800">{isEditing ? '공고 수정' : '공고 상세'}</h3>
                     <div className="flex gap-2">
                         {isOwner && !isEditing && (

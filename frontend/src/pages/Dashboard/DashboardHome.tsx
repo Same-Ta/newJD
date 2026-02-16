@@ -143,12 +143,12 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
     
     return (
         <div className="space-y-8 max-w-[1400px] mx-auto pb-10">
-            <div className="flex justify-between items-end">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900 tracking-tight">안녕하세요, {userName}님!</h2>
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">안녕하세요, {userName}님!</h2>
                     <p className="text-gray-500 text-sm mt-1.5 font-medium">오늘도 좋은 인재를 찾기 위한 준비가 되셨나요?</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-shrink-0">
                     <button 
                         onClick={() => setShowWidgetSelector(!showWidgetSelector)}
                         className="px-4 py-2.5 bg-white border border-gray-200 hover:border-gray-300 rounded-lg text-sm font-medium text-gray-700 transition-all shadow-sm hover:shadow"
@@ -472,8 +472,8 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
                 })}
 
                 {/* 지원자 추이 차트 (lg:col-span-2) */}
-                <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                    <div className="flex items-center justify-between mb-6">
+                <div className="md:col-span-2 lg:col-span-2 bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
                         <h3 className="font-bold text-gray-800">지원자 추이</h3>
                         <div className="flex gap-2">
                             <button className="px-3 py-1 text-xs font-bold bg-blue-600 text-white rounded-lg">지원자</button>
@@ -546,7 +546,7 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
                         <p className="text-sm text-gray-500">AI와 함께 첫 채용 공고를 작성해보세요!</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                         {activeJDs.map((jd) => {
                             // D-day 계산: recruitmentPeriod에서 마감일 파싱, 없으면 생성일+30일
                             let dDay = '';

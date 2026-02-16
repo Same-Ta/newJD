@@ -112,6 +112,8 @@ export const ChatDemo = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [jd, setJd] = useState<DemoJD>({ ...INITIAL_JD });
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
+  const [height, setHeight] = useState(580);
+  const [isResizing, setIsResizing] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -199,45 +201,77 @@ export const ChatDemo = () => {
     return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
   };
 
+  /* 높이 조절 핸들러 */
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const newHeight = e.clientY - rect.top;
+      if (newHeight >= 400 && newHeight <= 900) {
+        setHeight(newHeight);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
   /* ─────────── Render ─────────── */
   return (
-    <div
-      ref={containerRef}
-      className="flex bg-gray-100 rounded-2xl border border-gray-200 shadow-xl overflow-hidden w-full gap-3 pointer-events-none select-none"
-      style={{ height: '620px' }}
-    >
-      {/* ========== Chat Area – Left 35% ========== */}
-      <div className="w-[35%] flex flex-col bg-white rounded-l-2xl border border-gray-200 shadow-sm">
+    <div className="relative w-full select-none">
+      <div
+        ref={containerRef}
+        className="flex bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-3xl border border-gray-200/80 shadow-2xl overflow-hidden w-full gap-4"
+        style={{ height: `${height}px` }}
+      >
+      {/* ========== Chat Area – Left 40% ========== */}
+      <div className="w-[40%] flex flex-col bg-white rounded-l-3xl shadow-sm">
         {/* Header */}
-        <div className="p-5 border-b border-gray-200 bg-white flex justify-between items-center h-[70px] flex-shrink-0">
-          <div className="flex items-center gap-2.5 font-bold text-[15px] text-gray-800">
-            <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-sm">
-              <MessageSquare size={14} fill="white" />
+        <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50/50 flex justify-between items-center h-[72px] flex-shrink-0">
+          <div className="flex items-center gap-3 font-bold text-[15.5px] text-gray-900">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/30">
+              <MessageSquare size={15} fill="white" />
             </div>
             공고 생성 매니저
           </div>
-          <span className="text-gray-400 cursor-default"><X size={18} /></span>
+          <span className="text-gray-400 cursor-default hover:text-gray-600 transition-colors"><X size={18} /></span>
         </div>
 
         {/* Messages */}
         <div
           ref={chatScrollRef}
-          className="flex-1 p-5 space-y-6 overflow-y-auto bg-[#F8FAFC] scrollbar-hide"
+          className="flex-1 px-5 py-6 space-y-6 overflow-y-auto bg-gradient-to-b from-[#F8FAFC] to-[#F1F5F9] scrollbar-hide"
         >
           {messages.map((msg, idx) => (
             <div key={idx} className="flex gap-3 flex-col chat-enter">
               <div className="flex gap-3">
                 {msg.role === 'ai' && (
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-blue-600 border border-blue-200">
+                  <div className="w-9 h-9 bg-gradient-to-br from-blue-100 to-blue-50 rounded-xl flex-shrink-0 flex items-center justify-center text-[10.5px] font-extrabold text-blue-600 border border-blue-200/80 shadow-sm">
                     AI
                   </div>
                 )}
-                <div className={`space-y-1 max-w-[260px] ${msg.role === 'user' ? 'ml-auto' : ''}`}>
+                <div className={`space-y-1 max-w-[270px] ${msg.role === 'user' ? 'ml-auto' : ''}`}>
                   <div
-                    className={`p-3.5 rounded-2xl text-[13px] shadow-sm border leading-relaxed ${
+                    className={`px-4 py-3 rounded-2xl text-[13.5px] shadow-md border leading-relaxed ${
                       msg.role === 'ai'
-                        ? 'bg-white rounded-tl-none text-gray-700 border-gray-100'
-                        : 'bg-blue-600 rounded-tr-none text-white border-blue-600'
+                        ? 'bg-white rounded-tl-sm text-gray-700 border-gray-200/60'
+                        : 'bg-gradient-to-br from-blue-600 to-blue-700 rounded-tr-sm text-white border-blue-600 shadow-blue-500/20'
                     }`}
                     style={{ whiteSpace: 'pre-wrap' }}
                   >
@@ -251,23 +285,23 @@ export const ChatDemo = () => {
 
               {/* 옵션 버튼 */}
               {msg.role === 'ai' && msg.options && (
-                <div className="flex flex-col gap-2 ml-11">
+                <div className="flex flex-col gap-2.5 ml-12">
                   {msg.options.map((opt, oi) => {
                     const isSelected = selectedOptions[idx] === oi;
                     return (
                       <div
                         key={oi}
-                        className={`px-4 py-2.5 border rounded-lg text-[13px] font-medium text-left transition-all duration-300 cursor-default ${
+                        className={`px-4 py-3 border rounded-xl text-[13px] font-semibold text-left transition-all duration-300 cursor-default shadow-sm ${
                           isSelected
-                            ? 'bg-blue-50 border-blue-400 text-blue-600'
-                            : 'bg-white border-gray-200 text-gray-700'
+                            ? 'bg-gradient-to-r from-blue-50 to-blue-100/50 border-blue-400 text-blue-700 shadow-blue-200/50'
+                            : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
                         }`}
                       >
                         {opt}
                       </div>
                     );
                   })}
-                  <div className="px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-[13px] font-medium text-gray-500 text-center cursor-default">
+                  <div className="px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-[13px] font-semibold text-gray-500 text-center cursor-default shadow-sm">
                     건너뛰기
                   </div>
                 </div>
@@ -278,10 +312,10 @@ export const ChatDemo = () => {
           {/* 로딩 */}
           {isTyping && (
             <div className="flex gap-3 chat-enter">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-blue-600 border border-blue-200">
+              <div className="w-9 h-9 bg-gradient-to-br from-blue-100 to-blue-50 rounded-xl flex-shrink-0 flex items-center justify-center text-[10.5px] font-extrabold text-blue-600 border border-blue-200/80 shadow-sm">
                 AI
               </div>
-              <div className="bg-white p-3.5 rounded-2xl rounded-tl-none text-[13px] text-gray-400 shadow-sm border border-gray-100">
+              <div className="bg-white px-4 py-3 rounded-2xl rounded-tl-sm text-[13.5px] text-gray-400 shadow-md border border-gray-200/60">
                 응답 생성 중...
               </div>
             </div>
@@ -289,29 +323,29 @@ export const ChatDemo = () => {
         </div>
 
         {/* Input */}
-        <div className="p-4 bg-white border-t border-gray-100 flex-shrink-0">
+        <div className="p-5 bg-white border-t border-gray-100 flex-shrink-0">
           <div className="relative">
             <input
               type="text"
               placeholder="답변을 입력하세요..."
               disabled
-              className="w-full pl-4 pr-12 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-[13px] font-medium placeholder:text-gray-400 shadow-inner outline-none cursor-default"
+              className="w-full pl-5 pr-14 py-4 rounded-xl bg-gray-50 border border-gray-200 text-[14px] font-medium placeholder:text-gray-400 shadow-inner outline-none cursor-default"
             />
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-md">
+            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
               <ChevronRight size={18} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* ========== Preview Area – Right 65% ========== */}
-      <div className="flex-1 bg-white flex relative overflow-hidden rounded-r-2xl border border-gray-200 shadow-sm">
+      {/* ========== Preview Area – Right 60% ========== */}
+      <div className="flex-1 bg-white flex relative overflow-hidden rounded-r-3xl shadow-sm">
 
         {/* ── Left Profile Sidebar ── */}
-        <div className="w-[220px] border-r border-gray-100 flex flex-col bg-[#FAFBFC] overflow-y-auto flex-shrink-0 scrollbar-hide">
-          <div className="px-5 flex flex-col items-center pt-8">
+        <div className="w-[210px] border-r border-gray-100 flex flex-col bg-gradient-to-b from-[#FAFBFC] to-[#F8FAFC] overflow-y-auto flex-shrink-0 scrollbar-hide">
+          <div className="px-5 flex flex-col items-center pt-7">
             {/* Profile Image */}
-            <div className={`w-24 h-24 rounded-full mb-4 shadow-lg overflow-hidden transition-all duration-700 ${
+            <div className={`w-20 h-20 rounded-2xl mb-3.5 shadow-lg overflow-hidden transition-all duration-700 ${
               jd.image ? 'bg-gradient-to-br from-blue-400 to-purple-500' : 'bg-gray-100 border-2 border-gray-200'
             }`}>
               {jd.image ? (
@@ -327,10 +361,10 @@ export const ChatDemo = () => {
               )}
             </div>
             {/* Name */}
-            <h3 className={`font-bold text-[17px] mb-1 transition-all duration-500 ${jd.teamName ? 'text-gray-900' : 'text-gray-400'}`}>
+            <h3 className={`font-bold text-[16px] mb-1 transition-all duration-500 ${jd.teamName ? 'text-gray-900' : 'text-gray-400'}`}>
               {jd.teamName || '그룹 이름'}
             </h3>
-            <p className={`text-[12px] font-semibold mb-6 transition-all duration-500 ${jd.jobRole ? 'text-gray-500' : 'text-gray-400'}`}>
+            <p className={`text-[11.5px] font-semibold mb-5 transition-all duration-500 ${jd.jobRole ? 'text-gray-500' : 'text-gray-400'}`}>
               {jd.jobRole || '모집 분야'}
             </p>
           </div>
@@ -365,7 +399,7 @@ export const ChatDemo = () => {
 
         {/* ── Right Content ── */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-8 space-y-8 pt-8 scrollbar-hide">
+          <div className="flex-1 overflow-y-auto px-7 py-6 space-y-7 scrollbar-hide">
             {!jd.title && jd.requirements.length === 0 && !jd.description ? (
               /* 빈 상태 */
               <div className="h-full flex flex-col items-center justify-center text-center">
@@ -502,6 +536,17 @@ export const ChatDemo = () => {
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
+      </div>
+
+      {/* 높이 조절 핸들 */}
+      <div
+        className={`absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-center justify-center group ${
+          isResizing ? 'bg-blue-200/50' : 'hover:bg-blue-100/30'
+        } transition-colors`}
+        onMouseDown={handleMouseDown}
+      >
+        <div className="w-12 h-1 bg-gray-300 rounded-full group-hover:bg-blue-500 transition-colors"></div>
+      </div>
     </div>
   );
 };

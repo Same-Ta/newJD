@@ -7,6 +7,8 @@ import {
   CheckCircle2, 
   MessageSquare,
   Users,
+  Menu,
+  X,
 } from 'lucide-react';
 import { FONTS } from '@/constants/fonts';
 import { FunnelCSS } from '@/components/common/FunnelCSS';
@@ -72,6 +74,7 @@ const App = () => {
   const [userName, setUserName] = useState('채용 담당자');
   const [userEmail, setUserEmail] = useState('');
   const [userInitials, setUserInitials] = useState('U');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // 초기 URL 확인
   const initialJdId = getJdIdFromUrl();
@@ -302,8 +305,60 @@ const App = () => {
   return (
     <div className="h-screen bg-[#F8FAFC] flex overflow-hidden" style={{ fontFamily: FONTS.sans }}>
       <FunnelCSS />
+
+      {/* Mobile Header */}
+      <div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-100 h-14 flex items-center justify-between px-4 z-30 shadow-sm">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setSidebarOpen(true)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+            <Menu size={22} className="text-gray-700" />
+          </button>
+          <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white font-extrabold text-xs shadow-md shadow-blue-500/20">W</div>
+          <span className="font-extrabold text-[17px] text-gray-900 tracking-tight">WINNOW</span>
+        </div>
+        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[10px] border border-blue-200">{userInitials}</div>
+      </div>
+
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div className="md:hidden fixed inset-0 z-40 flex">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setSidebarOpen(false)} />
+          <div className="relative w-[280px] bg-white h-full flex flex-col shadow-xl z-50 animate-slideIn">
+            <div className="px-5 h-16 flex items-center justify-between flex-shrink-0 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white font-extrabold text-xs shadow-md shadow-blue-500/20">W</div>
+                <span className="font-extrabold text-[17px] text-gray-900 tracking-tight">WINNOW</span>
+              </div>
+              <button onClick={() => setSidebarOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            <div className="px-3 space-y-1 flex-1 overflow-y-auto pt-4">
+              <div className="text-[11px] font-bold text-gray-400 px-4 mb-2 uppercase tracking-wider">채용 관리</div>
+              <SidebarItem icon={LayoutDashboard} label="대시보드" active={currentPage === 'dashboard'} onClick={() => { navigateTo('dashboard'); setSidebarOpen(false); }} />
+              <SidebarItem icon={FileText} label="내 공고 목록" active={currentPage === 'my-jds'} onClick={() => { navigateTo('my-jds'); setSidebarOpen(false); }} />
+              <SidebarItem icon={CheckCircle2} label="지원자 관리" active={currentPage === 'applicants'} onClick={() => { navigateTo('applicants'); setSidebarOpen(false); }} />
+              <SidebarItem icon={MessageSquare} label="공고 생성 (AI)" active={currentPage === 'chat'} onClick={() => { navigateTo('chat'); setSidebarOpen(false); }} />
+            </div>
+            <div className="px-3 pb-6">
+              <div className="text-[11px] font-bold text-gray-400 px-4 mb-2 uppercase tracking-wider">내 정보</div>
+              <SidebarItem icon={Users} label="팀 관리" active={currentPage === 'team'} onClick={() => { navigateTo('team'); setSidebarOpen(false); }} />
+              <SidebarItem icon={Settings} label="계정 설정" active={currentPage === 'settings'} onClick={() => { navigateTo('settings'); setSidebarOpen(false); }} />
+              <div className="mt-4 px-4 pt-5 border-t border-gray-50">
+                <div className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition-colors cursor-pointer group">
+                  <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs border border-blue-200">{userInitials}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-bold text-gray-800 truncate">{userName}</div>
+                    <div className="text-[11px] text-gray-400 truncate">{userEmail}</div>
+                  </div>
+                  <LogOut size={16} className="text-gray-300 group-hover:text-red-500 transition-colors" onClick={(e) => { e.stopPropagation(); handleLogout(); }}/>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
-      {/* Sidebar */}
+      {/* Desktop Sidebar */}
       <aside className="w-[260px] bg-white border-r border-gray-100 h-screen z-20 hidden md:flex flex-col shadow-[2px_0_20px_rgba(0,0,0,0.02)]">
         <div className="px-6 h-20 flex items-center gap-2.5 mb-2 flex-shrink-0">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-extrabold text-sm shadow-md shadow-blue-500/20">W</div>
@@ -356,8 +411,8 @@ const App = () => {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 min-w-0 bg-[#F8FAFC] h-screen overflow-hidden">
-          <div className={currentPage === 'chat' ? 'h-full w-full p-4' : 'p-8 pb-20 h-full overflow-y-auto scroll-smooth'}>
+      <main className="flex-1 min-w-0 bg-[#F8FAFC] h-screen overflow-hidden pt-14 md:pt-0">
+          <div className={currentPage === 'chat' ? 'h-full w-full p-2 md:p-4' : 'p-4 md:p-8 pb-20 h-full overflow-y-auto scroll-smooth'}>
               {renderContent()}
           </div>
       </main>

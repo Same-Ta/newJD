@@ -1,4 +1,4 @@
-import { ChevronRight, MessageSquare, X, FileText, ChevronsLeft, ChevronsRight, ChevronsUp, ChevronsDown } from 'lucide-react';
+import { ChevronRight, MessageSquare, X, FileText } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { maskSensitiveData } from '../../utils/security';
 import { auth } from '../../config/firebase';
@@ -115,10 +115,21 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     // 채팅방 크기 조절 상태
     const [chatWidth, setChatWidth] = useState(35); // 퍼센트 단위
     const [chatHeight, setChatHeight] = useState(95); // vh 단위
-    const [isResizing, setIsResizing] = useState(false);
-    const [isCornerResizing, setIsCornerResizing] = useState(false);
-    const resizeRef = useRef<HTMLDivElement>(null);
+    const [isWidthResizing, setIsWidthResizing] = useState(false);
+    const [isHeightResizing, setIsHeightResizing] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
+    
+    // 모바일 탭 상태 (chat 또는 preview)
+    const [mobileTab, setMobileTab] = useState<'chat' | 'preview'>('chat');
+    const [isMobile, setIsMobile] = useState(false);
+    
+    // 모바일 감지
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 768);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
     
     // 지원 양식 커스터마이징 모달 상태
     const [showApplicationFieldsModal, setShowApplicationFieldsModal] = useState(false);
@@ -192,8 +203,8 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     // 크기 조절 핸들러
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
-            if (isResizing) {
-                const container = resizeRef.current?.parentElement;
+            if (isWidthResizing) {
+                const container = containerRef.current;
                 if (!container) return;
                 
                 const containerRect = container.getBoundingClientRect();
@@ -204,22 +215,16 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                     setChatWidth(newWidth);
                 }
             }
-            
-            if (isCornerResizing) {
+
+            if (isHeightResizing) {
                 const container = containerRef.current;
                 if (!container) return;
                 
                 const containerRect = container.getBoundingClientRect();
-                
-                // 가로 크기 조절
-                const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
-                if (newWidth >= 25 && newWidth <= 60) {
-                    setChatWidth(newWidth);
-                }
-                
-                // 세로 크기 조절
                 const windowHeight = window.innerHeight;
                 const newHeight = ((e.clientY - containerRect.top) / windowHeight) * 100;
+                
+                // 최소 50vh, 최대 95vh로 제한
                 if (newHeight >= 50 && newHeight <= 95) {
                     setChatHeight(newHeight);
                 }
@@ -227,14 +232,14 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         };
 
         const handleMouseUp = () => {
-            setIsResizing(false);
-            setIsCornerResizing(false);
+            setIsWidthResizing(false);
+            setIsHeightResizing(false);
         };
 
-        if (isResizing || isCornerResizing) {
+        if (isWidthResizing || isHeightResizing) {
             document.addEventListener('mousemove', handleMouseMove);
             document.addEventListener('mouseup', handleMouseUp);
-            document.body.style.cursor = isCornerResizing ? 'nwse-resize' : 'col-resize';
+            document.body.style.cursor = isWidthResizing ? 'col-resize' : 'ns-resize';
             document.body.style.userSelect = 'none';
         }
 
@@ -244,7 +249,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
         };
-    }, [isResizing, isCornerResizing]);
+    }, [isWidthResizing, isHeightResizing]);
 
     // 타이핑 애니메이션 효과
     const typeText = (key: string, text: string, speed: number = 30) => {
@@ -710,55 +715,33 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     };
 
     return (
-        <div ref={containerRef} className="flex bg-gray-100 rounded-2xl border border-gray-200 shadow-xl overflow-hidden w-full gap-0 relative" style={{ height: `${chatHeight}vh`, zoom: '0.95'}}>
+        <div className="relative w-full" style={{ zoom: isMobile ? '1' : '0.95'}}>
+        {/* 모바일 탭 전환 */}
+        {isMobile && (
+            <div className="flex mb-2 bg-gray-100 rounded-xl p-1 gap-1">
+                <button 
+                    onClick={() => setMobileTab('chat')}
+                    className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${mobileTab === 'chat' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                >
+                    💬 채팅
+                </button>
+                <button 
+                    onClick={() => setMobileTab('preview')}
+                    className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${mobileTab === 'preview' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                >
+                    📄 미리보기
+                </button>
+            </div>
+        )}
+        <div ref={containerRef} className={`${isMobile ? 'flex flex-col' : 'flex'} bg-gray-100 rounded-2xl border border-gray-200 shadow-xl overflow-hidden w-full gap-0 relative`} style={{ height: isMobile ? 'calc(100vh - 140px)' : `${chatHeight}vh` }}>
             {/* Chat Area - Left */}
-            <div className="flex flex-col bg-white rounded-l-2xl border border-gray-200 shadow-sm relative" style={{ width: `${chatWidth}%` }}>
-                <div className="p-5 border-b border-gray-200 bg-white flex justify-between items-center h-[70px]">
-                    <div className="flex items-center gap-2.5 font-bold text-[15px] text-gray-800">
+            <div className={`flex flex-col bg-white ${isMobile ? 'rounded-2xl' : 'rounded-l-2xl'} border border-gray-200 shadow-sm relative ${isMobile && mobileTab !== 'chat' ? 'hidden' : ''}`} style={{ width: isMobile ? '100%' : `${chatWidth}%`, height: isMobile ? '100%' : undefined }}>
+                <div className="p-3 md:p-5 border-b border-gray-200 bg-white flex justify-between items-center h-[56px] md:h-[70px]">
+                    <div className="flex items-center gap-2.5 font-bold text-gray-800" style={{ fontSize: isMobile ? '14px' : (chatWidth < 30 ? '13px' : '15px') }}>
                         <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-sm"><MessageSquare size={14} fill="white"/></div>
                         공고 생성 매니저
                     </div>
                     <div className="flex items-center gap-2">
-                        {/* 채팅방 가로 크기 조절 버튼 */}
-                        <button 
-                            onClick={() => setChatWidth(prev => Math.max(25, prev - 5))}
-                            disabled={chatWidth <= 25}
-                            className="text-gray-400 cursor-pointer hover:text-blue-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="채팅창 폭 축소"
-                        >
-                            <ChevronsLeft size={16} />
-                        </button>
-                        <span className="text-[10px] text-gray-400 font-medium min-w-[32px] text-center">{Math.round(chatWidth)}%</span>
-                        <button 
-                            onClick={() => setChatWidth(prev => Math.min(60, prev + 5))}
-                            disabled={chatWidth >= 60}
-                            className="text-gray-400 cursor-pointer hover:text-blue-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="채팅창 폭 확대"
-                        >
-                            <ChevronsRight size={16} />
-                        </button>
-                        
-                        {/* 채팅방 세로 크기 조절 버튼 */}
-                        <div className="w-px h-4 bg-gray-300 mx-1"></div>
-                        <button 
-                            onClick={() => setChatHeight(prev => Math.max(50, prev - 5))}
-                            disabled={chatHeight <= 50}
-                            className="text-gray-400 cursor-pointer hover:text-blue-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="채팅창 높이 축소"
-                        >
-                            <ChevronsDown size={16} />
-                        </button>
-                        <span className="text-[10px] text-gray-400 font-medium min-w-[32px] text-center">{Math.round(chatHeight)}vh</span>
-                        <button 
-                            onClick={() => setChatHeight(prev => Math.min(95, prev + 5))}
-                            disabled={chatHeight >= 95}
-                            className="text-gray-400 cursor-pointer hover:text-blue-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="채팅창 높이 확대"
-                        >
-                            <ChevronsUp size={16} />
-                        </button>
-                        
-                        <div className="w-px h-4 bg-gray-300 mx-1"></div>
                         {/* 되돌리기 버튼 */}
                         <button 
                             onClick={handleUndo}
@@ -799,15 +782,15 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                     {messages.map((msg, idx) => (
                         <div key={idx} className="flex gap-3 flex-col">
                             <div className="flex gap-3">
-                                {msg.role === 'ai' && (
+                                {msg.role === 'ai' && chatWidth >= 30 && (
                                     <div className="w-8 h-8 bg-blue-100 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-blue-600 border border-blue-200">AI</div>
                                 )}
-                                <div className={`space-y-1 max-w-[260px] ${msg.role === 'user' ? 'ml-auto' : ''}`}>
-                                    <div className={`p-3.5 rounded-2xl text-[13px] shadow-sm border leading-relaxed ${
+                                <div className={`space-y-1 ${msg.role === 'user' ? 'ml-auto' : ''}`} style={{ maxWidth: chatWidth < 30 ? '90%' : '70%' }}>
+                                    <div className={`p-3.5 rounded-2xl shadow-sm border leading-relaxed ${
                                         msg.role === 'ai' 
                                             ? 'bg-white rounded-tl-none text-gray-700 border-gray-100' 
                                             : 'bg-blue-600 rounded-tr-none text-white border-blue-600'
-                                    }`}>
+                                    }`} style={{ fontSize: chatWidth < 30 ? '12px' : '13px' }}>
                                         {msg.role === 'ai' ? (
                                             <span dangerouslySetInnerHTML={{ 
                                                 __html: (() => {
@@ -837,13 +820,14 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                             
                             {/* 선택지 버튼 */}
                             {msg.role === 'ai' && msg.options && Array.isArray(msg.options) && msg.options.length > 0 && (
-                                <div className="flex flex-col gap-2 ml-11">
+                                <div className="flex flex-col gap-2" style={{ marginLeft: chatWidth >= 30 ? '44px' : '0' }}>
                                     {msg.options.map((option, optIdx) => (
                                         <button
                                             key={optIdx}
                                             onClick={() => handleSend(option)}
                                             disabled={isLoading || isTypingAI}
-                                            className="px-4 py-2.5 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-400 rounded-lg text-[13px] font-medium text-gray-700 hover:text-blue-600 transition-all text-left disabled:opacity-50"
+                                            className="px-4 py-2.5 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-400 rounded-lg font-medium text-gray-700 hover:text-blue-600 transition-all text-left disabled:opacity-50"
+                                            style={{ fontSize: chatWidth < 30 ? '12px' : '13px' }}
                                         >
                                             {option}
                                         </button>
@@ -922,84 +906,47 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                         </button>
                     </div>
                 </div>
-                
-                {/* Corner Resize Handles */}
-                {/* Top-left corner */}
-                <div
-                    onMouseDown={(e) => {
-                        e.preventDefault();
-                        setIsCornerResizing(true);
-                    }}
-                    className="absolute top-0 left-0 w-6 h-6 cursor-nwse-resize group hover:bg-blue-50 rounded-br-lg transition-colors"
-                    style={{ zIndex: 50 }}
-                >
-                    <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 border-blue-400 opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                </div>
-                
-                {/* Top-right corner */}
-                <div
-                    onMouseDown={(e) => {
-                        e.preventDefault();
-                        setIsCornerResizing(true);
-                    }}
-                    className="absolute top-0 right-0 w-6 h-6 cursor-nesw-resize group hover:bg-blue-50 rounded-bl-lg transition-colors"
-                    style={{ zIndex: 50 }}
-                >
-                    <div className="absolute top-1 right-1 w-3 h-3 border-t-2 border-r-2 border-blue-400 opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                </div>
-                
-                {/* Bottom-left corner */}
-                <div
-                    onMouseDown={(e) => {
-                        e.preventDefault();
-                        setIsCornerResizing(true);
-                    }}
-                    className="absolute bottom-0 left-0 w-6 h-6 cursor-nesw-resize group hover:bg-blue-50 rounded-tr-lg transition-colors"
-                    style={{ zIndex: 50 }}
-                >
-                    <div className="absolute bottom-1 left-1 w-3 h-3 border-b-2 border-l-2 border-blue-400 opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                </div>
-                
-                {/* Bottom-right corner */}
-                <div
-                    onMouseDown={(e) => {
-                        e.preventDefault();
-                        setIsCornerResizing(true);
-                    }}
-                    className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize group hover:bg-blue-50 rounded-tl-lg transition-colors"
-                    style={{ zIndex: 50 }}
-                >
-                    <div className="absolute bottom-1 right-1 w-3 h-3 border-b-2 border-r-2 border-blue-400 opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                </div>
             </div>
 
-            {/* Resize Handle */}
+            {/* 가로 크기 조절 핸들 - 모바일에서 숨김 */}
+            {!isMobile && (
             <div 
-                ref={resizeRef}
-                onMouseDown={() => setIsResizing(true)}
-                className={`w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize transition-colors ${isResizing ? 'bg-blue-500' : ''}`}
+                className={`w-2 bg-gray-200 hover:bg-blue-400 cursor-col-resize transition-all flex items-center justify-center group relative ${
+                    isWidthResizing ? 'bg-blue-500' : ''
+                }`}
+                onMouseDown={(e) => {
+                    e.preventDefault();
+                    setIsWidthResizing(true);
+                }}
                 style={{ flexShrink: 0 }}
             >
-                <div className="h-full flex items-center justify-center">
-                    <div className="w-1 h-12 bg-gray-400 rounded-full opacity-0 hover:opacity-100 transition-opacity"></div>
+                {/* 중앙 아이콘 */}
+                <div className="absolute inset-y-0 flex items-center justify-center">
+                    <div className="flex flex-col gap-1">
+                        <div className="w-1 h-1 bg-gray-400 group-hover:bg-white rounded-full transition-colors"></div>
+                        <div className="w-1 h-1 bg-gray-400 group-hover:bg-white rounded-full transition-colors"></div>
+                        <div className="w-1 h-1 bg-gray-400 group-hover:bg-white rounded-full transition-colors"></div>
+                    </div>
                 </div>
             </div>
+            )}
 
             {/* Preview Area - Right */}
-            <div className="flex-1 bg-white flex relative overflow-hidden rounded-r-2xl border border-gray-200 shadow-sm">
+            <div className={`flex-1 bg-white flex relative overflow-hidden ${isMobile ? 'rounded-2xl' : 'rounded-r-2xl'} border border-gray-200 shadow-sm ${isMobile && mobileTab !== 'preview' ? 'hidden' : ''}`} style={{ height: isMobile ? '100%' : undefined }}>
                 
-                {/* Left Profile Section */}
-                <div className="w-[240px] border-r border-gray-100 flex flex-col bg-[#FAFBFC] overflow-y-auto">
+                {/* Left Profile Section - 채팅창이 클 때 또는 모바일에서 숨기기 */}
+                {!isMobile && chatWidth < 45 && (
+                <div className="border-r border-gray-100 flex flex-col bg-[#FAFBFC] overflow-y-auto" style={{ width: chatWidth < 35 ? '160px' : '200px' }}>
                     {/* Profile Image */}
-                    <div className="px-6 flex flex-col items-center pt-8">
-                        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 mb-4 shadow-lg overflow-hidden">
+                    <div className="px-4 flex flex-col items-center pt-6">
+                        <div className="rounded-full bg-gradient-to-br from-blue-400 to-purple-500 mb-3 shadow-lg overflow-hidden" style={{ width: chatWidth < 35 ? '48px' : '64px', height: chatWidth < 35 ? '48px' : '64px' }}>
                             <img 
                                 src={selectedImage}
                                 alt="Profile" 
                                 className="w-full h-full object-cover"
                             />
                         </div>
-                        <h3 className="font-bold text-[17px] text-gray-900 mb-1">
+                        <h3 className="font-bold text-gray-900 mb-1" style={{ fontSize: chatWidth < 50 ? '14px' : '17px' }}>
                             {currentJD.companyName || currentJD.teamName ? (
                                 <span>
                                     {typingText['companyName'] !== undefined 
@@ -1011,7 +958,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                 <span className="text-gray-400">{jdType === 'company' ? '회사 이름' : '동아리 이름'}</span>
                             )}
                         </h3>
-                        <p className="text-[12px] text-gray-500 font-semibold mb-6">
+                        <p className="text-gray-500 font-semibold mb-4" style={{ fontSize: chatWidth < 50 ? '11px' : '12px' }}>
                             {currentJD.jobRole || <span className="text-gray-400">모집 분야</span>}
                         </p>
                     </div>
@@ -1082,24 +1029,25 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                         </div>
                     )}
                 </div>
+                )}
 
                 {/* Right Content Section */}
                 <div className="flex-1 flex flex-col overflow-hidden">
                     
-                    <div className="flex-1 overflow-y-auto p-8 space-y-8 pt-8">
+                    <div className="flex-1 overflow-y-auto space-y-8" style={{ padding: chatWidth > 40 ? '32px' : '16px', paddingTop: chatWidth > 40 ? '32px' : '16px' }}>
                         {!currentJD.title && currentJD.responsibilities.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-center">
-                                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                                    <FileText size={32} className="text-gray-300"/>
+                                <div className="bg-gray-50 rounded-full flex items-center justify-center mb-4" style={{ width: chatWidth > 40 ? '64px' : '48px', height: chatWidth > 40 ? '64px' : '48px' }}>
+                                    <FileText size={chatWidth > 40 ? 32 : 24} className="text-gray-300"/>
                                 </div>
-                                <h4 className="font-bold text-gray-400 mb-2">아직 작성된 내용이 없습니다.</h4>
-                                <p className="text-[13px] text-gray-400 max-w-xs leading-relaxed">왼쪽 채팅창에서 AI 매니저와 대화를 나누면, 이곳에 채용 공고가 실시간으로 완성됩니다.</p>
+                                <h4 className="font-bold text-gray-400 mb-2" style={{ fontSize: chatWidth > 40 ? '16px' : '14px' }}>아직 작성된 내용이 없습니다.</h4>
+                                <p className="text-gray-400 max-w-xs leading-relaxed" style={{ fontSize: chatWidth > 40 ? '13px' : '12px' }}>왼쪽 채팅창에서 AI 매니저와 대화를 나누면, 이곳에 채용 공고가 실시간으로 완성됩니다.</p>
                             </div>
                         ) : (
                             <>
                                 {/* 공고 제목 */}
                                 <div>
-                                    <h1 className="text-2xl font-bold text-gray-900 mb-4">
+                                    <h1 className="font-bold text-gray-900 mb-4" style={{ fontSize: chatWidth > 40 ? '24px' : '18px' }}>
                                         {isEditMode ? (
                                             <input
                                                 type="text"
@@ -1840,6 +1788,22 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                     </div>
                 </div>
             )}
+        </div>
+
+        {/* 하단 높이 조절 핸들 - 모바일에서 숨김 */}
+        {!isMobile && (
+        <div
+            className={`absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-center justify-center group z-50 ${
+                isHeightResizing ? 'bg-blue-200/50' : 'hover:bg-blue-100/30'
+            } transition-colors`}
+            onMouseDown={(e) => {
+                e.preventDefault();
+                setIsHeightResizing(true);
+            }}
+        >
+            <div className="w-16 h-1 bg-gray-300 rounded-full group-hover:bg-blue-500 transition-colors"></div>
+        </div>
+        )}
         </div>
     );
 };

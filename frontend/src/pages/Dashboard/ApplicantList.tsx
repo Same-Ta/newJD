@@ -426,16 +426,16 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
 
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm min-h-[600px] flex flex-col max-w-[1400px] mx-auto">
-            <div className="p-6 border-b border-gray-100">
-                <div className="flex justify-between items-start mb-4">
+            <div className="p-4 sm:p-6 border-b border-gray-100">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-4">
                     <div>
-                        <h3 className="font-bold text-xl text-gray-900 mb-1">지원자 관리</h3>
+                        <h3 className="font-bold text-lg sm:text-xl text-gray-900 mb-1">지원자 관리</h3>
                         <p className="text-sm text-gray-500">총 {filteredApplications.length}명의 지원자</p>
                     </div>
                     
                     <button 
                         onClick={handleExcelDownload}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm flex-shrink-0 self-start"
                     >
                         <Download size={18}/> 엑셀 다운로드
                     </button>

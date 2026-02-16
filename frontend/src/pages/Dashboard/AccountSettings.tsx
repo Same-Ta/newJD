@@ -89,15 +89,15 @@ export const AccountSettings = () => {
   };
 
   return (
-    <div className="max-w-[720px] mx-auto space-y-8">
+    <div className="max-w-[720px] mx-auto space-y-6 sm:space-y-8">
       {/* 프로필 정보 카드 */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-8 py-5 border-b border-gray-100">
+        <div className="px-5 sm:px-8 py-4 sm:py-5 border-b border-gray-100">
           <h3 className="text-[15px] font-bold text-gray-900">프로필 정보</h3>
           <p className="text-[12px] text-gray-400 mt-0.5">다른 팀원에게 보여지는 이름을 설정하세요</p>
         </div>
 
-        <form onSubmit={handleUpdateProfile} className="p-8 space-y-5">
+        <form onSubmit={handleUpdateProfile} className="p-5 sm:p-8 space-y-5">
           {/* 이름 */}
           <div>
             <label className="block text-[13px] font-semibold text-gray-700 mb-2">이름</label>
@@ -142,12 +142,12 @@ export const AccountSettings = () => {
 
       {/* 비밀번호 변경 카드 */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-8 py-5 border-b border-gray-100">
+        <div className="px-5 sm:px-8 py-4 sm:py-5 border-b border-gray-100">
           <h3 className="text-[15px] font-bold text-gray-900">비밀번호 변경</h3>
           <p className="text-[12px] text-gray-400 mt-0.5">계정 보안을 위해 정기적으로 변경하세요</p>
         </div>
 
-        <form onSubmit={handleChangePassword} className="p-8 space-y-5">
+        <form onSubmit={handleChangePassword} className="p-5 sm:p-8 space-y-5">
           {/* 현재 비밀번호 */}
           <div>
             <label className="block text-[13px] font-semibold text-gray-700 mb-2">현재 비밀번호</label>
@@ -227,10 +227,10 @@ export const AccountSettings = () => {
 
       {/* 계정 활동 */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-8 py-5 border-b border-gray-100">
+        <div className="px-5 sm:px-8 py-4 sm:py-5 border-b border-gray-100">
           <h3 className="text-[15px] font-bold text-gray-900">계정 활동</h3>
         </div>
-        <div className="p-8 space-y-4">
+        <div className="p-5 sm:p-8 space-y-4">
           <div className="flex justify-between items-center py-3 border-b border-gray-50">
             <div>
               <p className="text-[13px] font-semibold text-gray-700">가입일</p>

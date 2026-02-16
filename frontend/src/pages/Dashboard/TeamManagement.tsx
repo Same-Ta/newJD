@@ -166,8 +166,8 @@ export const TeamManagement = (_props: TeamManagementProps) => {
       )}
 
       {/* Header */}
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900">팀 관리</h2>
+      <div className="mb-6 sm:mb-8">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">팀 관리</h2>
         <p className="text-sm text-gray-500 mt-1">공고별로 팀원을 초대하여 함께 채용을 관리하세요</p>
       </div>
 

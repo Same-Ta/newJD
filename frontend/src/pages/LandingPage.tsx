@@ -1,6 +1,6 @@
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Menu, X } from 'lucide-react';
 import { FONTS } from '@/constants/fonts';
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { ChatDemo } from '@/components/landing/ChatDemo';
 import { ApplicationFlowDemo } from '@/components/landing/ApplicationFlowDemo';
 import { AIEvaluationDemo } from '@/components/landing/AIEvaluationDemo';
@@ -10,6 +10,7 @@ interface LandingPageProps {
 }
 
 export const LandingPage = ({ onLogin }: LandingPageProps) => {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const progressRef = useRef<HTMLDivElement>(null);
 
   const handleScroll = useCallback(() => {
@@ -52,11 +53,24 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
               무료로 시작하기
             </button>
           </div>
+          <button className="md:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
         </div>
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-gray-100 bg-white/95 backdrop-blur-xl px-6 py-4 space-y-3">
+            <a href="#" className="block text-[15px] font-medium text-gray-600 hover:text-blue-600 py-2">프로세스</a>
+            <a href="#" className="block text-[15px] font-medium text-gray-600 hover:text-blue-600 py-2">주요기능</a>
+            <button onClick={() => { onLogin(); setMobileMenuOpen(false); }} className="w-full bg-[#0F172A] text-white px-6 py-2.5 rounded-full hover:bg-black transition-all shadow-lg text-sm font-semibold">
+              무료로 시작하기
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Hero */}
-      <section className="pt-40 pb-24 text-center px-4 relative overflow-hidden">
+      <section className="pt-32 md:pt-40 pb-16 md:pb-24 text-center px-4 relative overflow-hidden">
         {/* Background Glow */}
         <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-blue-100/40 rounded-full blur-[100px] -z-10 pointer-events-none"></div>
 
@@ -70,10 +84,10 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
             <svg className="absolute w-full h-3 -bottom-1 left-0 text-blue-200/50 -z-10" viewBox="0 0 100 10" preserveAspectRatio="none"><path d="M0 5 Q 50 10 100 5" stroke="currentColor" strokeWidth="8" fill="none" /></svg>
           </span> 만 남기세요
         </h1>
-        <p className="text-gray-500 text-lg mb-12 font-medium">
+        <p className="text-gray-500 text-base md:text-lg mb-8 md:mb-12 font-medium">
           수백 개의 이력서를 검토하느라 지치셨나요?
         </p>
-        <div className="flex flex-col sm:flex-row justify-center gap-4 mb-24">
+        <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 mb-16 md:mb-24 px-2">
           <button onClick={onLogin} className="bg-blue-600 text-white px-8 py-3.5 rounded-full font-bold shadow-xl shadow-blue-500/20 hover:bg-blue-700 hover:scale-105 transition-all text-[15px]">
             스크리닝 체험하기
           </button>
@@ -91,9 +105,9 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
             지원자 관리부터 AI 면접, 분석까지 한 곳에서
           </p>
 
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 px-2 sm:px-0">
             {/* Step 1: 지원자 UI */}
-            <div className="group relative h-[420px] rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.02] transition-all duration-300">
+            <div className="group relative h-[320px] sm:h-[380px] md:h-[420px] rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.02] transition-all duration-300 sm:col-span-2 md:col-span-1">
               {/* Background with overlay */}
               <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-blue-800 to-blue-950"></div>
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(59,130,246,0.3),transparent_50%)]"></div>
@@ -145,7 +159,7 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
             </div>
 
             {/* Step 2: AI 대화 UI */}
-            <div className="group relative h-[420px] rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.02] transition-all duration-300">
+            <div className="group relative h-[320px] sm:h-[380px] md:h-[420px] rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.02] transition-all duration-300">
               {/* Background with overlay */}
               <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-950"></div>
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_50%,rgba(168,85,247,0.3),transparent_50%)]"></div>
@@ -202,7 +216,7 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
             </div>
 
             {/* Step 3: 분석 표 */}
-            <div className="group relative h-[420px] rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.02] transition-all duration-300">
+            <div className="group relative h-[320px] sm:h-[380px] md:h-[420px] rounded-2xl overflow-hidden cursor-pointer hover:scale-[1.02] transition-all duration-300">
               {/* Background with overlay */}
               <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950"></div>
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.2),transparent_50%)]"></div>
@@ -268,7 +282,7 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
       </section>
 
       {/* Interactive Chat Demo Section */}
-      <section className="py-28 px-4 bg-gradient-to-b from-white via-gray-50/50 to-white relative overflow-hidden">
+      <section className="py-16 md:py-28 px-4 bg-gradient-to-b from-white via-gray-50/50 to-white relative overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[400px] bg-blue-50/60 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
         <div className="max-w-[1100px] mx-auto">
           <div className="text-center mb-14">
@@ -283,14 +297,12 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
               실제 동작을 확인해보세요.
             </p>
           </div>
-          <div style={{ transform: 'scale(0.75)', transformOrigin: 'top center' }}>
-            <ChatDemo />
-          </div>
+          <ChatDemo />
         </div>
       </section>
 
       {/* Application Flow Demo Section */}
-      <section className="py-28 px-4 bg-gradient-to-b from-white via-gray-50/30 to-white relative overflow-hidden">
+      <section className="py-16 md:py-28 px-4 bg-gradient-to-b from-white via-gray-50/30 to-white relative overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[400px] bg-purple-50/40 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
         <div className="max-w-[1100px] mx-auto">
           <div className="text-center mb-14">
@@ -304,14 +316,14 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
               공고를 게시하고 링크를 공유하면, 지원자가 체크리스트를 작성하고 대시보드에서 바로 확인됩니다.
             </p>
           </div>
-          <div style={{ transform: 'scale(0.75)', transformOrigin: 'top center' }}>
+          <div className="overflow-x-auto" style={{ transform: 'scale(0.65)', transformOrigin: 'top center' }}>
             <ApplicationFlowDemo />
           </div>
         </div>
       </section>
 
       {/* AI Evaluation Demo Section */}
-      <section className="py-28 px-4 bg-gradient-to-b from-white via-gray-50/30 to-white relative overflow-hidden">
+      <section className="py-16 md:py-28 px-4 bg-gradient-to-b from-white via-gray-50/30 to-white relative overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[400px] bg-green-50/40 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
         <div className="max-w-[1100px] mx-auto">
           <div className="text-center mb-14">
@@ -325,14 +337,14 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
               지원자별 역량과 의지를 AI가 자동으로 평가합니다. 한눈에 비교하고 간편하게 합격/불합격을 관리하세요.
             </p>
           </div>
-          <div style={{ transform: 'scale(0.75)', transformOrigin: 'top center' }}>
+          <div className="overflow-x-auto" style={{ transform: 'scale(0.65)', transformOrigin: 'top center' }}>
             <AIEvaluationDemo />
           </div>
         </div>
       </section>
 
       {/* Dark Feature Section */}
-      <section className="bg-[#020617] text-white py-32 px-4 relative overflow-hidden">
+      <section className="bg-[#020617] text-white py-20 md:py-32 px-4 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-blue-900 to-transparent opacity-50"></div>
         
         <div className="max-w-[1100px] mx-auto relative z-10">
@@ -341,7 +353,7 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
             <span className="text-blue-500">활용해보세요</span>
           </h2>
           
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
             {[
                 { title: '정교한 평가 지표', desc: '1,000개 이상의 직무 데이터를 기반으로 지원자의 핵심 역량을 정밀하게 분석하세요.', tags: ['직무 적합성', '성장 가능성', '기술 역량'] },
                 { title: '간편한 평가 프로세스', desc: 'JD 생성부터 결과 분석까지, 채용의 전 과정을 원스톱으로 관리하세요.', tags: ['JD 생성', '자동화', '대시보드'] },
@@ -363,8 +375,8 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
       </section>
 
       {/* Bottom CTA */}
-      <section className="py-32 px-4 bg-white">
-          <div className="max-w-[1000px] mx-auto bg-[#0F172A] rounded-[40px] px-8 py-20 text-center text-white relative overflow-hidden shadow-2xl shadow-slate-200">
+      <section className="py-20 md:py-32 px-4 bg-white">
+          <div className="max-w-[1000px] mx-auto bg-[#0F172A] rounded-[24px] md:rounded-[40px] px-6 md:px-8 py-14 md:py-20 text-center text-white relative overflow-hidden shadow-2xl shadow-slate-200">
               <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
               <div className="relative z-10 flex flex-col items-center">
                 <h2 className="text-3xl md:text-4xl font-bold mb-6 leading-tight">채용의 새로운 기준을<br/>만들어보세요</h2>
