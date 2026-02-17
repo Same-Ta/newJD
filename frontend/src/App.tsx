@@ -14,7 +14,7 @@ import { FONTS } from '@/constants/fonts';
 import { FunnelCSS } from '@/components/common/FunnelCSS';
 import { SidebarItem } from '@/components/common/SidebarItem';
 import { auth } from '@/config/firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, onIdTokenChanged, signOut } from 'firebase/auth';
 import { clearAuthCache } from '@/services/api';
 
 // Lazy load all page components for code splitting
@@ -127,6 +127,44 @@ const App = () => {
 
     return () => unsubscribe();
   }, [currentPage]);
+
+  // 토큰 자동 갱신 감지 (만료 전 자동 리프레시)
+  useEffect(() => {
+    const unsubscribe = onIdTokenChanged(auth, async (user) => {
+      if (user) {
+        try {
+          // 토큰 강제 갱신 (캐시된 토큰 무효화)
+          await user.getIdToken(true);
+          console.log('🔄 Token refreshed automatically');
+          clearAuthCache(); // API 캐시도 초기화
+        } catch (error) {
+          console.error('Token refresh failed:', error);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // 주기적인 토큰 갱신 (50분마다 - Firebase 토큰은 1시간 유효)
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const refreshInterval = setInterval(async () => {
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          await user.getIdToken(true); // 강제 토큰 갱신
+          clearAuthCache();
+          console.log('🔄 Token refreshed by interval (50 min)');
+        } catch (error) {
+          console.error('Scheduled token refresh failed:', error);
+        }
+      }
+    }, 50 * 60 * 1000); // 50분마다
+
+    return () => clearInterval(refreshInterval);
+  }, [isLoggedIn]);
 
   // URL 변경 감지 및 공개 링크 처리
   useEffect(() => {

@@ -13,24 +13,32 @@ export const clearAuthCache = () => {
   tokenExpiry = 0;
   cache.invalidateAll();
 };
-const getAuthToken = async (): Promise<string> => {
+const getAuthToken = async (forceRefresh: boolean = false): Promise<string> => {
   const now = Date.now();
-  if (cachedToken && now < tokenExpiry) {
-    return cachedToken;
+  
+  // forceRefresh가 true이거나 캐시가 만료된 경우 새 토큰 발급
+  if (forceRefresh || !cachedToken || now >= tokenExpiry) {
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('사용자가 로그인되어 있지 않습니다.');
+    }
+    
+    // forceRefresh 시 Firebase에서 새 토큰 강제 발급
+    cachedToken = await user.getIdToken(forceRefresh);
+    tokenExpiry = now + 50 * 60 * 1000; // 50분 캐시 (토큰 유효기간은 1시간)
+    
+    if (forceRefresh) {
+      console.log('🔄 Auth token forcefully refreshed');
+    }
   }
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error('사용자가 로그인되어 있지 않습니다.');
-  }
-  cachedToken = await user.getIdToken();
-  tokenExpiry = now + 5 * 60 * 1000; // 5분 캐시
+  
   return cachedToken;
 };
 
-// API 요청 헬퍼
-const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
+// API 요청 헬퍼 (토큰 만료 시 자동 재시도)
+const apiRequest = async (endpoint: string, options: RequestInit = {}, retryCount: number = 0): Promise<any> => {
   try {
-    const token = await getAuthToken();
+    const token = await getAuthToken(retryCount > 0); // 재시도 시 토큰 강제 갱신
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers: {
@@ -40,6 +48,13 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
       },
     });
 
+    // 401 에러 발생 시 토큰 만료로 간주하고 1회 재시도
+    if (response.status === 401 && retryCount === 0) {
+      console.log('⚠️  Token expired, retrying with refreshed token...');
+      clearAuthCache(); // 캐시 초기화
+      return await apiRequest(endpoint, options, retryCount + 1);
+    }
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: response.statusText }));
       throw new Error(error.detail || `API 요청 실패: ${response.status}`);
@@ -47,6 +62,13 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
 
     return await response.json();
   } catch (error) {
+    // 네트워크 에러나 타임아웃의 경우 재시도 (최대 1회)
+    if (retryCount === 0 && error instanceof TypeError) {
+      console.log('⚠️  Network error, retrying...');
+      await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
+      return await apiRequest(endpoint, options, retryCount + 1);
+    }
+    
     console.error('API 요청 에러:', error);
     throw error;
   }

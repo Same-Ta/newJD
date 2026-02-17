@@ -16,6 +16,23 @@ from routes.team import router as team_router
 
 app = FastAPI(title="Winnow API", version="1.0.0")
 
+# ==================== Startup Events ====================
+@app.on_event("startup")
+async def startup_event():
+    """서버 시작 시 Firebase Admin SDK 미리 초기화하여 콜드 스타트 방지"""
+    from config.firebase import get_db, get_bucket
+    try:
+        # Firebase 초기화 (첫 요청 전에 미리 실행)
+        db = get_db()
+        bucket = get_bucket()
+        print("✅ Firebase Admin SDK initialized successfully")
+        print("✅ Firestore client warmed up")
+        if bucket:
+            print("✅ Storage bucket warmed up")
+    except Exception as e:
+        print(f"⚠️  Firebase initialization warning: {e}")
+
+
 # CORS 설정 (프로덕션에서는 실제 프론트엔드 URL만 허용)
 import os
 allowed_origins = [
