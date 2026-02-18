@@ -64,8 +64,14 @@ class JDCreate(BaseModel):
     responsibilities: List[str] = []
     requirements: List[str] = []
     preferred: List[str] = []
+    requirementTypes: Optional[Dict[str, str]] = None  # {"0": "checkbox", "1": "text"}
+    preferredTypes: Optional[Dict[str, str]] = None  # {"0": "checkbox", "1": "text"}
+    requirementsFormat: Optional[str] = None  # "checkbox" | "text"
+    preferredFormat: Optional[str] = None  # "checkbox" | "text"
     benefits: List[str] = []
     status: str = "draft"
+    bannerImage: Optional[str] = None  # 배너 이미지 URL
+    profileImage: Optional[str] = None  # 프로필 이미지 URL
     applicationFields: Optional[Dict[str, Any]] = None
     # 동아리 모집 일정 필드
     recruitmentPeriod: Optional[str] = None   # 모집 기간
@@ -92,8 +98,14 @@ class JDUpdate(BaseModel):
     responsibilities: Optional[List[str]] = None
     requirements: Optional[List[str]] = None
     preferred: Optional[List[str]] = None
+    requirementTypes: Optional[Dict[str, str]] = None
+    preferredTypes: Optional[Dict[str, str]] = None
+    requirementsFormat: Optional[str] = None
+    preferredFormat: Optional[str] = None
     benefits: Optional[List[str]] = None
     status: Optional[str] = None
+    bannerImage: Optional[str] = None  # 배너 이미지 URL
+    profileImage: Optional[str] = None  # 프로필 이미지 URL
     applicationFields: Optional[Dict[str, Any]] = None
     recruitmentPeriod: Optional[str] = None
     recruitmentTarget: Optional[str] = None

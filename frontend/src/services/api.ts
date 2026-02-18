@@ -176,6 +176,44 @@ export const jdAPI = {
     cache.invalidate('jds-all');
     return result;
   },
+
+  // 이미지 압축 후 base64 변환
+  compressImage: (file: File, maxWidth: number = 800, quality: number = 0.7): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          // 리사이즈
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Canvas context not available'));
+            return;
+          }
+          
+          ctx.drawImage(img, 0, 0, width, height);
+          const base64 = canvas.toDataURL('image/jpeg', quality);
+          resolve(base64);
+        };
+        img.onerror = () => reject(new Error('이미지 로드 실패'));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('파일 읽기 실패'));
+      reader.readAsDataURL(file);
+    });
+  },
 };
 
 // ==================== Application API ====================
@@ -301,6 +339,22 @@ export const geminiAPI = {
     return await apiRequest('/api/gemini/chat', {
       method: 'POST',
       body: JSON.stringify({ message, chatHistory, type }),
+    });
+  },
+  
+  // 시맨틱 지원자 검색
+  semanticSearch: async (query: string, applications: any[]) => {
+    return await apiRequest('/api/gemini/semantic-search', {
+      method: 'POST',
+      body: JSON.stringify({ query, applications }),
+    });
+  },
+  
+  // 대화형 지원자 데이터 질의
+  queryApplicants: async (question: string, applications: any[], chatHistory: any[] = []) => {
+    return await apiRequest('/api/gemini/query-applicants', {
+      method: 'POST',
+      body: JSON.stringify({ question, applications, chatHistory }),
     });
   },
 };

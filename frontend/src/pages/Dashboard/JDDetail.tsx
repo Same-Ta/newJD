@@ -23,10 +23,16 @@ interface JDData {
     responsibilities: string[];
     requirements: string[];
     preferred: string[];
+    requirementTypes?: Record<number, 'checkbox' | 'text'>;
+    preferredTypes?: Record<number, 'checkbox' | 'text'>;
+    requirementsFormat?: 'checkbox' | 'text';
+    preferredFormat?: 'checkbox' | 'text';
     benefits: string[];
     createdAt: any;
     status?: string;
     userId?: string;
+    bannerImage?: string;
+    profileImage?: string;
     // 동아리 모집 일정 필드
     recruitmentPeriod?: string;
     recruitmentTarget?: string;
@@ -80,8 +86,16 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     const [viewRequirementChecks, setViewRequirementChecks] = useState<Record<number, { checked: boolean; detail: string }>>({});
     const [viewPreferredChecks, setViewPreferredChecks] = useState<Record<number, { checked: boolean; detail: string }>>({});
     
-    // 프로필 이미지를 한 번만 선택하도록 useState 사용
+    // 프로필 이미지 편집 모달 상태
+    const [showProfileModal, setShowProfileModal] = useState(false);
+    const [profileFile, setProfileFile] = useState<File | null>(null);
+    const [profilePreview, setProfilePreview] = useState<string | null>(null);
+    const [isUploadingProfile, setIsUploadingProfile] = useState(false);
+    
+    // 프로필 이미지 (저장된 이미지 또는 랜덤 이미지)
     const [profileImage] = useState(() => {
+        if (jdData?.profileImage) return jdData.profileImage;
+        
         const officeImages = [
             'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=400&h=400&fit=crop',
             'https://images.unsplash.com/photo-1497032205916-ac775f0649ae?w=400&h=400&fit=crop',
@@ -96,6 +110,8 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
         ];
         return officeImages[Math.floor(Math.random() * officeImages.length)];
     });
+    
+    const displayProfileImage = jdData?.profileImage || profileImage;
     
     const currentUserId = auth.currentUser?.uid;
     const isOwner = currentUserId && jdData?.userId === currentUserId;
@@ -132,6 +148,59 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     const updateEditedField = (field: keyof JDData, value: any) => {
         if (!editedData) return;
         setEditedData({ ...editedData, [field]: value });
+    };
+
+    // 프로필 이미지 업로드 핸들러
+    const handleProfileFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                alert('파일 크기는 5MB 이하여야 합니다.');
+                return;
+            }
+            
+            if (!file.type.startsWith('image/')) {
+                alert('이미지 파일만 업로드 가능합니다.');
+                return;
+            }
+            
+            setProfileFile(file);
+            
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setProfilePreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleSaveProfile = async () => {
+        if (!profileFile || !jdId) {
+            alert('업로드할 이미지를 선택해주세요.');
+            return;
+        }
+
+        setIsUploadingProfile(true);
+        try {
+            // 프로필 이미지 압축 후 base64 변환
+            const base64 = await jdAPI.compressImage(profileFile, 400, 0.7);
+            
+            // JD 업데이트 (base64 직접 저장)
+            await jdAPI.update(jdId, { profileImage: base64 });
+            
+            // 로컬 상태 업데이트
+            setJdData(prev => prev ? { ...prev, profileImage: base64 } : prev);
+            
+            alert('프로필 이미지가 변경되었습니다!');
+            setShowProfileModal(false);
+            setProfileFile(null);
+            setProfilePreview(null);
+        } catch (error) {
+            console.error('프로필 업로드 실패:', error);
+            alert('프로필 업로드 중 오류가 발생했습니다.');
+        } finally {
+            setIsUploadingProfile(false);
+        }
     };
 
     useEffect(() => {
@@ -308,17 +377,44 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     }
 
     return (
-        <div className="flex flex-col md:flex-row h-full bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden max-w-[1200px] mx-auto" style={{ height: 'calc(100vh - 140px)'}}>
-            {/* Left Profile Section */}
-            <div className="hidden md:flex w-[240px] border-r border-gray-100 flex-col bg-[#FAFBFC] pt-16 overflow-y-auto scrollbar-hide">
+        <div className="flex flex-col h-full bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden max-w-[1200px] mx-auto" style={{ height: 'calc(100vh - 140px)'}}>
+            {/* Banner Image Section (if available, applicant view only) */}
+            {jdData.bannerImage && !isOwner && (
+                <div className="w-full h-48 overflow-hidden border-b border-gray-200">
+                    <img 
+                        src={jdData.bannerImage}
+                        alt="Job Banner" 
+                        className="w-full h-full object-cover"
+                    />
+                </div>
+            )}
+            
+            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+                {/* Left Profile Section */}
+                <div className="hidden md:flex w-[240px] border-r border-gray-100 flex-col bg-[#FAFBFC] pt-16 overflow-y-auto scrollbar-hide">
                 {/* Profile Image */}
                 <div className="px-6 flex flex-col items-center">
-                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 mb-4 shadow-lg overflow-hidden">
+                    <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 mb-4 shadow-lg overflow-hidden group">
                         <img 
-                            src={profileImage}
+                            src={displayProfileImage}
                             alt="Profile" 
                             className="w-full h-full object-cover"
                         />
+                        {isOwner && (
+                            <button
+                                onClick={() => {
+                                    setProfilePreview(displayProfileImage);
+                                    setShowProfileModal(true);
+                                }}
+                                className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                title="프로필 이미지 변경"
+                            >
+                                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                            </button>
+                        )}
                     </div>
                     <h3 className="font-bold text-[17px] text-gray-900 mb-1">
                         {jdData.teamName || jdData.companyName || jdData.company || 'WINNOW'}
@@ -586,32 +682,78 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                             <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{(jdData.type || 'club') === 'company' ? '자격 요건 (CHECKLIST)' : '지원자 체크리스트 (필수)'}</h4>
                             {isEditing ? (
                                 <div className="space-y-2">
-                                    {((editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : ['']).map((item, idx) => (
-                                        <div key={idx} className="flex gap-2">
-                                            <input
-                                                type="text"
-                                                value={item}
-                                                onChange={(e) => {
-                                                    const current = (editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : [''];
-                                                    const newRequirements = [...current];
-                                                    newRequirements[idx] = e.target.value;
-                                                    updateEditedField('requirements', newRequirements);
-                                                }}
-                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500"
-                                                placeholder="자격 요건 입력"
-                                            />
-                                            <button
-                                                onClick={() => {
-                                                    const current = (editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : [''];
-                                                    const newRequirements = current.filter((_, i) => i !== idx);
-                                                    updateEditedField('requirements', newRequirements.length ? newRequirements : ['']);
-                                                }}
-                                                className="px-3 py-2 bg-red-500 text-white rounded-lg text-[12px] hover:bg-red-600"
-                                            >
-                                                삭제
-                                            </button>
-                                        </div>
-                                    ))}
+                                    {((editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : ['']).map((item, idx) => {
+                                        const itemType = editedData?.requirementTypes?.[idx] || 'text';
+                                        return (
+                                            <div key={idx} className="space-y-1">
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={item}
+                                                        onChange={(e) => {
+                                                            const current = (editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : [''];
+                                                            const newRequirements = [...current];
+                                                            newRequirements[idx] = e.target.value;
+                                                            updateEditedField('requirements', newRequirements);
+                                                        }}
+                                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="자격 요건 입력"
+                                                    />
+                                                    <button
+                                                        onClick={() => {
+                                                            const current = (editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : [''];
+                                                            const newRequirements = current.filter((_, i) => i !== idx);
+                                                            // 타입 맵도 인덱스 재매핑
+                                                            const currentTypes = { ...(editedData?.requirementTypes || {}) };
+                                                            const newTypes: Record<number, 'checkbox' | 'text'> = {};
+                                                            Object.keys(currentTypes).forEach(k => {
+                                                                const ki = parseInt(k);
+                                                                if (ki < idx) newTypes[ki] = currentTypes[ki];
+                                                                else if (ki > idx) newTypes[ki - 1] = currentTypes[ki];
+                                                            });
+                                                            updateEditedField('requirements', newRequirements.length ? newRequirements : ['']);
+                                                            updateEditedField('requirementTypes', newTypes);
+                                                        }}
+                                                        className="px-3 py-2 bg-red-500 text-white rounded-lg text-[12px] hover:bg-red-600"
+                                                    >
+                                                        삭제
+                                                    </button>
+                                                </div>
+                                                {/* 답변 형식 토글 */}
+                                                <div className="flex items-center gap-2 ml-1">
+                                                    <span className="text-[11px] text-gray-400">답변 형식:</span>
+                                                    <button
+                                                        onClick={() => {
+                                                            const types = { ...(editedData?.requirementTypes || {}) };
+                                                            types[idx] = 'checkbox';
+                                                            updateEditedField('requirementTypes', types);
+                                                        }}
+                                                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                                                            itemType === 'checkbox' 
+                                                                ? 'bg-green-100 text-green-700 border border-green-300' 
+                                                                : 'bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100'
+                                                        }`}
+                                                    >
+                                                        ✓ 체크만
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            const types = { ...(editedData?.requirementTypes || {}) };
+                                                            types[idx] = 'text';
+                                                            updateEditedField('requirementTypes', types);
+                                                        }}
+                                                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                                                            itemType === 'text' 
+                                                                ? 'bg-blue-100 text-blue-700 border border-blue-300' 
+                                                                : 'bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100'
+                                                        }`}
+                                                    >
+                                                        ✎ 서술형
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                     <button
                                         onClick={() => {
                                             const current = (editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : [''];
@@ -625,30 +767,34 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                 </div>
                             ) : (
                                 <div className="space-y-2">
-                                    {jdData.requirements && jdData.requirements.length > 0 ? jdData.requirements.map((item, idx) => (
+                                    {jdData.requirements && jdData.requirements.length > 0 ? jdData.requirements.map((item, idx) => {
+                                        const itemType = jdData.requirementTypes?.[idx] || 'checkbox';
+                                        return (
                                         <div key={idx} className="space-y-2">
                                             <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
                                                 <input 
                                                     type="checkbox" 
                                                     checked={viewRequirementChecks[idx]?.checked || false}
                                                     onChange={(e) => {
-                                                        if (!isOwner) {
-                                                            setViewRequirementChecks({
-                                                                ...viewRequirementChecks,
-                                                                [idx]: {
-                                                                    checked: e.target.checked,
-                                                                    detail: viewRequirementChecks[idx]?.detail || ''
-                                                                }
-                                                            });
-                                                        }
+                                                        setViewRequirementChecks({
+                                                            ...viewRequirementChecks,
+                                                            [idx]: {
+                                                                checked: e.target.checked,
+                                                                detail: viewRequirementChecks[idx]?.detail || ''
+                                                            }
+                                                        });
                                                     }}
-                                                    disabled={!!isOwner}
-                                                    className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
+                                                    className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
                                                 />
-                                                <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
+                                                    {itemType === 'text' && (
+                                                        <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded font-medium">서술</span>
+                                                    )}
+                                                </div>
                                             </label>
-                                            {!isOwner && viewRequirementChecks[idx]?.checked && (
-                                                <div className="ml-10 mt-2">
+                                            {viewRequirementChecks[idx]?.checked && itemType === 'text' && (
+                                                <div className="ml-10">
                                                     <textarea
                                                         value={viewRequirementChecks[idx]?.detail || ''}
                                                         onChange={(e) => setViewRequirementChecks({
@@ -665,7 +811,8 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                 </div>
                                             )}
                                         </div>
-                                    )) : (
+                                        );
+                                    }) : (
                                         <p className="text-[13px] text-gray-400 p-3">{(jdData.type || 'club') === 'company' ? '자격 요건이 설정되지 않았습니다.' : '체크리스트가 설정되지 않았습니다.'}</p>
                                     )}
                                 </div>
@@ -677,32 +824,78 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                             <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{(jdData.type || 'club') === 'company' ? '우대 사항 (PREFERRED)' : '지원자 체크리스트 (우대)'}</h4>
                             {isEditing ? (
                                 <div className="space-y-2">
-                                    {((editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : ['']).map((item, idx) => (
-                                        <div key={idx} className="flex gap-2">
-                                            <input
-                                                type="text"
-                                                value={item}
-                                                onChange={(e) => {
-                                                    const current = (editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : [''];
-                                                    const newPreferred = [...current];
-                                                    newPreferred[idx] = e.target.value;
-                                                    updateEditedField('preferred', newPreferred);
-                                                }}
-                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500"
-                                                placeholder="우대 사항 입력"
-                                            />
-                                            <button
-                                                onClick={() => {
-                                                    const current = (editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : [''];
-                                                    const newPreferred = current.filter((_, i) => i !== idx);
-                                                    updateEditedField('preferred', newPreferred.length ? newPreferred : ['']);
-                                                }}
-                                                className="px-3 py-2 bg-red-500 text-white rounded-lg text-[12px] hover:bg-red-600"
-                                            >
-                                                삭제
-                                            </button>
-                                        </div>
-                                    ))}
+                                    {((editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : ['']).map((item, idx) => {
+                                        const itemType = editedData?.preferredTypes?.[idx] || 'text';
+                                        return (
+                                            <div key={idx} className="space-y-1">
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={item}
+                                                        onChange={(e) => {
+                                                            const current = (editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : [''];
+                                                            const newPreferred = [...current];
+                                                            newPreferred[idx] = e.target.value;
+                                                            updateEditedField('preferred', newPreferred);
+                                                        }}
+                                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500"
+                                                        placeholder="우대 사항 입력"
+                                                    />
+                                                    <button
+                                                        onClick={() => {
+                                                            const current = (editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : [''];
+                                                            const newPreferred = current.filter((_, i) => i !== idx);
+                                                            // 타입 맵도 인덱스 재매핑
+                                                            const currentTypes = { ...(editedData?.preferredTypes || {}) };
+                                                            const newTypes: Record<number, 'checkbox' | 'text'> = {};
+                                                            Object.keys(currentTypes).forEach(k => {
+                                                                const ki = parseInt(k);
+                                                                if (ki < idx) newTypes[ki] = currentTypes[ki];
+                                                                else if (ki > idx) newTypes[ki - 1] = currentTypes[ki];
+                                                            });
+                                                            updateEditedField('preferred', newPreferred.length ? newPreferred : ['']);
+                                                            updateEditedField('preferredTypes', newTypes);
+                                                        }}
+                                                        className="px-3 py-2 bg-red-500 text-white rounded-lg text-[12px] hover:bg-red-600"
+                                                    >
+                                                        삭제
+                                                    </button>
+                                                </div>
+                                                {/* 답변 형식 토글 */}
+                                                <div className="flex items-center gap-2 ml-1">
+                                                    <span className="text-[11px] text-gray-400">답변 형식:</span>
+                                                    <button
+                                                        onClick={() => {
+                                                            const types = { ...(editedData?.preferredTypes || {}) };
+                                                            types[idx] = 'checkbox';
+                                                            updateEditedField('preferredTypes', types);
+                                                        }}
+                                                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                                                            itemType === 'checkbox' 
+                                                                ? 'bg-green-100 text-green-700 border border-green-300' 
+                                                                : 'bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100'
+                                                        }`}
+                                                    >
+                                                        ✓ 체크만
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            const types = { ...(editedData?.preferredTypes || {}) };
+                                                            types[idx] = 'text';
+                                                            updateEditedField('preferredTypes', types);
+                                                        }}
+                                                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                                                            itemType === 'text' 
+                                                                ? 'bg-blue-100 text-blue-700 border border-blue-300' 
+                                                                : 'bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100'
+                                                        }`}
+                                                    >
+                                                        ✎ 서술형
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                     <button
                                         onClick={() => {
                                             const current = (editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : [''];
@@ -716,30 +909,34 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                 </div>
                             ) : (
                                 <div className="space-y-2">
-                                    {jdData.preferred && jdData.preferred.length > 0 ? jdData.preferred.map((item, idx) => (
+                                    {jdData.preferred && jdData.preferred.length > 0 ? jdData.preferred.map((item, idx) => {
+                                        const itemType = jdData.preferredTypes?.[idx] || 'checkbox';
+                                        return (
                                         <div key={idx} className="space-y-2">
                                             <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
                                                 <input 
                                                     type="checkbox" 
                                                     checked={viewPreferredChecks[idx]?.checked || false}
                                                     onChange={(e) => {
-                                                        if (!isOwner) {
-                                                            setViewPreferredChecks({
-                                                                ...viewPreferredChecks,
-                                                                [idx]: {
-                                                                    checked: e.target.checked,
-                                                                    detail: viewPreferredChecks[idx]?.detail || ''
-                                                                }
-                                                            });
-                                                        }
+                                                        setViewPreferredChecks({
+                                                            ...viewPreferredChecks,
+                                                            [idx]: {
+                                                                checked: e.target.checked,
+                                                                detail: viewPreferredChecks[idx]?.detail || ''
+                                                            }
+                                                        });
                                                     }}
-                                                    disabled={!!isOwner}
-                                                    className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" 
+                                                    className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
                                                 />
-                                                <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
+                                                    {itemType === 'text' && (
+                                                        <span className="text-[10px] text-purple-500 bg-purple-50 px-1.5 py-0.5 rounded font-medium">서술</span>
+                                                    )}
+                                                </div>
                                             </label>
-                                            {!isOwner && viewPreferredChecks[idx]?.checked && (
-                                                <div className="ml-10 mt-2">
+                                            {viewPreferredChecks[idx]?.checked && itemType === 'text' && (
+                                                <div className="ml-10">
                                                     <textarea
                                                         value={viewPreferredChecks[idx]?.detail || ''}
                                                         onChange={(e) => setViewPreferredChecks({
@@ -751,17 +948,73 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                         })}
                                                         placeholder="관련 경험이나 역량을 구체적으로 작성해주세요"
                                                         rows={3}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                                                     />
                                                 </div>
                                             )}
                                         </div>
-                                    )) : (
+                                        );
+                                    }) : (
                                         <p className="text-[13px] text-gray-400 p-3">{(jdData.type || 'club') === 'company' ? '우대 사항이 설정되지 않았습니다.' : '우대 체크리스트가 설정되지 않았습니다.'}</p>
                                     )}
                                 </div>
                             )}
                         </div>
+
+                        {/* 혜택 / 복리후생 */}
+                        {((jdData.benefits && jdData.benefits.length > 0) || isEditing) && (
+                            <div className="space-y-3">
+                                <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{(jdData.type || 'club') === 'company' ? '복리후생 (BENEFITS)' : '활동 혜택 (BENEFITS)'}</h4>
+                                {isEditing ? (
+                                    <div className="space-y-2">
+                                        {((editedData?.benefits && editedData.benefits.length > 0) ? editedData.benefits : ['']).map((item, idx) => (
+                                            <div key={idx} className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={item}
+                                                    onChange={(e) => {
+                                                        const current = (editedData?.benefits && editedData.benefits.length > 0) ? editedData.benefits : [''];
+                                                        const newBenefits = [...current];
+                                                        newBenefits[idx] = e.target.value;
+                                                        updateEditedField('benefits', newBenefits);
+                                                    }}
+                                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="혜택/복리후생 입력"
+                                                />
+                                                <button
+                                                    onClick={() => {
+                                                        const current = (editedData?.benefits && editedData.benefits.length > 0) ? editedData.benefits : [''];
+                                                        const newBenefits = current.filter((_, i) => i !== idx);
+                                                        updateEditedField('benefits', newBenefits.length ? newBenefits : ['']);
+                                                    }}
+                                                    className="px-3 py-2 bg-red-500 text-white rounded-lg text-[12px] hover:bg-red-600"
+                                                >
+                                                    삭제
+                                                </button>
+                                            </div>
+                                        ))}
+                                        <button
+                                            onClick={() => {
+                                                const current = (editedData?.benefits && editedData.benefits.length > 0) ? editedData.benefits : [''];
+                                                updateEditedField('benefits', [...current, '']);
+                                            }}
+                                            className="px-4 py-2 bg-blue-500 text-white rounded-lg text-[12px] hover:bg-blue-600"
+                                        >
+                                            + 항목 추가
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1">
+                                        {jdData.benefits.map((item, idx) => (
+                                            <div key={idx} className="flex items-start gap-3 px-3 py-2">
+                                                <span className="text-orange-400 mt-0.5 flex-shrink-0">•</span>
+                                                <span className="text-[13px] text-gray-700 leading-relaxed">{item}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* 스킬/도구 체크리스트 섹션 */}
                         {((jdData?.applicationFields?.skillOptions && jdData.applicationFields.skillOptions.length > 0) || isEditing) && (
@@ -1303,6 +1556,115 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                     </div>
                 </div>
             )}
+            
+            {/* 프로필 이미지 편집 모달 */}
+            {showProfileModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-hidden shadow-2xl border border-gray-200">
+                        {/* 모달 헤더 */}
+                        <div className="px-6 py-5 border-b border-gray-100">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h2 className="text-[17px] font-bold text-gray-900">프로필 이미지 변경</h2>
+                                    <p className="text-[12px] text-gray-500 mt-1">{jdData.teamName || jdData.companyName || '회사/팀'} 프로필</p>
+                                </div>
+                                <button 
+                                    onClick={() => {
+                                        setShowProfileModal(false);
+                                        setProfileFile(null);
+                                        setProfilePreview(null);
+                                    }}
+                                    className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {/* 모달 본문 */}
+                        <div className="p-6 overflow-y-auto max-h-[60vh]">
+                            <div className="space-y-4">
+                                {/* 프로필 이미지 미리보기 */}
+                                {profilePreview && (
+                                    <div className="flex justify-center relative">
+                                        <div className="w-48 h-48 rounded-full overflow-hidden border-4 border-gray-200 shadow-lg">
+                                            <img 
+                                                src={profilePreview} 
+                                                alt="프로필 미리보기" 
+                                                className="w-full h-full object-cover"
+                                            />
+                                        </div>
+                                        {profileFile && (
+                                            <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-3 py-1 rounded-full font-medium shadow-md">
+                                                새 이미지
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                
+                                {/* 파일 선택 */}
+                                <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-blue-400 transition-colors">
+                                    <label className="cursor-pointer flex flex-col items-center gap-3">
+                                        <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center">
+                                            <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                            </svg>
+                                        </div>
+                                        <div className="text-center">
+                                            <span className="text-[14px] font-semibold text-blue-600">
+                                                {profileFile ? '다른 이미지 선택' : '프로필 이미지 선택'}
+                                            </span>
+                                            <p className="text-[12px] text-gray-500 mt-1">5MB 이하의 이미지 파일 (JPG, PNG, GIF)</p>
+                                        </div>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleProfileFileChange}
+                                            className="hidden"
+                                        />
+                                    </label>
+                                </div>
+                                
+                                {profileFile && (
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                        <p className="text-[12px] text-blue-800">
+                                            <span className="font-semibold">선택된 파일:</span> {profileFile.name}
+                                        </p>
+                                        <p className="text-[11px] text-blue-600 mt-1">
+                                            크기: {(profileFile.size / 1024 / 1024).toFixed(2)} MB
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        
+                        {/* 모달 푸터 */}
+                        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+                            <button
+                                onClick={() => {
+                                    setShowProfileModal(false);
+                                    setProfileFile(null);
+                                    setProfilePreview(null);
+                                }}
+                                className="px-5 py-2.5 rounded-xl text-[13px] font-bold text-gray-500 hover:bg-gray-100 transition-colors"
+                                disabled={isUploadingProfile}
+                            >
+                                취소
+                            </button>
+                            <button
+                                onClick={handleSaveProfile}
+                                disabled={!profileFile || isUploadingProfile}
+                                className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-bold hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                {isUploadingProfile ? '업로드 중...' : '저장'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            </div>
         </div>
     );
 };

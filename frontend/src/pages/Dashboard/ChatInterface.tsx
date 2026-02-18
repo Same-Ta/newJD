@@ -20,6 +20,8 @@ interface CurrentJD {
     responsibilities: string[];
     requirements: string[];
     preferred: string[];
+    requirementTypes?: Record<number, 'checkbox' | 'text'>;
+    preferredTypes?: Record<number, 'checkbox' | 'text'>;
     benefits: string[];
     // 필수 체크 개수 설정
     requiredCheckCount?: number;
@@ -64,6 +66,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         title: '', type, jobRole: '', company: '', companyName: '', teamName: '',
         location: '', scale: '', description: '', vision: '', mission: '', techStacks: [],
         responsibilities: [], requirements: [], preferred: [], benefits: [],
+        requirementTypes: {}, preferredTypes: {},
         recruitmentPeriod: '', recruitmentTarget: '', recruitmentCount: '',
         recruitmentProcess: [], activitySchedule: '', membershipFee: ''
     });
@@ -78,8 +81,8 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     const getDefaultMessage = (type: 'company' | 'club' = 'club'): ChatMessage => ({
         role: 'ai',
         text: type === 'club'
-            ? '동아리 모집공고를 만들어 볼게요! 🎯 동아리의 정체성을 브랜딩하고, 최고의 신입 부원을 찾는 공고를 함께 만들어볼게요! 먼저, 어떤 동아리이신가요?'
-            : '회사 채용공고를 만들어 볼게요! 🎯 기업의 핵심 인재를 찾는 채용 공고를 함께 만들어볼게요! 먼저, 어떤 회사이신가요?',
+            ? '동아리 모집공고를 만들어 볼게요! 🎯 동아리의 정체성을 브랜딩하고, 최고의 신입 부원을 찾는 공고를 함께 만들어볼게요!\n\n먼저, 동아리 이름이 무엇인가요?'
+            : '회사 채용공고를 만들어 볼게요! 🎯 기업의 핵심 인재를 찾는 채용 공고를 함께 만들어볼게요!\n\n먼저, 회사 이름이 무엇인가요?',
         timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
     });
 
@@ -148,6 +151,10 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         skillOptions: [] as { category: string; skills: string[] }[]
     });
     const [newCustomQuestion, setNewCustomQuestion] = useState('');
+    
+    // 배너 이미지 업로드 상태
+    const [bannerImageFile, setBannerImageFile] = useState<File | null>(null);
+    const [bannerImagePreview, setBannerImagePreview] = useState<string | null>(null);
     const [newSkillCategory, setNewSkillCategory] = useState('');
     const [newSkillItem, setNewSkillItem] = useState('');
     const [editingSkillCategoryIdx, setEditingSkillCategoryIdx] = useState<number | null>(null);
@@ -417,6 +424,47 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         }));
     };
 
+    // 배너 이미지 파일 선택 핸들러
+    const handleBannerImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            // 파일 크기 체크 (5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                alert('파일 크기는 5MB 이하여야 합니다.');
+                return;
+            }
+            
+            // 이미지 파일 타입 체크
+            if (!file.type.startsWith('image/')) {
+                alert('이미지 파일만 업로드 가능합니다.');
+                return;
+            }
+            
+            setBannerImageFile(file);
+            
+            // 미리보기 생성
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setBannerImagePreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    // 배너 이미지 압축 및 base64 변환 함수
+    const compressBannerImage = async (): Promise<string | null> => {
+        if (!bannerImageFile) return null;
+        
+        try {
+            const base64 = await jdAPI.compressImage(bannerImageFile, 800, 0.7);
+            return base64;
+        } catch (error) {
+            console.error('배너 이미지 압축 오류:', error);
+            alert('배너 이미지 처리 중 오류가 발생했습니다.');
+            return null;
+        }
+    };
+
     // 실제 공고 게시 (모달에서 확인 후)
     const publishJob = async () => {
         const user = auth.currentUser;
@@ -433,6 +481,12 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         console.log('공고 게시 시작...', currentJD);
 
         try {
+            // 배너 이미지가 있으면 압축 후 base64 변환
+            let bannerBase64 = null;
+            if (bannerImageFile) {
+                bannerBase64 = await compressBannerImage();
+            }
+            
             // undefined 값을 빈 문자열이나 빈 배열로 변환
             const jobData = {
                 status: 'published',
@@ -451,6 +505,8 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 responsibilities: currentJD.responsibilities || [],
                 requirements: currentJD.requirements || [],
                 preferred: currentJD.preferred || [],
+                requirementTypes: currentJD.requirementTypes || undefined,
+                preferredTypes: currentJD.preferredTypes || undefined,
                 benefits: currentJD.benefits || [],
                 recruitmentPeriod: currentJD.recruitmentPeriod || '',
                 recruitmentTarget: currentJD.recruitmentTarget || '',
@@ -461,7 +517,9 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 requiredCheckCount: requiredCheckCount || 0,
                 preferredCheckCount: preferredCheckCount || 0,
                 // 지원 양식 설정 추가
-                applicationFields: applicationFieldsConfig
+                applicationFields: applicationFieldsConfig,
+                // 배너 이미지 base64 추가
+                bannerImage: bannerBase64 || undefined
             };
 
             console.log('저장할 데이터:', jobData);
@@ -494,6 +552,10 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             // 체크 개수 초기화
             setRequiredCheckCount(0);
             setPreferredCheckCount(0);
+            
+            // 배너 이미지 초기화
+            setBannerImageFile(null);
+            setBannerImagePreview(null);
             
             // 채팅 내역 초기화
             setMessages([getTypeSelectionMessage()]);
@@ -625,42 +687,38 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             }, chatMessageText.length * 20 + 100); // 타이핑이 끝난 후 히스토리 업데이트
             
             // 2. 미리보기 업데이트: 공고 데이터가 있으면 기존 상태와 병합
+            // 핵심 원칙: AI 응답에 해당 필드가 명시적으로 있고 비어있지 않을 때만 업데이트
+            // 빈 문자열/빈 배열은 "아직 안 채웠다"이므로 기존 값 유지
             if (response.jdData && typeof response.jdData === 'object') {
+                const rd = response.jdData; // 축약
+                const mergeStr = (newVal: string | undefined, oldVal: string) => 
+                    (newVal && newVal.trim().length > 0) ? newVal : oldVal;
+                const mergeArr = (newVal: any[] | undefined, oldVal: any[]) =>
+                    (newVal && Array.isArray(newVal) && newVal.length > 0) ? newVal : oldVal;
+
                 const newJD = {
-                    title: response.jdData.title || currentJD.title || '',
-                    jobRole: response.jdData.jobRole || currentJD.jobRole || '',
-                    company: response.jdData.company || currentJD.company || '',
-                    companyName: response.jdData.companyName || currentJD.companyName || '',
-                    teamName: response.jdData.teamName || currentJD.teamName || '',
-                    location: response.jdData.location || currentJD.location || '',
-                    scale: response.jdData.scale || currentJD.scale || '',
-                    description: response.jdData.description || currentJD.description || '',
-                    vision: response.jdData.vision || currentJD.vision || '',
-                    mission: response.jdData.mission || currentJD.mission || '',
-                    techStacks: (response.jdData.techStacks && response.jdData.techStacks.length > 0)
-                        ? response.jdData.techStacks
-                        : currentJD.techStacks || [],
-                    responsibilities: (response.jdData.responsibilities && response.jdData.responsibilities.length > 0) 
-                        ? response.jdData.responsibilities 
-                        : currentJD.responsibilities || [],
-                    requirements: (response.jdData.requirements && response.jdData.requirements.length > 0) 
-                        ? response.jdData.requirements 
-                        : currentJD.requirements || [],
-                    preferred: (response.jdData.preferred && response.jdData.preferred.length > 0) 
-                        ? response.jdData.preferred 
-                        : currentJD.preferred || [],
-                    benefits: (response.jdData.benefits && response.jdData.benefits.length > 0) 
-                        ? response.jdData.benefits 
-                        : currentJD.benefits || [],
+                    title: mergeStr(rd.title, currentJD.title || ''),
+                    jobRole: mergeStr(rd.jobRole, currentJD.jobRole || ''),
+                    company: mergeStr(rd.company, currentJD.company || ''),
+                    companyName: mergeStr(rd.companyName, currentJD.companyName || ''),
+                    teamName: mergeStr(rd.teamName, currentJD.teamName || ''),
+                    location: mergeStr(rd.location, currentJD.location || ''),
+                    scale: mergeStr(rd.scale, currentJD.scale || ''),
+                    description: mergeStr(rd.description, currentJD.description || ''),
+                    vision: mergeStr(rd.vision, currentJD.vision || ''),
+                    mission: mergeStr(rd.mission, currentJD.mission || ''),
+                    techStacks: mergeArr(rd.techStacks, currentJD.techStacks || []),
+                    responsibilities: mergeArr(rd.responsibilities, currentJD.responsibilities || []),
+                    requirements: mergeArr(rd.requirements, currentJD.requirements || []),
+                    preferred: mergeArr(rd.preferred, currentJD.preferred || []),
+                    benefits: mergeArr(rd.benefits, currentJD.benefits || []),
                     // 동아리 모집 일정 필드
-                    recruitmentPeriod: response.jdData.recruitmentPeriod || currentJD.recruitmentPeriod || '',
-                    recruitmentTarget: response.jdData.recruitmentTarget || currentJD.recruitmentTarget || '',
-                    recruitmentCount: response.jdData.recruitmentCount || currentJD.recruitmentCount || '',
-                    recruitmentProcess: (response.jdData.recruitmentProcess && response.jdData.recruitmentProcess.length > 0)
-                        ? response.jdData.recruitmentProcess
-                        : currentJD.recruitmentProcess || [],
-                    activitySchedule: response.jdData.activitySchedule || currentJD.activitySchedule || '',
-                    membershipFee: response.jdData.membershipFee || currentJD.membershipFee || '',
+                    recruitmentPeriod: mergeStr(rd.recruitmentPeriod, currentJD.recruitmentPeriod || ''),
+                    recruitmentTarget: mergeStr(rd.recruitmentTarget, currentJD.recruitmentTarget || ''),
+                    recruitmentCount: mergeStr(rd.recruitmentCount, currentJD.recruitmentCount || ''),
+                    recruitmentProcess: mergeArr(rd.recruitmentProcess, currentJD.recruitmentProcess || []),
+                    activitySchedule: mergeStr(rd.activitySchedule, currentJD.activitySchedule || ''),
+                    membershipFee: mergeStr(rd.membershipFee, currentJD.membershipFee || ''),
                 };
                 
                 // 타이핑 애니메이션 적용 - 새로운 값이 있을 때만
@@ -832,6 +890,38 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                             {option}
                                         </button>
                                     ))}
+                                    {/* 직접 입력 필드 */}
+                                    {idx === messages.length - 1 && (
+                                        <form
+                                            onSubmit={(e) => {
+                                                e.preventDefault();
+                                                const formData = new FormData(e.currentTarget);
+                                                const customValue = (formData.get('customOption') as string)?.trim();
+                                                if (customValue) {
+                                                    handleSend(customValue);
+                                                    e.currentTarget.reset();
+                                                }
+                                            }}
+                                            className="flex gap-2"
+                                        >
+                                            <input
+                                                name="customOption"
+                                                type="text"
+                                                placeholder="직접 입력..."
+                                                disabled={isLoading || isTypingAI}
+                                                className="flex-1 px-4 py-2.5 bg-white border border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-lg text-gray-700 transition-all disabled:opacity-50 outline-none"
+                                                style={{ fontSize: chatWidth < 30 ? '12px' : '13px' }}
+                                            />
+                                            <button
+                                                type="submit"
+                                                disabled={isLoading || isTypingAI}
+                                                className="px-3 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all disabled:opacity-50 flex-shrink-0"
+                                                style={{ fontSize: chatWidth < 30 ? '12px' : '13px' }}
+                                            >
+                                                전송
+                                            </button>
+                                        </form>
+                                    )}
                                     <button
                                         onClick={() => handleSend('이 질문은 건너뛰겠습니다')}
                                         disabled={isLoading || isTypingAI}
@@ -1289,33 +1379,88 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                     <div className="space-y-2">
                                         {isEditMode ? (
                                             editedJD.requirements && editedJD.requirements.length > 0 ? (
-                                                editedJD.requirements.map((item, idx) => (
-                                                    <div key={idx} className="flex items-start gap-2">
-                                                        <input
-                                                            type="text"
-                                                            value={item}
-                                                            onChange={(e) => updateArrayItem('requirements', idx, e.target.value)}
-                                                            placeholder={jdType === 'company' ? '자격 요건을 입력하세요' : '체크리스트 항목을 입력하세요'}
-                                                            className="flex-1 px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
-                                                        />
-                                                        <button
-                                                            onClick={() => removeArrayItem('requirements', idx)}
-                                                            className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                        >
-                                                            ✕
-                                                        </button>
-                                                    </div>
-                                                ))
+                                                editedJD.requirements.map((item, idx) => {
+                                                    const itemType = editedJD.requirementTypes?.[idx] || 'checkbox';
+                                                    return (
+                                                        <div key={idx} className="space-y-1">
+                                                            <div className="flex items-start gap-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item}
+                                                                    onChange={(e) => updateArrayItem('requirements', idx, e.target.value)}
+                                                                    placeholder={jdType === 'company' ? '자격 요건을 입력하세요' : '체크리스트 항목을 입력하세요'}
+                                                                    className="flex-1 px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
+                                                                />
+                                                                <button
+                                                                    onClick={() => removeArrayItem('requirements', idx)}
+                                                                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                                                                >
+                                                                    ✕
+                                                                </button>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 pl-1">
+                                                                <button
+                                                                    onClick={() => setEditedJD({ ...editedJD, requirementTypes: { ...editedJD.requirementTypes, [idx]: 'checkbox' } })}
+                                                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
+                                                                        itemType === 'checkbox'
+                                                                            ? 'bg-blue-600 border-blue-600 text-white'
+                                                                            : 'bg-white border-gray-200 text-gray-400 hover:border-blue-300'
+                                                                    }`}
+                                                                >
+                                                                    ✓ 체크형
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setEditedJD({ ...editedJD, requirementTypes: { ...editedJD.requirementTypes, [idx]: 'text' } })}
+                                                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
+                                                                        itemType === 'text'
+                                                                            ? 'bg-blue-600 border-blue-600 text-white'
+                                                                            : 'bg-white border-gray-200 text-gray-400 hover:border-blue-300'
+                                                                    }`}
+                                                                >
+                                                                    ✎ 서술형
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })
                                             ) : (
                                                 <p className="text-[13px] text-gray-400 p-3">항목을 추가하세요.</p>
                                             )
                                         ) : (
-                                            currentJD.requirements.length > 0 ? currentJD.requirements.map((item, idx) => (
-                                                <label key={idx} className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
-                                                    <input type="checkbox" className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
-                                                    <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
-                                                </label>
-                                            )) : (
+                                            currentJD.requirements.length > 0 ? currentJD.requirements.map((item, idx) => {
+                                                const itemType = currentJD.requirementTypes?.[idx] || 'checkbox';
+                                                return (
+                                                    <div key={idx} className="space-y-1">
+                                                        <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
+                                                            {itemType === 'checkbox' && <input type="checkbox" className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />}
+                                                            {itemType === 'text' && <span className="text-blue-400 mt-0.5 flex-shrink-0">•</span>}
+                                                            <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
+                                                        </label>
+                                                        <div className="flex items-center gap-1.5 pl-3">
+                                                            <button
+                                                                onClick={() => setCurrentJD(prev => ({ ...prev, requirementTypes: { ...prev.requirementTypes, [idx]: 'checkbox' } }))}
+                                                                className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
+                                                                    itemType === 'checkbox'
+                                                                        ? 'bg-blue-600 border-blue-600 text-white'
+                                                                        : 'bg-white border-gray-200 text-gray-400 hover:border-blue-300'
+                                                                }`}
+                                                            >
+                                                                ✓ 체크형
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setCurrentJD(prev => ({ ...prev, requirementTypes: { ...prev.requirementTypes, [idx]: 'text' } }))}
+                                                                className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
+                                                                    itemType === 'text'
+                                                                        ? 'bg-blue-600 border-blue-600 text-white'
+                                                                        : 'bg-white border-gray-200 text-gray-400 hover:border-blue-300'
+                                                                }`}
+                                                            >
+                                                                ✎ 서술형
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }) : (
                                                 <p className="text-[13px] text-gray-400 p-3">아직 설정되지 않았습니다.</p>
                                             )
                                         )}
@@ -1338,38 +1483,142 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                     <div className="space-y-2">
                                         {isEditMode ? (
                                             editedJD.preferred && editedJD.preferred.length > 0 ? (
-                                                editedJD.preferred.map((item, idx) => (
-                                                    <div key={idx} className="flex items-start gap-2">
-                                                        <input
-                                                            type="text"
-                                                            value={item}
-                                                            onChange={(e) => updateArrayItem('preferred', idx, e.target.value)}
-                                                            placeholder={jdType === 'company' ? '우대 사항을 입력하세요' : '우대 체크리스트 항목을 입력하세요'}
-                                                            className="flex-1 px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
-                                                        />
-                                                        <button
-                                                            onClick={() => removeArrayItem('preferred', idx)}
-                                                            className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                        >
-                                                            ✕
-                                                        </button>
-                                                    </div>
-                                                ))
+                                                editedJD.preferred.map((item, idx) => {
+                                                    const itemType = editedJD.preferredTypes?.[idx] || 'checkbox';
+                                                    return (
+                                                        <div key={idx} className="space-y-1">
+                                                            <div className="flex items-start gap-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item}
+                                                                    onChange={(e) => updateArrayItem('preferred', idx, e.target.value)}
+                                                                    placeholder={jdType === 'company' ? '우대 사항을 입력하세요' : '우대 체크리스트 항목을 입력하세요'}
+                                                                    className="flex-1 px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
+                                                                />
+                                                                <button
+                                                                    onClick={() => removeArrayItem('preferred', idx)}
+                                                                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                                                                >
+                                                                    ✕
+                                                                </button>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 pl-1">
+                                                                <button
+                                                                    onClick={() => setEditedJD({ ...editedJD, preferredTypes: { ...editedJD.preferredTypes, [idx]: 'checkbox' } })}
+                                                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
+                                                                        itemType === 'checkbox'
+                                                                            ? 'bg-purple-600 border-purple-600 text-white'
+                                                                            : 'bg-white border-gray-200 text-gray-400 hover:border-purple-300'
+                                                                    }`}
+                                                                >
+                                                                    ✓ 체크형
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setEditedJD({ ...editedJD, preferredTypes: { ...editedJD.preferredTypes, [idx]: 'text' } })}
+                                                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
+                                                                        itemType === 'text'
+                                                                            ? 'bg-purple-600 border-purple-600 text-white'
+                                                                            : 'bg-white border-gray-200 text-gray-400 hover:border-purple-300'
+                                                                    }`}
+                                                                >
+                                                                    ✎ 서술형
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })
                                             ) : (
                                                 <p className="text-[13px] text-gray-400 p-3">항목을 추가하세요.</p>
                                             )
                                         ) : (
-                                            currentJD.preferred.length > 0 ? currentJD.preferred.map((item, idx) => (
-                                                <label key={idx} className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
-                                                    <input type="checkbox" className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
-                                                    <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
-                                                </label>
-                                            )) : (
+                                            currentJD.preferred.length > 0 ? currentJD.preferred.map((item, idx) => {
+                                                const itemType = currentJD.preferredTypes?.[idx] || 'checkbox';
+                                                return (
+                                                    <div key={idx} className="space-y-1">
+                                                        <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
+                                                            {itemType === 'checkbox' && <input type="checkbox" className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />}
+                                                            {itemType === 'text' && <span className="text-purple-400 mt-0.5 flex-shrink-0">•</span>}
+                                                            <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
+                                                        </label>
+                                                        <div className="flex items-center gap-1.5 pl-3">
+                                                            <button
+                                                                onClick={() => setCurrentJD(prev => ({ ...prev, preferredTypes: { ...prev.preferredTypes, [idx]: 'checkbox' } }))}
+                                                                className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
+                                                                    itemType === 'checkbox'
+                                                                        ? 'bg-purple-600 border-purple-600 text-white'
+                                                                        : 'bg-white border-gray-200 text-gray-400 hover:border-purple-300'
+                                                                }`}
+                                                            >
+                                                                ✓ 체크형
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setCurrentJD(prev => ({ ...prev, preferredTypes: { ...prev.preferredTypes, [idx]: 'text' } }))}
+                                                                className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
+                                                                    itemType === 'text'
+                                                                        ? 'bg-purple-600 border-purple-600 text-white'
+                                                                        : 'bg-white border-gray-200 text-gray-400 hover:border-purple-300'
+                                                                }`}
+                                                            >
+                                                                ✎ 서술형
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }) : (
                                                 <p className="text-[13px] text-gray-400 p-3">아직 설정되지 않았습니다.</p>
                                             )
                                         )}
                                     </div>
                                 </div>
+
+                                {/* 혜택 / 복리후생 */}
+                                {(currentJD.benefits && currentJD.benefits.length > 0 || isEditMode) && (
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center">
+                                            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{jdType === 'company' ? '복리후생 (BENEFITS)' : '활동 혜택 (BENEFITS)'}</h4>
+                                            {isEditMode && (
+                                                <button
+                                                    onClick={() => addArrayItem('benefits')}
+                                                    className="text-[11px] font-semibold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
+                                                >
+                                                    + 추가
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="space-y-2">
+                                            {isEditMode ? (
+                                                editedJD.benefits && editedJD.benefits.length > 0 ? (
+                                                    editedJD.benefits.map((item, idx) => (
+                                                        <div key={idx} className="flex items-start gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={item}
+                                                                onChange={(e) => updateArrayItem('benefits', idx, e.target.value)}
+                                                                placeholder={jdType === 'company' ? '복리후생을 입력하세요' : '활동 혜택을 입력하세요'}
+                                                                className="flex-1 px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
+                                                            />
+                                                            <button
+                                                                onClick={() => removeArrayItem('benefits', idx)}
+                                                                className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <p className="text-[13px] text-gray-400 p-3">항목을 추가하세요.</p>
+                                                )
+                                            ) : (
+                                                currentJD.benefits.map((item, idx) => (
+                                                    <div key={idx} className="flex items-start gap-3 px-3 py-2">
+                                                        <span className="text-orange-400 mt-0.5 flex-shrink-0">•</span>
+                                                        <span className="text-[13px] text-gray-700 leading-relaxed">{item}</span>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Footer */}
                                 <div className="pt-6 border-t border-gray-100 flex justify-end items-center gap-2">
@@ -1419,6 +1668,51 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                         
                         {/* 모달 본문 */}
                         <div className="p-6 overflow-y-auto max-h-[55vh]">
+                            {/* 배너 이미지 업로드 */}
+                            <div className="mb-6">
+                                <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">배너 이미지 (선택)</h3>
+                                <div className="space-y-3">
+                                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
+                                        {bannerImagePreview ? (
+                                            <div className="relative">
+                                                <img 
+                                                    src={bannerImagePreview} 
+                                                    alt="배너 미리보기" 
+                                                    className="w-full h-32 object-cover rounded-lg"
+                                                />
+                                                <button
+                                                    onClick={() => {
+                                                        setBannerImageFile(null);
+                                                        setBannerImagePreview(null);
+                                                    }}
+                                                    className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <label className="cursor-pointer flex flex-col items-center gap-2">
+                                                <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
+                                                    <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                    </svg>
+                                                </div>
+                                                <div className="text-center">
+                                                    <span className="text-[13px] font-medium text-blue-600">이미지 선택</span>
+                                                    <p className="text-[11px] text-gray-500 mt-1">5MB 이하의 이미지 파일</p>
+                                                </div>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={handleBannerImageChange}
+                                                    className="hidden"
+                                                />
+                                            </label>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            
                             {/* 필수 정보 */}
                             <div className="mb-6">
                                 <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">필수 정보</h3>

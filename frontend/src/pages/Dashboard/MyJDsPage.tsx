@@ -2,6 +2,7 @@ import { Badge } from '@/components/common/Badge';
 import { useState, useEffect } from 'react';
 import { auth } from '@/config/firebase';
 import { jdAPI, applicationAPI } from '@/services/api';
+import { X, Upload, Image } from 'lucide-react';
 
 interface MyJDsPageProps {
   onNavigate: (page: string) => void;
@@ -16,12 +17,20 @@ interface JDItem {
   createdAt: any;
   status?: string;
   recruitmentPeriod?: string;
+  bannerImage?: string;
 }
 
 export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
   const [jdList, setJdList] = useState<JDItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [applicantCounts, setApplicantCounts] = useState<Record<string, number>>({});
+  
+  // 이미지 편집 모달 상태
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingJD, setEditingJD] = useState<JDItem | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     const fetchJDs = async () => {
@@ -88,6 +97,72 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
     }
   };
 
+  const handleEditClick = (job: JDItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingJD(job);
+    setBannerPreview(job.bannerImage || null);
+    setShowEditModal(true);
+  };
+
+  const handleBannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('파일 크기는 5MB 이하여야 합니다.');
+        return;
+      }
+      
+      if (!file.type.startsWith('image/')) {
+        alert('이미지 파일만 업로드 가능합니다.');
+        return;
+      }
+      
+      setBannerFile(file);
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setBannerPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveBanner = async () => {
+    if (!editingJD || !bannerFile) {
+      alert('업로드할 이미지를 선택해주세요.');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      // 이미지 압축 후 base64 변환
+      const base64 = await jdAPI.compressImage(bannerFile, 800, 0.7);
+      
+      // JD 업데이트 (base64 직접 저장)
+      await jdAPI.update(editingJD.id, { bannerImage: base64 });
+      
+      // 로컬 상태 업데이트
+      setJdList(prevList => 
+        prevList.map(jd => 
+          jd.id === editingJD.id 
+            ? { ...jd, bannerImage: base64 }
+            : jd
+        )
+      );
+      
+      alert('배너 이미지가 변경되었습니다!');
+      setShowEditModal(false);
+      setBannerFile(null);
+      setBannerPreview(null);
+      setEditingJD(null);
+    } catch (error) {
+      console.error('배너 업로드 실패:', error);
+      alert('배너 업로드 중 오류가 발생했습니다.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6 max-w-[1200px] mx-auto">
@@ -143,7 +218,7 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
             dDay = diffDays > 0 ? `D-${diffDays}` : '마감';
           }
 
-          // 랜덤 이미지 선택
+          // 랜덤 이미지 선택 (배너 이미지가 없을 경우)
           const images = [
             'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=800',
             'https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&q=80&w=800',
@@ -151,6 +226,7 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
             'https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&q=80&w=800',
           ];
           const randomImage = images[Math.floor(Math.random() * images.length)];
+          const bannerImage = job.bannerImage || randomImage;
 
           return (
             <div 
@@ -161,7 +237,7 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
               {/* 이미지 영역 */}
               <div className="h-44 relative">
                 <img 
-                  src={randomImage} 
+                  src={bannerImage} 
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
                   alt={job.title}
                 />
@@ -171,15 +247,24 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
                     text={job.status === 'published' ? '채용중' : '임시저장'} 
                   />
                 </div>
-                <button
-                  onClick={(e) => handleDelete(job.id, e)}
-                  className="absolute top-3 right-3 p-1.5 bg-white/90 backdrop-blur-sm text-gray-600 hover:text-red-600 hover:bg-white rounded-lg transition-colors shadow-sm"
-                  title="삭제"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                <div className="absolute top-3 right-3 flex gap-2">
+                  <button
+                    onClick={(e) => handleEditClick(job, e)}
+                    className="p-1.5 bg-white/90 backdrop-blur-sm text-gray-600 hover:text-blue-600 hover:bg-white rounded-lg transition-colors shadow-sm"
+                    title="이미지 편집"
+                  >
+                    <Image className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={(e) => handleDelete(job.id, e)}
+                    className="p-1.5 bg-white/90 backdrop-blur-sm text-gray-600 hover:text-red-600 hover:bg-white rounded-lg transition-colors shadow-sm"
+                    title="삭제"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               {/* 콘텐츠 영역 */}
               <div className="p-5">
@@ -203,6 +288,110 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
             </div>
           );
         })}
+      </div>
+    )}
+    
+    {/* 이미지 편집 모달 */}
+    {showEditModal && editingJD && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-hidden shadow-2xl border border-gray-200">
+          {/* 모달 헤더 */}
+          <div className="px-6 py-5 border-b border-gray-100">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-[17px] font-bold text-gray-900">배너 이미지 변경</h2>
+                <p className="text-[12px] text-gray-500 mt-1">{editingJD.title}</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowEditModal(false);
+                  setBannerFile(null);
+                  setBannerPreview(null);
+                  setEditingJD(null);
+                }}
+                className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+          
+          {/* 모달 본문 */}
+          <div className="p-6 overflow-y-auto max-h-[60vh]">
+            <div className="space-y-4">
+              {/* 배너 이미지 미리보기 */}
+              {bannerPreview && (
+                <div className="relative">
+                  <img 
+                    src={bannerPreview} 
+                    alt="배너 미리보기" 
+                    className="w-full h-48 object-cover rounded-xl border-2 border-gray-200"
+                  />
+                  {bannerFile && (
+                    <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-medium">
+                      새 이미지
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* 파일 선택 */}
+              <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-blue-400 transition-colors">
+                <label className="cursor-pointer flex flex-col items-center gap-3">
+                  <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center">
+                    <Upload className="w-8 h-8 text-blue-500" />
+                  </div>
+                  <div className="text-center">
+                    <span className="text-[14px] font-semibold text-blue-600">
+                      {bannerFile ? '다른 이미지 선택' : '배너 이미지 선택'}
+                    </span>
+                    <p className="text-[12px] text-gray-500 mt-1">5MB 이하의 이미지 파일 (JPG, PNG, GIF)</p>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBannerFileChange}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+              
+              {bannerFile && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-[12px] text-blue-800">
+                    <span className="font-semibold">선택된 파일:</span> {bannerFile.name}
+                  </p>
+                  <p className="text-[11px] text-blue-600 mt-1">
+                    크기: {(bannerFile.size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* 모달 푸터 */}
+          <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+            <button
+              onClick={() => {
+                setShowEditModal(false);
+                setBannerFile(null);
+                setBannerPreview(null);
+                setEditingJD(null);
+              }}
+              className="px-5 py-2.5 rounded-xl text-[13px] font-bold text-gray-500 hover:bg-gray-100 transition-colors"
+              disabled={isUploading}
+            >
+              취소
+            </button>
+            <button
+              onClick={handleSaveBanner}
+              disabled={!bannerFile || isUploading}
+              className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-bold hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isUploading ? '업로드 중...' : '저장'}
+            </button>
+          </div>
+        </div>
       </div>
     )}
   </div>

@@ -38,6 +38,13 @@ def _initialize_firebase():
         
         storage_bucket = os.getenv("FIREBASE_STORAGE_BUCKET", "")
         
+        # Storage bucket이 설정되지 않았으면 project_id로 기본값 생성
+        if not storage_bucket:
+            project_id = os.getenv("FIREBASE_PROJECT_ID")
+            if project_id:
+                storage_bucket = f"{project_id}.appspot.com"
+                print(f"⚠️ FIREBASE_STORAGE_BUCKET not set, using default: {storage_bucket}")
+        
         cred = credentials.Certificate(firebase_config)
         
         init_options = {}
@@ -59,9 +66,14 @@ def get_db() -> firestore.Client:
 def get_bucket() -> Optional[Any]:
     """지연 초기화된 Storage 버킷 반환"""
     global _bucket
-    if _bucket is None and os.getenv("FIREBASE_STORAGE_BUCKET"):
+    if _bucket is None:
         _initialize_firebase()
-        _bucket = storage.bucket()
+        try:
+            _bucket = storage.bucket()
+            print(f"📦 Storage bucket initialized: {_bucket.name}")
+        except Exception as e:
+            print(f"⚠️ Storage bucket initialization failed: {e}")
+            _bucket = None
     return _bucket
 
 # 하위 호환성을 위한 별칭

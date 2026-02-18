@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from firebase_admin import firestore as firebase_firestore
+import uuid
+from datetime import timedelta, datetime
 
-from config.firebase import get_db
+from config.firebase import get_db, get_bucket
 from dependencies.auth import verify_token
 from models.schemas import JDCreate, JDUpdate
 
@@ -141,6 +143,68 @@ async def delete_jd(jd_id: str, user_data: dict = Depends(verify_token)):
 
         doc_ref.delete()
         return {"message": "JD deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/upload-banner")
+async def upload_banner_image(
+    file: UploadFile = File(...),
+    user_data: dict = Depends(verify_token)
+):
+    """JD 배너 이미지를 업로드하고 공개 URL을 반환합니다."""
+    try:
+        # 파일 유효성 검사
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(
+                status_code=400,
+                detail="Only image files are allowed"
+            )
+        
+        # 파일 크기 제한 (5MB)
+        contents = await file.read()
+        if len(contents) > 5 * 1024 * 1024:
+            raise HTTPException(
+                status_code=400,
+                detail="File size must be less than 5MB"
+            )
+        
+        # Firebase Storage 버킷 가져오기
+        bucket = get_bucket()
+        if not bucket:
+            raise HTTPException(
+                status_code=500,
+                detail="Storage not configured. Please set FIREBASE_STORAGE_BUCKET environment variable or restart the server."
+            )
+        
+        # 고유한 파일명 생성
+        file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+        unique_filename = f"jd-banners/{user_data['uid']}/{uuid.uuid4()}.{file_extension}"
+        
+        # Firebase Storage에 업로드
+        blob = bucket.blob(unique_filename)
+        
+        # 메타데이터에 토큰 추가 (공개 액세스용)
+        blob.metadata = {"firebaseStorageDownloadTokens": str(uuid.uuid4())}
+        
+        blob.upload_from_string(
+            contents,
+            content_type=file.content_type
+        )
+        
+        # 공개 URL 생성 (토큰 포함)
+        # Firebase Storage 공개 URL 형식
+        token = blob.metadata.get("firebaseStorageDownloadTokens")
+        public_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{unique_filename.replace('/', '%2F')}?alt=media&token={token}"
+        
+        return {
+            "url": public_url,
+            "filename": file.filename,
+            "message": "Banner uploaded successfully"
+        }
+        
     except HTTPException:
         raise
     except Exception as e:
