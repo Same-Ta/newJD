@@ -307,6 +307,14 @@ export const applicationAPI = {
     return await applicationAPI.getAll(false);
   },
 
+  // 이메일 알림 전송
+  sendEmailNotification: async (applicationIds: string[], subject: string, message: string, notificationType: 'accepted' | 'rejected') => {
+    return await apiRequest('/api/applications/send-email', {
+      method: 'POST',
+      body: JSON.stringify({ applicationIds, subject, message, notificationType }),
+    });
+  },
+
   uploadPortfolio: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);

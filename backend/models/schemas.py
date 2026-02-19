@@ -265,3 +265,19 @@ class GeminiChatRequest(BaseModel):
     message: str
     chatHistory: List[Dict[str, Any]] = []
     type: Optional[str] = "club"  # 'company' | 'club'
+
+
+# ==================== Email Notification Models ====================
+class EmailNotificationRequest(BaseModel):
+    """이메일 알림 전송 요청 모델"""
+    applicationIds: List[str] = Field(..., min_length=1, description="전송 대상 지원서 ID 목록")
+    subject: str = Field(..., min_length=1, description="이메일 제목")
+    message: str = Field(..., min_length=1, description="이메일 본문")
+    notificationType: str = Field(..., description="알림 유형: 'accepted' 또는 'rejected'")
+
+    @field_validator('notificationType')
+    @classmethod
+    def validate_notification_type(cls, v: str) -> str:
+        if v not in ('accepted', 'rejected'):
+            raise ValueError("notificationType must be 'accepted' or 'rejected'")
+        return v

@@ -378,16 +378,6 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
 
     return (
         <div className="flex flex-col h-full bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden max-w-[1200px] mx-auto" style={{ height: 'calc(100vh - 140px)'}}>
-            {/* Banner Image Section (if available, applicant view only) */}
-            {jdData.bannerImage && !isOwner && (
-                <div className="w-full h-48 overflow-hidden border-b border-gray-200">
-                    <img 
-                        src={jdData.bannerImage}
-                        alt="Job Banner" 
-                        className="w-full h-full object-cover"
-                    />
-                </div>
-            )}
             
             <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
                 {/* Left Profile Section */}

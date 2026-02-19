@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Filter, Download, X, Sparkles, FileText, Trash2, Search, Calendar, ChevronDown, Users } from 'lucide-react';
+import { Filter, Download, X, Sparkles, FileText, Trash2, Search, Calendar, ChevronDown, Users, Mail, Send, CheckCircle, XCircle } from 'lucide-react';
 import { auth } from '@/config/firebase';
 import { applicationAPI, jdAPI } from '@/services/api';
 import { AIAnalysisDashboard } from '@/components/ai/AIAnalysisComponents';
@@ -46,6 +46,15 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
     // 상태 드롭다운 메뉴
     const [openStatusDropdown, setOpenStatusDropdown] = useState<string | null>(null);
     const statusDropdownRef = useRef<HTMLDivElement>(null);
+
+    // 이메일 전송 디야로그 상태
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [emailType, setEmailType] = useState<'accepted' | 'rejected'>('accepted');
+    const [emailSubject, setEmailSubject] = useState('');
+    const [emailMessage, setEmailMessage] = useState('');
+    const [emailSending, setEmailSending] = useState(false);
+    const [emailResult, setEmailResult] = useState<{success: any[], failed: any[]} | null>(null);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         // 병렬 로딩으로 초기 로딩 속도 개선
@@ -413,6 +422,97 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
         setDateRange({start: '', end: ''});
     };
 
+    // 체크박스 토글
+    const toggleSelectId = (id: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedIds.size === filteredApplications.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(filteredApplications.map(a => a.id)));
+        }
+    };
+
+    // 이메일 전송 모달 열기
+    const openEmailModal = (type: 'accepted' | 'rejected') => {
+        const targetStatus = type === 'accepted' ? '합격' : '불합격';
+
+        // 항상 해당 상태(합격/불합격)인 지원자만 대상으로 삼음
+        // 체크박스로 선택된 항목이 있으면 그 중에서 해당 상태인 사람만, 없으면 전체 해당 상태 지원자
+        const statusFiltered = filteredApplications.filter(a => a.status === targetStatus);
+        const targetIds = selectedIds.size > 0
+            ? statusFiltered.filter(a => selectedIds.has(a.id)).map(a => a.id)
+            : statusFiltered.map(a => a.id);
+
+        // 선택된 항목이 있지만 해당 상태인 사람이 없으면 전체 해당 상태 지원자로 폴백
+        const finalIds = targetIds.length > 0 ? targetIds : statusFiltered.map(a => a.id);
+
+        if (finalIds.length === 0) {
+            alert(`${targetStatus} 상태의 지원자가 없습니다. \n먼저 상태를 '${targetStatus}'으로 변경해주세요.`);
+            return;
+        }
+
+        setSelectedIds(new Set(finalIds));
+        setEmailType(type);
+        setEmailSubject(type === 'accepted' ? '[합격] 지원 결과 안내' : '[불합격] 지원 결과 안내');
+        setEmailMessage(type === 'accepted'
+            ? '축하드립니다! 귀하의 지원이 합격되었음을 알려드립니다.\n\n앞으로의 일정은 추후 안내드리겠습니다.\n감사합니다.'
+            : '안녕하세요. 지원해 주셔서 감사합니다.\n\n안타깝게도 이번에는 함께하지 못하게 되었습니다.\n다음 기회에 다시 만나기를 바랍니다.\n감사합니다.'
+        );
+        setEmailResult(null);
+        setShowEmailModal(true);
+    };
+
+    // 이메일 전송 실행
+    const handleSendEmail = async () => {
+        if (!emailSubject.trim() || !emailMessage.trim()) {
+            alert('제목과 메시지를 모두 입력해주세요.');
+            return;
+        }
+
+        const targetIds = Array.from(selectedIds);
+        if (targetIds.length === 0) {
+            alert('전송할 대상이 없습니다.');
+            return;
+        }
+
+        const confirmed = confirm(
+            `${targetIds.length}명의 지원자에게 ${emailType === 'accepted' ? '합격' : '불합격'} 이메일을 전송합니다.\n계속하시겠습니까?`
+        );
+        if (!confirmed) return;
+
+        setEmailSending(true);
+        try {
+            const res = await applicationAPI.sendEmailNotification(
+                targetIds,
+                emailSubject,
+                emailMessage,
+                emailType
+            );
+            setEmailResult(res.results);
+
+            // 로컬 상태 업데이트
+            const newStatus = emailType === 'accepted' ? '합격' : '불합격';
+            setApplications(prev =>
+                prev.map(app =>
+                    targetIds.includes(app.id) ? { ...app, status: newStatus } : app
+                )
+            );
+        } catch (error: any) {
+            console.error('이메일 전송 실패:', error);
+            alert(`이메일 전송 중 오류가 발생했습니다: ${error.message}`);
+        } finally {
+            setEmailSending(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-96">
@@ -430,15 +530,29 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-4">
                     <div>
                         <h3 className="font-bold text-lg sm:text-xl text-gray-900 mb-1">지원자 관리</h3>
-                        <p className="text-sm text-gray-500">총 {filteredApplications.length}명의 지원자</p>
+                        <p className="text-sm text-gray-500">총 {filteredApplications.length}명의 지원자{selectedIds.size > 0 && ` · ${selectedIds.size}명 선택`}</p>
                     </div>
                     
+                    <div className="flex items-center gap-2 flex-wrap self-start">
                     <button 
                         onClick={handleExcelDownload}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm flex-shrink-0 self-start"
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm flex-shrink-0"
                     >
                         <Download size={18}/> 엑셀 다운로드
                     </button>
+                    <button 
+                        onClick={() => openEmailModal('accepted')}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm flex-shrink-0"
+                    >
+                        <Mail size={18}/> 합격 메일
+                    </button>
+                    <button 
+                        onClick={() => openEmailModal('rejected')}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors shadow-sm flex-shrink-0"
+                    >
+                        <Mail size={18}/> 불합격 메일
+                    </button>
+                    </div>
                 </div>
                 
                 {/* 필터 영역 */}
@@ -744,7 +858,15 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                                 onClick={() => handleApplicantClick(application)}
                             >
                                 <div className="flex items-start justify-between gap-3 mb-3">
-                                    <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedIds.has(application.id)}
+                                            onChange={() => toggleSelectId(application.id)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0 mt-0.5"
+                                        />
+                                        <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="font-bold text-[15px] text-gray-900 truncate">{application.applicantName}</span>
                                             <span className={`flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -763,6 +885,7 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                                             </span>
                                         </div>
                                         <p className="text-[12px] text-gray-500 truncate">{application.jdTitle}</p>
+                                        </div>
                                     </div>
                                     <div className="flex items-center gap-1 flex-shrink-0">
                                         <button
@@ -824,7 +947,7 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                 <table className="w-full text-left text-sm text-gray-600" style={{fontSize: '0.85rem'}}>
                     <thead className="bg-[#F8FAFC] text-[10px] uppercase font-bold text-gray-400 tracking-wider sticky top-0">
                         <tr>
-                            <th className="px-3 py-3 w-10"><input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"/></th>
+                            <th className="px-3 py-3 w-10"><input type="checkbox" checked={selectedIds.size === filteredApplications.length && filteredApplications.length > 0} onChange={toggleSelectAll} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"/></th>
                             <th className="px-3 py-3 whitespace-nowrap">이름</th>
                             <th className="px-3 py-3 whitespace-nowrap">이메일</th>
                             <th className="px-3 py-3 whitespace-nowrap">전화번호</th>
@@ -849,7 +972,7 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                         ) : (
                             filteredApplications.map((application) => (
                                 <tr key={application.id} className="hover:bg-blue-50/30 transition-colors group cursor-pointer">
-                                    <td className="px-3 py-3"><input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" onClick={(e) => e.stopPropagation()}/></td>
+                                    <td className="px-3 py-3"><input type="checkbox" checked={selectedIds.has(application.id)} onChange={() => toggleSelectId(application.id)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" onClick={(e) => e.stopPropagation()}/></td>
                                     <td className="px-3 py-3 whitespace-nowrap" onClick={() => handleApplicantClick(application)}>
                                         <div className="font-bold text-[13px] text-gray-900">
                                             {application.applicantName}
@@ -1060,6 +1183,190 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                                 <button onClick={closeModal} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
                                     닫기
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 이메일 전송 모달 */}
+            {showEmailModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !emailSending && setShowEmailModal(false)}>
+                    <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        {/* 모달 헤더 */}
+                        <div className={`p-6 text-white ${emailType === 'accepted' ? 'bg-gradient-to-r from-green-600 to-green-500' : 'bg-gradient-to-r from-red-600 to-red-500'}`}>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h2 className="text-xl font-bold mb-1 flex items-center gap-2">
+                                        <Mail size={22} />
+                                        {emailType === 'accepted' ? '합격 통보 메일 전송' : '불합격 통보 메일 전송'}
+                                    </h2>
+                                    <p className="text-sm opacity-80">
+                                        {selectedIds.size}명의 지원자에게 이메일을 전송합니다
+                                    </p>
+                                </div>
+                                <button onClick={() => !emailSending && setShowEmailModal(false)} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+                                    <X size={22} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* 모달 본문 */}
+                        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+                            {emailResult ? (
+                                /* 전송 결과 화면 */
+                                <div className="space-y-4">
+                                    <div className="text-center py-4">
+                                        <div className="text-4xl mb-3">✉️</div>
+                                        <h3 className="text-lg font-bold text-gray-900 mb-1">전송 완료</h3>
+                                        <p className="text-sm text-gray-500">
+                                            {emailResult.success.length}건 성공 / {emailResult.failed.length}건 실패
+                                        </p>
+                                    </div>
+
+                                    {emailResult.success.length > 0 && (
+                                        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                                            <h4 className="text-sm font-bold text-green-800 mb-2 flex items-center gap-1">
+                                                <CheckCircle size={16} /> 전송 성공
+                                            </h4>
+                                            <div className="space-y-1">
+                                                {emailResult.success.map((s: any, i: number) => (
+                                                    <p key={i} className="text-sm text-green-700">{s.name} ({s.email})</p>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {emailResult.failed.length > 0 && (
+                                        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                                            <h4 className="text-sm font-bold text-red-800 mb-2 flex items-center gap-1">
+                                                <XCircle size={16} /> 전송 실패
+                                            </h4>
+                                            <div className="space-y-1">
+                                                {emailResult.failed.map((f: any, i: number) => (
+                                                    <p key={i} className="text-sm text-red-700">ID: {f.id} - {f.reason}</p>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                /* 메시지 입력 화면 */
+                                <div className="space-y-5">
+                                    {/* 수신자 목록 */}
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">수신자 ({selectedIds.size}명)</label>
+                                        <div className="bg-gray-50 rounded-xl p-3 max-h-[120px] overflow-y-auto border border-gray-200">
+                                            <div className="flex flex-wrap gap-2">
+                                                {filteredApplications
+                                                    .filter(a => selectedIds.has(a.id))
+                                                    .map(a => (
+                                                        <span key={a.id} className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-gray-200 rounded-full text-xs text-gray-700 shadow-sm">
+                                                            {a.applicantName}
+                                                            <span className="text-gray-400">({a.applicantEmail})</span>
+                                                            <button
+                                                                onClick={() => toggleSelectId(a.id)}
+                                                                className="ml-0.5 text-gray-400 hover:text-red-500"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </span>
+                                                    ))
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 제목 */}
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">이메일 제목</label>
+                                        <input
+                                            type="text"
+                                            value={emailSubject}
+                                            onChange={(e) => setEmailSubject(e.target.value)}
+                                            placeholder="이메일 제목을 입력하세요"
+                                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                        />
+                                    </div>
+
+                                    {/* 메시지 본문 */}
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">메시지 내용</label>
+                                        <textarea
+                                            value={emailMessage}
+                                            onChange={(e) => setEmailMessage(e.target.value)}
+                                            placeholder="지원자에게 전달할 메시지를 입력하세요..."
+                                            rows={8}
+                                            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-none leading-relaxed"
+                                        />
+                                        <p className="mt-1 text-xs text-gray-400">
+                                            * 지원자 이름은 이메일에 자동으로 포함됩니다.
+                                        </p>
+                                    </div>
+
+                                    {/* 미리보기 */}
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">미리보기</label>
+                                        <div className={`rounded-xl border-2 overflow-hidden ${emailType === 'accepted' ? 'border-green-200' : 'border-red-200'}`}>
+                                            <div className={`px-4 py-3 text-center ${emailType === 'accepted' ? 'bg-green-500' : 'bg-red-500'} text-white`}>
+                                                <div className="text-2xl mb-1">{emailType === 'accepted' ? '🎉' : '📋'}</div>
+                                                <p className="font-bold text-sm">지원 결과 안내</p>
+                                            </div>
+                                            <div className="p-4 bg-white">
+                                                <p className="text-sm text-gray-800 mb-2">안녕하세요, <strong>지원자</strong>님.</p>
+                                                <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold mb-3 ${emailType === 'accepted' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                    {emailType === 'accepted' ? '합격' : '불합격'}
+                                                </span>
+                                                <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">{emailMessage}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 모달 푸터 */}
+                        <div className="border-t border-gray-100 p-4 bg-gray-50">
+                            <div className="flex justify-end items-center gap-3">
+                                {emailResult ? (
+                                    <button
+                                        onClick={() => { setShowEmailModal(false); setEmailResult(null); setSelectedIds(new Set()); }}
+                                        className="px-6 py-2.5 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-900 transition-colors"
+                                    >
+                                        닫기
+                                    </button>
+                                ) : (
+                                    <>
+                                        <button
+                                            onClick={() => setShowEmailModal(false)}
+                                            disabled={emailSending}
+                                            className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
+                                        >
+                                            취소
+                                        </button>
+                                        <button
+                                            onClick={handleSendEmail}
+                                            disabled={emailSending || selectedIds.size === 0}
+                                            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 text-white ${
+                                                emailType === 'accepted'
+                                                    ? 'bg-green-600 hover:bg-green-700'
+                                                    : 'bg-red-600 hover:bg-red-700'
+                                            }`}
+                                        >
+                                            {emailSending ? (
+                                                <>
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                    전송 중...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Send size={16} />
+                                                    메일 전송하기
+                                                </>
+                                            )}
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>

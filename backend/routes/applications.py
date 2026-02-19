@@ -4,14 +4,172 @@ from firebase_admin import firestore as firebase_firestore
 import json
 import uuid
 import io
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import google.generativeai as genai
 
 from config.firebase import get_db, bucket
 import os
 from dependencies.auth import verify_token
-from models.schemas import ApplicationCreate, ApplicationUpdate, ApplicationResponse, AIAnalysisRequest, SaveAnalysisRequest
+from models.schemas import ApplicationCreate, ApplicationUpdate, ApplicationResponse, AIAnalysisRequest, SaveAnalysisRequest, EmailNotificationRequest
 
 router = APIRouter(prefix="/api/applications", tags=["Applications"])
+
+
+def _send_email_smtp(to_email: str, subject: str, html_body: str):
+    """SMTP를 사용하여 이메일을 전송합니다."""
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER", "")
+    smtp_password = os.getenv("SMTP_PASSWORD", "")
+    smtp_from = os.getenv("SMTP_FROM", smtp_user)
+
+    if not smtp_user or not smtp_password:
+        raise ValueError("SMTP 설정이 되어 있지 않습니다. SMTP_USER와 SMTP_PASSWORD 환경변수를 설정해주세요.")
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = smtp_from
+    msg["To"] = to_email
+
+    html_part = MIMEText(html_body, "html", "utf-8")
+    msg.attach(html_part)
+
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+        server.login(smtp_user, smtp_password)
+        server.sendmail(smtp_from, to_email, msg.as_string())
+
+
+def _build_email_html(applicant_name: str, message: str, notification_type: str) -> str:
+    """이메일 HTML 템플릿을 생성합니다."""
+    is_accepted = notification_type == "accepted"
+    accent_color = "#16a34a" if is_accepted else "#dc2626"
+    badge_bg = "#dcfce7" if is_accepted else "#fee2e2"
+    badge_text = "합격" if is_accepted else "불합격"
+    icon = "🎉" if is_accepted else "📋"
+
+    # 메시지 내 줄바꿈을 <br>로 변환
+    formatted_message = message.replace("\n", "<br>")
+
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <!-- Header -->
+        <tr>
+          <td style="background:{accent_color};padding:32px 40px;text-align:center;">
+            <div style="font-size:36px;margin-bottom:8px;">{icon}</div>
+            <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;">지원 결과 안내</h1>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:36px 40px;">
+            <p style="font-size:16px;color:#1e293b;margin:0 0 8px;">
+              안녕하세요, <strong>{applicant_name}</strong>님.
+            </p>
+            <div style="display:inline-block;padding:4px 16px;background:{badge_bg};color:{accent_color};border-radius:20px;font-size:13px;font-weight:700;margin:12px 0 24px;">
+              {badge_text}
+            </div>
+            <div style="font-size:15px;line-height:1.8;color:#334155;white-space:pre-line;">
+              {formatted_message}
+            </div>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="padding:24px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#94a3b8;">본 메일은 Winnow를 통해 발송되었습니다.</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
+@router.post("/send-email")
+async def send_email_notifications(request: EmailNotificationRequest, user_data: dict = Depends(verify_token)):
+    """합격/불합격 이메일 알림을 전송합니다."""
+    try:
+        uid = user_data['uid']
+        results = {"success": [], "failed": []}
+
+        for app_id in request.applicationIds:
+            try:
+                doc = get_db().collection('applications').document(app_id).get()
+                if not doc.exists:
+                    results["failed"].append({"id": app_id, "reason": "지원서를 찾을 수 없습니다."})
+                    continue
+
+                app_data = doc.to_dict()
+
+                # 권한 확인
+                is_authorized = app_data.get('recruiterId') == uid
+                if not is_authorized and app_data.get('jdId'):
+                    jd_doc = get_db().collection('jds').document(app_data['jdId']).get()
+                    if jd_doc.exists:
+                        jd_data = jd_doc.to_dict()
+                        is_authorized = uid in (jd_data.get('collaboratorIds') or [])
+                if not is_authorized:
+                    results["failed"].append({"id": app_id, "reason": "권한이 없습니다."})
+                    continue
+
+                # 복호화하여 이메일 주소 가져오기
+                app_data['applicationId'] = doc.id
+                try:
+                    decrypted_app = ApplicationResponse(**app_data)
+                    email = decrypted_app.applicantEmail
+                    name = decrypted_app.applicantName
+                except Exception:
+                    email = app_data.get('applicantEmail', '')
+                    name = app_data.get('applicantName', '지원자')
+
+                if not email:
+                    results["failed"].append({"id": app_id, "reason": "이메일 주소가 없습니다."})
+                    continue
+
+                # HTML 이메일 생성 및 전송
+                html_body = _build_email_html(name, request.message, request.notificationType)
+                _send_email_smtp(email, request.subject, html_body)
+
+                # 전송 기록 저장
+                new_status = "합격" if request.notificationType == "accepted" else "불합격"
+                doc.reference.update({
+                    'emailSentAt': firebase_firestore.SERVER_TIMESTAMP,
+                    'emailType': request.notificationType,
+                    'status': new_status,
+                    'updatedAt': firebase_firestore.SERVER_TIMESTAMP
+                })
+
+                results["success"].append({"id": app_id, "email": email, "name": name})
+                print(f"✅ Email sent to {email} ({name})")
+
+            except ValueError as ve:
+                results["failed"].append({"id": app_id, "reason": str(ve)})
+            except Exception as e:
+                print(f"❌ Failed to send email for {app_id}: {str(e)}")
+                results["failed"].append({"id": app_id, "reason": str(e)})
+
+        total = len(request.applicationIds)
+        success_count = len(results["success"])
+
+        return {
+            "message": f"{total}건 중 {success_count}건 전송 완료",
+            "results": results
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("")
