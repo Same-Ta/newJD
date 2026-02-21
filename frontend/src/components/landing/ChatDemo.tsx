@@ -112,8 +112,7 @@ export const ChatDemo = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [jd, setJd] = useState<DemoJD>({ ...INITIAL_JD });
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
-  const [height, setHeight] = useState(typeof window !== 'undefined' && window.innerWidth < 768 ? 480 : 580);
-  const [isResizing, setIsResizing] = useState(false);
+  const [height] = useState(typeof window !== 'undefined' && window.innerWidth < 768 ? 480 : 750);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -201,40 +200,11 @@ export const ChatDemo = () => {
     return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
   };
 
-  /* 높이 조절 핸들러 */
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-  }, []);
 
-  useEffect(() => {
-    if (!isResizing) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const newHeight = e.clientY - rect.top;
-      if (newHeight >= 400 && newHeight <= 900) {
-        setHeight(newHeight);
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizing]);
 
   /* ─────────── Render ─────────── */
   return (
-    <div className="relative w-full select-none">
+    <div className="relative w-full select-none pointer-events-none">
       <div
         ref={containerRef}
         className="flex bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-3xl border border-gray-200/80 shadow-2xl overflow-hidden w-full gap-0 md:gap-4"
@@ -536,16 +506,6 @@ export const ChatDemo = () => {
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
-      </div>
-
-      {/* 높이 조절 핸들 (desktop only) */}
-      <div
-        className={`hidden md:flex absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize items-center justify-center group ${
-          isResizing ? 'bg-blue-200/50' : 'hover:bg-blue-100/30'
-        } transition-colors`}
-        onMouseDown={handleMouseDown}
-      >
-        <div className="w-12 h-1 bg-gray-300 rounded-full group-hover:bg-blue-500 transition-colors"></div>
       </div>
     </div>
   );

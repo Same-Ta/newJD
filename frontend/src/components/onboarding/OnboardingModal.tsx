@@ -656,9 +656,7 @@ export const OnboardingModal = ({ onClose, onStartTutorial, onDontShowAgain }: O
         <div className="px-8 pt-6 pb-2">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-extrabold text-sm shadow-md shadow-blue-500/20">
-                W
-              </div>
+              <img src="/logo.png" alt="WINNOW" className="w-8 h-8 object-contain" />
               <span className="font-extrabold text-lg text-gray-900 tracking-tight">WINNOW 시작 가이드</span>
             </div>
             <span className="text-[12px] text-gray-400 font-semibold">
