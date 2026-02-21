@@ -197,7 +197,7 @@ export const AIEvaluationDemo = () => {
           evaluateOne(0);
         }
       },
-      { threshold: 0.2 },
+      { threshold: 0.05, rootMargin: '0px 0px 100px 0px' },
     );
     obs.observe(el);
     return () => {

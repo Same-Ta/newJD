@@ -30,7 +30,7 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
   }, [handleScroll]);
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 overflow-y-auto scrollbar-hide" style={{ fontFamily: FONTS.sans, zoom: 0.8 }}>
+    <div className="min-h-screen bg-white text-gray-900 overflow-y-auto scrollbar-hide snap-y snap-proximity" style={{ fontFamily: FONTS.sans, zoom: 0.8 }}>
       {/* Scroll Progress Bar */}
       <div className="fixed top-0 left-0 w-full h-1 bg-gray-100 z-[60]">
         <div 
@@ -106,7 +106,7 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
       </section>
 
       {/* Interactive Chat Demo Section */}
-      <section id="demos" className="scroll-mt-20 py-16 md:py-28 px-4 bg-[#F1F5F9] relative overflow-hidden">
+      <section id="demos" className="scroll-mt-20 py-16 md:py-28 px-4 bg-[#F1F5F9] relative overflow-hidden snap-start">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[400px] bg-blue-100/40 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
         <div className="max-w-[1100px] mx-auto">
           <div className="text-center mb-14">
@@ -121,12 +121,19 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
               실제 동작을 확인해보세요.
             </p>
           </div>
-          <ChatDemo />
+          <div className="pointer-events-none">
+            <div className="hidden md:block" style={{ transform: 'scale(0.7)', transformOrigin: 'top center', height: '480px' }}>
+              <ChatDemo />
+            </div>
+            <div className="md:hidden" style={{ transform: 'scale(0.55)', transformOrigin: 'top left', height: '280px' }}>
+              <ChatDemo />
+            </div>
+          </div>
         </div>
       </section>
 
       {/* Application Flow Demo Section */}
-      <section className="py-16 md:py-28 px-4 bg-[#F1F5F9] relative overflow-hidden">
+      <section className="py-16 md:py-28 px-4 bg-[#F1F5F9] relative overflow-hidden snap-start">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[400px] bg-purple-100/30 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
         <div className="max-w-[1100px] mx-auto">
           <div className="text-center mb-14">
@@ -154,7 +161,7 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
       </section>
 
       {/* AI Evaluation Demo Section */}
-      <section className="py-16 md:py-28 px-4 bg-[#F1F5F9] relative overflow-hidden">
+      <section className="py-16 md:py-28 px-4 bg-[#F1F5F9] relative overflow-hidden snap-start">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[400px] bg-green-100/30 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
         <div className="max-w-[1100px] mx-auto">
           <div className="text-center mb-14">
@@ -169,7 +176,12 @@ export const LandingPage = ({ onLogin }: LandingPageProps) => {
             </p>
           </div>
           <div className="pointer-events-none">
-                <AIEvaluationDemo />
+            <div className="hidden md:block" style={{ transform: 'scale(0.7)', transformOrigin: 'top center', height: '520px' }}>
+              <AIEvaluationDemo />
+            </div>
+            <div className="md:hidden" style={{ transform: 'scale(0.55)', transformOrigin: 'top left', height: '400px' }}>
+              <AIEvaluationDemo />
+            </div>
           </div>
         </div>
       </section>

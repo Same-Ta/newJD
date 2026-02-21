@@ -188,9 +188,9 @@ export const ChatDemo = () => {
     const obs = new IntersectionObserver(([e]) => {
       if (e.isIntersecting && !hasStarted.current) {
         hasStarted.current = true;
-        addTimeout(() => play(0), 600);
+        addTimeout(() => play(0), 200);
       }
-    }, { threshold: 0.2 });
+    }, { threshold: 0.05, rootMargin: '0px 0px 100px 0px' });
     obs.observe(el);
     return () => { obs.disconnect(); clearAll(); };
   }, [addTimeout, clearAll, play]);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, XCircle, TrendingUp, Clock, Users, FileText } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 /* ───────── 카운트업 애니메이션 훅 ───────── */
 function useCountUp(end: number, duration = 2000, suffix = '') {
@@ -58,10 +58,10 @@ function ImpactStatsBand() {
   const s4 = useCountUp(95, 2200);
 
   const stats = [
-    { ...s1, label: '1차 스크리닝 효율', unit: '%', icon: <TrendingUp size={22} strokeWidth={2} />, accent: 'text-blue-400' },
-    { ...s2, label: '채용 리드타임 단축', unit: '%', icon: <Clock size={22} strokeWidth={2} />, accent: 'text-purple-400' },
-    { ...s3, label: '공고 작성 시간', unit: '분', icon: <FileText size={22} strokeWidth={2} />, accent: 'text-emerald-400' },
-    { ...s4, label: '사용자 만족도', unit: '%', icon: <Users size={22} strokeWidth={2} />, accent: 'text-amber-400' },
+    { ...s1, label: '1차 스크리닝 효율', unit: '%', accent: 'text-blue-400' },
+    { ...s2, label: '채용 리드타임 단축', unit: '%', accent: 'text-purple-400' },
+    { ...s3, label: '공고 작성 시간', unit: '분', accent: 'text-emerald-400' },
+    { ...s4, label: '사용자 만족도', unit: '%', accent: 'text-amber-400' },
   ];
 
   return (
@@ -93,9 +93,6 @@ function ImpactStatsBand() {
               ref={stat.ref}
               className="group relative bg-slate-900/60 border border-slate-800 rounded-2xl p-6 md:p-8 text-center hover:border-slate-700 transition-all duration-500"
             >
-              <div className={`${stat.accent} mb-5`}>
-                {stat.icon}
-              </div>
               <div className="text-4xl md:text-5xl font-black text-white mb-2 tabular-nums">
                 {stat.count}<span className={`text-2xl md:text-3xl ${stat.accent}`}>{stat.unit}</span>
               </div>

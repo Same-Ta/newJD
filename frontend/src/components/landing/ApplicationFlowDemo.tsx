@@ -244,10 +244,10 @@ export const ApplicationFlowDemo = () => {
                 }, 600);
               }, 600);
             });
-          }, 1000);
-        }, 1200);
-      }, 800);
-    }, 1200);
+          }, 800);
+        }, 900);
+      }, 600);
+    }, 400);
   }, [addTimeout, clearAll, resetAll, typeText]);
 
   /* ─── IntersectionObserver ─── */
@@ -261,7 +261,7 @@ export const ApplicationFlowDemo = () => {
           runSequence();
         }
       },
-      { threshold: 0.2 },
+      { threshold: 0.05, rootMargin: '0px 0px 100px 0px' },
     );
     obs.observe(el);
     return () => {
@@ -687,7 +687,7 @@ export const ApplicationFlowDemo = () => {
 
   /* ═══════════════════════════════════════════ */
   return (
-    <div ref={containerRef} className="relative w-full h-[550px] pointer-events-none select-none">
+    <div ref={containerRef} className="relative w-full h-[620px] pointer-events-none select-none">
       {renderPublishView()}
       {renderApplicationForm()}
       {renderApplicantTable()}
