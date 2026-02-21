@@ -43,7 +43,7 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
     const fetchApplication = async () => {
         // 데모 모드: 데모 데이터 사용
         if (isDemoMode || applicationId.startsWith('demo-')) {
-            const demoApp = DEMO_APPLICANTS.find(a => a.id === applicationId) ?? DEMO_APPLICANTS[0];
+            const demoApp = DEMO_APPLICANTS.find((a: (typeof DEMO_APPLICANTS)[0]) => a.id === applicationId) ?? DEMO_APPLICANTS[0];
             setApplication(demoApp as any);
             setJdType('company');
             setSummaryLoading(true);

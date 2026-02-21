@@ -594,66 +594,168 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                         )}
 
                         {/* 모집 일정 및 정보 (동아리 모드) */}
-                        {(jdData.type || 'club') === 'club' && (
-                            jdData.recruitmentPeriod || jdData.recruitmentTarget || jdData.recruitmentCount ||
-                            (jdData.recruitmentProcess && jdData.recruitmentProcess.length > 0) ||
-                            jdData.activitySchedule || jdData.membershipFee
-                        ) && (
-                            <div className="space-y-3">
-                                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-lg p-5">
-                                    <h4 className="text-[11px] font-bold text-green-600 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                                        </svg>
-                                        모집 일정 및 정보
-                                    </h4>
-                                    <div className="space-y-3">
-                                        {jdData.recruitmentPeriod && (
-                                            <div className="flex items-start gap-3">
-                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 기간</span>
-                                                <span className="text-[13px] text-gray-700">{jdData.recruitmentPeriod}</span>
+                        {((jdData.type || 'club') === 'club' || isEditing) && (
+                            isEditing ? (
+                                <div className="space-y-3">
+                                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-lg p-5">
+                                        <h4 className="text-[11px] font-bold text-green-600 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                                            </svg>
+                                            모집 일정 및 정보
+                                        </h4>
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0">모집 기간</span>
+                                                <input
+                                                    type="text"
+                                                    value={editedData?.recruitmentPeriod || ''}
+                                                    onChange={(e) => updateEditedField('recruitmentPeriod', e.target.value)}
+                                                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-green-500"
+                                                    placeholder="예: 2025.03.01 ~ 2025.03.15"
+                                                />
                                             </div>
-                                        )}
-                                        {jdData.recruitmentTarget && (
-                                            <div className="flex items-start gap-3">
-                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 대상</span>
-                                                <span className="text-[13px] text-gray-700">{jdData.recruitmentTarget}</span>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0">모집 대상</span>
+                                                <input
+                                                    type="text"
+                                                    value={editedData?.recruitmentTarget || ''}
+                                                    onChange={(e) => updateEditedField('recruitmentTarget', e.target.value)}
+                                                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-green-500"
+                                                    placeholder="예: 전공 무관 대학생"
+                                                />
                                             </div>
-                                        )}
-                                        {jdData.recruitmentCount && (
-                                            <div className="flex items-start gap-3">
-                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 인원</span>
-                                                <span className="text-[13px] text-gray-700">{jdData.recruitmentCount}</span>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0">모집 인원</span>
+                                                <input
+                                                    type="text"
+                                                    value={editedData?.recruitmentCount || ''}
+                                                    onChange={(e) => updateEditedField('recruitmentCount', e.target.value)}
+                                                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-green-500"
+                                                    placeholder="예: 10명"
+                                                />
                                             </div>
-                                        )}
-                                        {jdData.recruitmentProcess && jdData.recruitmentProcess.length > 0 && (
                                             <div className="flex items-start gap-3">
-                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 절차</span>
-                                                <span className="text-[13px] text-gray-700">
-                                                    {jdData.recruitmentProcess.map((step, i) => (
-                                                        <span key={i}>
-                                                            {i > 0 && <span className="text-green-400 mx-1">→</span>}
-                                                            {step}
-                                                        </span>
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-2">모집 절차</span>
+                                                <div className="flex-1 space-y-2">
+                                                    {((editedData?.recruitmentProcess && editedData.recruitmentProcess.length > 0) ? editedData.recruitmentProcess : ['']).map((proc, i) => (
+                                                        <div key={i} className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={proc}
+                                                                onChange={(e) => {
+                                                                    const arr = [...((editedData?.recruitmentProcess && editedData.recruitmentProcess.length > 0) ? editedData.recruitmentProcess : [''])];
+                                                                    arr[i] = e.target.value;
+                                                                    updateEditedField('recruitmentProcess', arr);
+                                                                }}
+                                                                className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-green-500"
+                                                                placeholder={`절차 ${i + 1} 예: 서류 심사`}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const arr = [...((editedData?.recruitmentProcess && editedData.recruitmentProcess.length > 0) ? editedData.recruitmentProcess : [''])];
+                                                                    arr.splice(i, 1);
+                                                                    updateEditedField('recruitmentProcess', arr.length > 0 ? arr : ['']);
+                                                                }}
+                                                                className="px-2 py-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-xs transition-colors"
+                                                            >✕</button>
+                                                        </div>
                                                     ))}
-                                                </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const arr = [...(editedData?.recruitmentProcess || []), ''];
+                                                            updateEditedField('recruitmentProcess', arr);
+                                                        }}
+                                                        className="text-[11px] text-green-600 hover:text-green-700 font-medium"
+                                                    >+ 절차 추가</button>
+                                                </div>
                                             </div>
-                                        )}
-                                        {jdData.activitySchedule && (
-                                            <div className="flex items-start gap-3">
-                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">활동 일정</span>
-                                                <span className="text-[13px] text-gray-700">{jdData.activitySchedule}</span>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0">활동 일정</span>
+                                                <input
+                                                    type="text"
+                                                    value={editedData?.activitySchedule || ''}
+                                                    onChange={(e) => updateEditedField('activitySchedule', e.target.value)}
+                                                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-green-500"
+                                                    placeholder="예: 매주 수요일 오후 7시"
+                                                />
                                             </div>
-                                        )}
-                                        {jdData.membershipFee && (
-                                            <div className="flex items-start gap-3">
-                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">회비</span>
-                                                <span className="text-[13px] text-gray-700">{jdData.membershipFee}</span>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0">회비</span>
+                                                <input
+                                                    type="text"
+                                                    value={editedData?.membershipFee || ''}
+                                                    onChange={(e) => updateEditedField('membershipFee', e.target.value)}
+                                                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-green-500"
+                                                    placeholder="예: 월 1만원"
+                                                />
                                             </div>
-                                        )}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            ) : (
+                                (jdData.recruitmentPeriod || jdData.recruitmentTarget || jdData.recruitmentCount ||
+                                (jdData.recruitmentProcess && jdData.recruitmentProcess.length > 0) ||
+                                jdData.activitySchedule || jdData.membershipFee) && (
+                                    <div className="space-y-3">
+                                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-lg p-5">
+                                            <h4 className="text-[11px] font-bold text-green-600 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                                                </svg>
+                                                모집 일정 및 정보
+                                            </h4>
+                                            <div className="space-y-3">
+                                                {jdData.recruitmentPeriod && (
+                                                    <div className="flex items-start gap-3">
+                                                        <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 기간</span>
+                                                        <span className="text-[13px] text-gray-700">{jdData.recruitmentPeriod}</span>
+                                                    </div>
+                                                )}
+                                                {jdData.recruitmentTarget && (
+                                                    <div className="flex items-start gap-3">
+                                                        <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 대상</span>
+                                                        <span className="text-[13px] text-gray-700">{jdData.recruitmentTarget}</span>
+                                                    </div>
+                                                )}
+                                                {jdData.recruitmentCount && (
+                                                    <div className="flex items-start gap-3">
+                                                        <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 인원</span>
+                                                        <span className="text-[13px] text-gray-700">{jdData.recruitmentCount}</span>
+                                                    </div>
+                                                )}
+                                                {jdData.recruitmentProcess && jdData.recruitmentProcess.length > 0 && (
+                                                    <div className="flex items-start gap-3">
+                                                        <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 절차</span>
+                                                        <span className="text-[13px] text-gray-700">
+                                                            {jdData.recruitmentProcess.map((step, i) => (
+                                                                <span key={i}>
+                                                                    {i > 0 && <span className="text-green-400 mx-1">→</span>}
+                                                                    {step}
+                                                                </span>
+                                                            ))}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {jdData.activitySchedule && (
+                                                    <div className="flex items-start gap-3">
+                                                        <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">활동 일정</span>
+                                                        <span className="text-[13px] text-gray-700">{jdData.activitySchedule}</span>
+                                                    </div>
+                                                )}
+                                                {jdData.membershipFee && (
+                                                    <div className="flex items-start gap-3">
+                                                        <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">회비</span>
+                                                        <span className="text-[13px] text-gray-700">{jdData.membershipFee}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            )
                         )}
 
                         {/* VISION & MISSION */}
