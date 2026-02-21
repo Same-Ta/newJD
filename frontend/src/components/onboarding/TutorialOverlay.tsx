@@ -313,6 +313,7 @@ export default function TutorialOverlay({ onComplete, onNavigate }: TutorialOver
 
   // ── 완료 화면 ──
   if (showComplete) {
+    // step은 이 블록에서 사용하지 않으므로 undefined여도 무방
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
         <motion.div
@@ -373,6 +374,9 @@ export default function TutorialOverlay({ onComplete, onNavigate }: TutorialOver
       </div>
     );
   }
+
+  // showComplete가 false인 경우 step은 반드시 정의됨 (위 가드 통과) — TypeScript narrowing
+  if (!step) return null;
 
   return (
     <>
