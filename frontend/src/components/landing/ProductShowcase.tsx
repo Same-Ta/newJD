@@ -58,10 +58,10 @@ function ImpactStatsBand() {
   const s4 = useCountUp(95, 2200);
 
   const stats = [
-    { ...s1, label: '1차 스크리닝 효율', unit: '%', icon: <TrendingUp size={20} />, color: 'from-blue-500 to-blue-600' },
-    { ...s2, label: '채용 리드타임 단축', unit: '%', icon: <Clock size={20} />, color: 'from-purple-500 to-purple-600' },
-    { ...s3, label: '공고 작성 시간', unit: '분', icon: <FileText size={20} />, color: 'from-emerald-500 to-emerald-600' },
-    { ...s4, label: '사용자 만족도', unit: '%', icon: <Users size={20} />, color: 'from-amber-500 to-amber-600' },
+    { ...s1, label: '1차 스크리닝 효율', unit: '%', icon: <TrendingUp size={22} strokeWidth={2} />, accent: 'text-blue-400' },
+    { ...s2, label: '채용 리드타임 단축', unit: '%', icon: <Clock size={22} strokeWidth={2} />, accent: 'text-purple-400' },
+    { ...s3, label: '공고 작성 시간', unit: '분', icon: <FileText size={22} strokeWidth={2} />, accent: 'text-emerald-400' },
+    { ...s4, label: '사용자 만족도', unit: '%', icon: <Users size={22} strokeWidth={2} />, accent: 'text-amber-400' },
   ];
 
   return (
@@ -91,16 +91,15 @@ function ImpactStatsBand() {
             <div
               key={i}
               ref={stat.ref}
-              className="group relative bg-slate-900/60 border border-slate-800 rounded-2xl p-6 md:p-8 text-center hover:border-blue-500/40 transition-all duration-500 hover:bg-slate-900/80"
+              className="group relative bg-slate-900/60 border border-slate-800 rounded-2xl p-6 md:p-8 text-center hover:border-slate-700 transition-all duration-500"
             >
-              <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br ${stat.color} text-white mb-4 group-hover:scale-110 transition-transform`}>
+              <div className={`${stat.accent} mb-5`}>
                 {stat.icon}
               </div>
               <div className="text-4xl md:text-5xl font-black text-white mb-2 tabular-nums">
-                {stat.count}<span className="text-2xl md:text-3xl text-blue-400">{stat.unit}</span>
+                {stat.count}<span className={`text-2xl md:text-3xl ${stat.accent}`}>{stat.unit}</span>
               </div>
               <p className="text-slate-400 text-sm font-medium">{stat.label}</p>
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-t from-blue-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
             </div>
           ))}
         </div>
