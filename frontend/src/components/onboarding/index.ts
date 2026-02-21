@@ -1,6 +1,6 @@
 // ── 새 라이브 시뮬레이션 온보딩 시스템 ──
-export { DemoModeProvider, useDemoMode, isTutorialDismissed, dismissTutorial, resetTutorial, DEMO_AI_JD_RESPONSE, DEMO_APPLICANTS, DEMO_AI_ANALYSIS } from './DemoModeContext';
-export { default as TutorialOverlay } from './TutorialOverlay';
+export { DemoModeProvider, useDemoMode, isTutorialDismissed, dismissTutorial, resetTutorial, DEMO_AI_JD_RESPONSE, DEMO_APPLICANTS, DEMO_AI_ANALYSIS } from './DemoModeContext.tsx';
+export { default as TutorialOverlay } from './TutorialOverlay.tsx';
 export { default as WelcomeDialog } from './WelcomeDialog';
 
 // ── 레거시 (하위 호환용, 추후 제거 가능) ──
