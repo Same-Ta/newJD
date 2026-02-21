@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Users, UserPlus, Trash2, Crown, Mail, X, Loader2, AlertCircle, CheckCircle, FileText, ChevronRight } from 'lucide-react';
 import { FONTS } from '@/constants/fonts';
 import { teamAPI, jdAPI } from '@/services/api';
+import { useDemoMode } from '@/components/onboarding';
 
 interface Collaborator {
   uid: string | null;
@@ -23,6 +24,7 @@ interface TeamManagementProps {
 }
 
 export const TeamManagement = (_props: TeamManagementProps) => {
+  const { isDemoMode, demoJDs, demoTeamMembers, onDemoAction } = useDemoMode();
   const [jds, setJds] = useState<JDItem[]>([]);
   const [selectedJdId, setSelectedJdId] = useState<string | null>(null);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
@@ -34,9 +36,23 @@ export const TeamManagement = (_props: TeamManagementProps) => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // 투토리얼 스텝 전환 시 초대 모달 강제 닫기 (Phase 3→4 전환 등)
   useEffect(() => {
+    if (!isDemoMode) return;
+    const handleCloseMenus = () => setShowInviteModal(false);
+    window.addEventListener('tutorial:close-menus', handleCloseMenus);
+    return () => window.removeEventListener('tutorial:close-menus', handleCloseMenus);
+  }, [isDemoMode]);
+
+  useEffect(() => {
+    if (isDemoMode) {
+      // 데모 모드: 가짜 JD로 세팅
+      setJds(demoJDs.map((j: any) => ({ id: j.id, title: j.title })) as JDItem[]);
+      setLoading(false);
+      return;
+    }
     loadJDs();
-  }, []);
+  }, [isDemoMode]);
 
   useEffect(() => {
     if (toast) {
@@ -74,6 +90,17 @@ export const TeamManagement = (_props: TeamManagementProps) => {
 
   const handleSelectJD = (jdId: string) => {
     setSelectedJdId(jdId);
+    if (isDemoMode) {
+      // 데모 모드: 가짜 협업자 데이터 세팅
+      setCollaborators(demoTeamMembers.map((m: any) => ({
+        uid: null,
+        email: m.email,
+        name: m.name,
+        role: m.role,
+      })));
+      setOwnerInfo({ name: '나', email: 'demo@winnow.com' });
+      return;
+    }
     loadCollaborators(jdId);
   };
 
@@ -83,6 +110,16 @@ export const TeamManagement = (_props: TeamManagementProps) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(inviteEmail.trim())) {
       setToast({ type: 'error', message: '올바른 이메일 형식을 입력해주세요.' });
+      return;
+    }
+
+    if (isDemoMode) {
+      // 데모 모드: API 호출 없이 성공 처리
+      setToast({ type: 'success', message: `${inviteEmail.trim()} 님을 공고에 초대했습니다.` });
+      setCollaborators(prev => [...prev, { uid: null, email: inviteEmail.trim(), name: inviteEmail.split('@')[0], role: 'viewer' }]);
+      setInviteEmail('');
+      setShowInviteModal(false);
+      onDemoAction?.('team-invited');
       return;
     }
 
@@ -189,7 +226,7 @@ export const TeamManagement = (_props: TeamManagementProps) => {
                   <p className="text-gray-400 text-sm">공고가 없습니다</p>
                 </div>
               ) : (
-                jds.map(jd => (
+                jds.map((jd, jdIdx) => (
                   <button
                     key={jd.id}
                     onClick={() => handleSelectJD(jd.id)}
@@ -198,6 +235,7 @@ export const TeamManagement = (_props: TeamManagementProps) => {
                         ? 'bg-blue-50 border-l-2 border-blue-600'
                         : 'hover:bg-gray-50 border-l-2 border-transparent'
                     }`}
+                    {...(jdIdx === 0 ? { 'data-tour': 'team-jd-first' } : {})}
                   >
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-medium truncate ${selectedJdId === jd.id ? 'text-blue-700' : 'text-gray-900'}`}>
@@ -236,6 +274,7 @@ export const TeamManagement = (_props: TeamManagementProps) => {
                   </div>
                   <button
                     onClick={() => setShowInviteModal(true)}
+                    data-tour="team-invite-btn"
                     className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold text-sm shadow-md shadow-blue-500/20 whitespace-nowrap"
                   >
                     <UserPlus size={14} />
@@ -361,6 +400,7 @@ export const TeamManagement = (_props: TeamManagementProps) => {
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
+                data-tour="team-invite-input"
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all placeholder:text-gray-400"
                 autoFocus
               />

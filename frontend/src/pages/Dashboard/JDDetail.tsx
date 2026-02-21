@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { auth } from '@/config/firebase';
 import { jdAPI, applicationAPI } from '@/services/api';
+import { useDemoMode, DEMO_AI_JD_RESPONSE } from '@/components/onboarding';
 
 interface JDDetailProps {
     jdId?: string;
@@ -113,8 +114,9 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     
     const displayProfileImage = jdData?.profileImage || profileImage;
     
+    const { isDemoMode, onDemoAction } = useDemoMode();
     const currentUserId = auth.currentUser?.uid;
-    const isOwner = currentUserId && jdData?.userId === currentUserId;
+    const isOwner = isDemoMode || (currentUserId && jdData?.userId === currentUserId);
 
     // 수정 관련 함수
     const handleEdit = () => {
@@ -129,6 +131,15 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
 
     const handleSave = async () => {
         if (!editedData || !jdId) return;
+
+        // 데모 모드: API 호웈 없이 즉시 저장 처리
+        if (isDemoMode) {
+            setJdData(editedData);
+            setIsEditing(false);
+            setEditedData(null);
+            onDemoAction?.('jd-save-complete');
+            return;
+        }
         
         try {
             setSubmitting(true);
@@ -211,6 +222,13 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                 return;
             }
 
+            // 데모 모드: mock 데이터 사용
+            if (isDemoMode) {
+                setJdData(DEMO_AI_JD_RESPONSE as any);
+                setLoading(false);
+                return;
+            }
+
             try {
                 const data = await jdAPI.getById(jdId);
                 setJdData(data as JDData);
@@ -223,10 +241,17 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
         };
 
         fetchJD();
-    }, [jdId]);
+    }, [jdId, isDemoMode]);
 
     const handleShare = async () => {
         if (!jdId) return;
+
+        // 데모 모드: 실제 클립보드 대신 토스트만 표시
+        if (isDemoMode) {
+            onDemoAction('link-copied');
+            alert('공고 링크가 클립보드에 복사되었습니다!\n지원자에게 이 링크를 공유하세요.');
+            return;
+        }
         
         try {
             // 베이스 URL 가져오기 (origin)
@@ -479,12 +504,14 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                         {isOwner && !isEditing && (
                             <>
                                 <button
+                                    data-tour="jd-edit-btn"
                                     onClick={handleEdit}
                                     className="px-4 py-2 bg-white border border-blue-600 text-blue-600 rounded-lg text-[12px] font-bold hover:bg-blue-50 transition-all"
                                 >
                                     수정
                                 </button>
                                 <button
+                                    data-tour="jd-share-link"
                                     onClick={handleShare}
                                     className="px-4 py-2 bg-blue-600 text-white rounded-lg text-[12px] font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
                                 >
@@ -495,6 +522,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                         {isEditing && (
                             <>
                                 <button
+                                    data-tour="jd-save-btn"
                                     onClick={handleSave}
                                     disabled={submitting}
                                     className="px-4 py-2 bg-blue-600 text-white rounded-lg text-[12px] font-bold hover:bg-blue-700 disabled:bg-gray-400 transition-all"

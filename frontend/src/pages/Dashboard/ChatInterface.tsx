@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { maskSensitiveData } from '../../utils/security';
 import { auth } from '../../config/firebase';
 import { jdAPI, geminiAPI } from '@/services/api';
+import { useDemoMode, DEMO_AI_JD_RESPONSE } from '@/components/onboarding/DemoModeContext';
 
 interface CurrentJD {
     title: string;
@@ -61,6 +62,8 @@ interface ChatInterfaceProps {
 }
 
 export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
+    const { isDemoMode, shouldSimulateAI, setShouldSimulateAI, setAiSimulationComplete, onDemoAction, setDemoCreatedJDId } = useDemoMode();
+
     // 기본 JD 초기값
     const getDefaultJD = (type: 'company' | 'club' = 'club'): CurrentJD => ({
         title: '', type, jobRole: '', company: '', companyName: '', teamName: '',
@@ -194,13 +197,53 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         }
     }, [currentJD]);
 
-    // 메시지가 변경될 때마다 자동 저장
+    // 메시지가 변경될 때마다 자동 저장 (데모 모드에서는 저장하지 않음)
     useEffect(() => {
-        if (messages.length > 1) { // 초기 메시지 제외
+        if (messages.length > 1 && !isDemoMode) { // 초기 메시지 제외, 데모 모드 제외
             localStorage.setItem('chatMessages', JSON.stringify(messages));
             console.log('💾 채팅 내역 자동 저장됨:', messages.length, '개 메시지');
         }
-    }, [messages]);
+    }, [messages, isDemoMode]);
+
+    // 데모 모드: AI 시뮬레이션 effect
+    useEffect(() => {
+        if (!isDemoMode || !shouldSimulateAI) return;
+        setShouldSimulateAI(false);
+
+        // 1) 채팅 영역에 AI 응답 메시지 표시
+        const aiChatMsg: ChatMessage = {
+            role: 'ai',
+            text: '공고가 완성되었습니다! 🎉 미리보기를 확인하고, 마음에 드시면 **공고 게시** 버튼을 눌러주세요.',
+            timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+        };
+        typeAIMessage(aiChatMsg);
+
+        // 2) 미리보기 패널에 데모 JD 데이터 타이핑 시뮬레이션
+        const demoJD = DEMO_AI_JD_RESPONSE;
+        const delays: { key: string; value: string; speed: number; delay: number }[] = [
+            { key: 'companyName', value: demoJD.companyName || demoJD.teamName || '', speed: 30, delay: 400 },
+            { key: 'title', value: demoJD.title, speed: 30, delay: 900 },
+            { key: 'description', value: demoJD.description || '', speed: 18, delay: 1400 },
+            { key: 'location', value: demoJD.location || '', speed: 22, delay: 2800 },
+            { key: 'scale', value: demoJD.scale || '', speed: 22, delay: 3200 },
+        ];
+
+        delays.forEach(({ key, value, speed, delay }) => {
+            if (value) setTimeout(() => typeText(key, value, speed), delay);
+        });
+
+        // 전체 JD 데이터 반영
+        setTimeout(() => {
+            setCurrentJD(prev => ({ ...prev, ...demoJD }));
+        }, 600);
+
+        // 배열 필드 지연 반영 + AI 시뮬레이션 완료 알림
+        setTimeout(() => {
+            setCurrentJD(prev => ({ ...prev, ...demoJD }));
+            setAiSimulationComplete(true);
+        }, 5000);
+
+    }, [isDemoMode, shouldSimulateAI]);
 
     // 자동 스크롤
     useEffect(() => {
@@ -389,8 +432,16 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         alert('공고 작성이 초기화되었습니다.');
     };
 
-    // 공고 게시 버튼 클릭 시 -> 지원양식 설정 모달 표시
+    // 공고 게시 버튼 클릭 시 -> 지원양식 설정 모달 표시 (데모 모드: 바로 게시 완료)
     const handlePublishClick = () => {
+        if (isDemoMode) {
+            // 데모 모드에서는 API 호출 없이 즉시 완료 처리
+            setDemoCreatedJDId?.('demo-jd-created');
+            onDemoAction?.('jd-published');
+            onNavigate('my-jds');
+            return;
+        }
+
         const user = auth.currentUser;
         if (!user) {
             alert('로그인이 필요합니다.');
@@ -593,6 +644,20 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         if (!selectedOption) setInput('');
         setIsLoading(true);
 
+        // 데모 모드: 유형 선택 버튼(회사/동아리/기타)은 정상 처리, 실제 키워드 입력만 시뮬레이션
+        if (isDemoMode && selectedOption !== '회사 채용공고' && selectedOption !== '동아리 모집공고' && selectedOption !== '기타') {
+            const demoReply: ChatMessage = {
+                role: 'ai',
+                text: '좋아요! 입력하신 키워드를 바탕으로 공고를 생성하고 있습니다... 🔄\n잠시만 기다려주세요!',
+                timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+            };
+            typeAIMessage(demoReply);
+            setIsLoading(false);
+            // 튜토리얼에서 다음 단계(AI 타이핑)로 진행
+            setTimeout(() => onDemoAction?.('ai-simulation-start'), 800);
+            return;
+        }
+
         // 회사/동아리 유형 선택 처리
         if (selectedOption === '회사 채용공고' || selectedOption === '동아리 모집공고') {
             const newType = selectedOption === '회사 채용공고' ? 'company' : 'club';
@@ -633,10 +698,8 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             return;
         }
 
-        // 기타 선택 후 사용자 입력인 경우
-        if (waitingForCustomInput) {
-            setWaitingForCustomInput(false);
-        }
+        // "기타" 선택 후 사용자 입력인 경우
+        if (waitingForCustomInput) setWaitingForCustomInput(false);
 
         try {
             // messages 상태를 Gemini API 형식으로 변환 (options 필드 제외)
@@ -965,7 +1028,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                     <div ref={chatEndRef} />
                 </div>
 
-                <div className="p-4 bg-white border-t border-gray-100">
+                <div className="p-4 bg-white border-t border-gray-100" data-tour="chat-input">
                     <div className="relative">
                         <textarea 
                             placeholder="답변을 입력하세요..." 
@@ -1022,7 +1085,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             )}
 
             {/* Preview Area - Right */}
-            <div className={`flex-1 bg-white flex relative overflow-hidden ${isMobile ? 'rounded-2xl' : 'rounded-r-2xl'} border border-gray-200 shadow-sm ${isMobile && mobileTab !== 'preview' ? 'hidden' : ''}`} style={{ height: isMobile ? '100%' : undefined }}>
+            <div data-tour="chat-preview" className={`flex-1 bg-white flex relative overflow-hidden ${isMobile ? 'rounded-2xl' : 'rounded-r-2xl'} border border-gray-200 shadow-sm ${isMobile && mobileTab !== 'preview' ? 'hidden' : ''}`} style={{ height: isMobile ? '100%' : undefined }}>
                 
                 {/* Left Profile Section - 채팅창이 클 때 또는 모바일에서 숨기기 */}
                 {!isMobile && chatWidth < 45 && (
@@ -1626,7 +1689,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                         <>
                                             <button onClick={resetJD} className="px-4 py-2.5 border border-red-300 text-red-600 rounded-lg text-[13px] font-bold hover:bg-red-50 transition-colors">초기화</button>
                                             <button onClick={startEdit} className="px-4 py-2.5 border border-blue-500 text-blue-600 rounded-lg text-[13px] font-bold hover:bg-blue-50 transition-colors">편집</button>
-                                            <button onClick={handlePublishClick} className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-[13px] font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all">공고 게시</button>
+                                            <button data-tour="chat-publish-btn" onClick={handlePublishClick} className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-[13px] font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all">공고 게시</button>
                                         </>
                                     ) : (
                                         <>

@@ -1,6 +1,22 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { auth } from '@/config/firebase';
 import { commentAPI } from '@/services/api';
+import { useDemoMode } from '@/components/onboarding';
+
+// ==================== 데모 Mock 코멘트 ====================
+const now = Math.floor(Date.now() / 1000);
+const DEMO_COMMENT_THREADS: CommentThread[] = [
+  {
+    root: { id: 'demo-c-001', applicationId: 'demo', content: 'React 경험이 풍부하고 포트폴리오가 인상적입니다. 기술 면접 진행해보면 좋겠습니다! 구마', authorId: 'demo-u-001', authorEmail: 'sarah@company.com', authorName: '김사라', posX: 15, posY: 8, parentId: null, resolved: false, createdAt: { seconds: now - 3600 }, updatedAt: { seconds: now - 3600 } },
+    replies: [
+      { id: 'demo-c-001-r', applicationId: 'demo', content: '동의합니다. 팀 문화 적합성도 좋아 보여요. 최종 면접 추천! ✨', authorId: 'demo-u-002', authorEmail: 'james@company.com', authorName: '이재민', posX: 15, posY: 8, parentId: 'demo-c-001', resolved: false, createdAt: { seconds: now - 1800 }, updatedAt: { seconds: now - 1800 } },
+    ],
+  },
+  {
+    root: { id: 'demo-c-002', applicationId: 'demo', content: 'CI/CD 경험이 부족하지만, 교육을 통해 빠르게 특히 할 수 있는 인재로 보입니다.', authorId: 'demo-u-001', authorEmail: 'sarah@company.com', authorName: '김사라', posX: 70, posY: 25, parentId: null, resolved: false, createdAt: { seconds: now - 900 }, updatedAt: { seconds: now - 900 } },
+    replies: [],
+  },
+];
 
 // ==================== 타입 정의 ====================
 interface Comment {
@@ -116,16 +132,16 @@ const CommentThreadCard = ({
   const [editText, setEditText] = useState('');
   const replyRef = useRef<HTMLTextAreaElement>(null);
   const currentUserId = auth.currentUser?.uid;
+  const { isDemoMode } = useDemoMode();
 
   const allComments = [thread.root, ...thread.replies];
 
   const handleReply = async () => {
     if (!replyText.trim() || sending) return;
+    if (isDemoMode) { setReplyText(''); return; } // 데모: 시각적 피드백 후 닫기
     setSending(true);
     try {
-      console.log('[Comment] Creating reply:', { applicationId, parentId: thread.root.id });
       await commentAPI.create(applicationId, replyText.trim(), thread.root.posX ?? undefined, thread.root.posY ?? undefined, thread.root.id);
-      console.log('[Comment] Reply created successfully');
       setReplyText('');
       onRefresh();
     } catch (e: any) {
@@ -137,6 +153,7 @@ const CommentThreadCard = ({
   };
 
   const handleDelete = async (commentId: string) => {
+    if (isDemoMode) return; // 데모: 스킵
     if (!window.confirm('코멘트를 삭제하시겠습니까?')) return;
     try {
       await commentAPI.delete(commentId);
@@ -149,6 +166,7 @@ const CommentThreadCard = ({
 
   const handleEdit = async (commentId: string) => {
     if (!editText.trim()) return;
+    if (isDemoMode) { setEditingId(null); return; } // 데모: 스킵
     try {
       await commentAPI.update(commentId, editText.trim());
       setEditingId(null);
@@ -159,6 +177,7 @@ const CommentThreadCard = ({
   };
 
   const handleResolve = async () => {
+    if (isDemoMode) return; // 데모: 스킵
     try {
       await commentAPI.resolve(thread.root.id);
       onRefresh();
@@ -306,6 +325,7 @@ const NewCommentPopup = ({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { isDemoMode } = useDemoMode();
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -313,10 +333,10 @@ const NewCommentPopup = ({
 
   const handleSubmit = async () => {
     if (!text.trim() || sending) return;
+    if (isDemoMode) { onClose(); return; } // 데모: Firebase 호출 없이 닫기
     setSending(true);
     setError(null);
     try {
-      console.log('[Comment] Creating comment:', { applicationId, posX, posY, content: text.trim() });
       const result = await commentAPI.create(applicationId, text.trim(), posX, posY);
       console.log('[Comment] Created successfully:', result);
       onCreated();
@@ -391,15 +411,17 @@ export const FigmaComments = ({ applicationId, children }: FigmaCommentsProps) =
   const [newCommentPos, setNewCommentPos] = useState<{ x: number; y: number } | null>(null);
   const [showResolved, setShowResolved] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { isDemoMode } = useDemoMode();
 
   const fetchComments = useCallback(async () => {
+    if (isDemoMode) return; // 데모 모드에서는 API 호출 스킵
     try {
       const data = await commentAPI.getByApplicationId(applicationId);
       setComments(data);
     } catch (e) {
       console.error('코멘트 로딩 실패:', e);
     }
-  }, [applicationId]);
+  }, [applicationId, isDemoMode]);
 
   useEffect(() => {
     fetchComments();
@@ -437,16 +459,18 @@ export const FigmaComments = ({ applicationId, children }: FigmaCommentsProps) =
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [commentMode, newCommentPos, activeThreadId]);
 
-  // 스레드로 그룹핑
-  const threads: CommentThread[] = (() => {
-    const roots = comments.filter(c => !c.parentId && c.posX != null && c.posY != null);
-    return roots.map(root => ({
-      root,
-      replies: comments.filter(c => c.parentId === root.id).sort((a, b) =>
-        (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0)
-      ),
-    }));
-  })();
+  // 스레드로 그룹핑 (데모 모드는 mock 데이터 사용)
+  const threads: CommentThread[] = isDemoMode
+    ? DEMO_COMMENT_THREADS
+    : (() => {
+        const roots = comments.filter(c => !c.parentId && c.posX != null && c.posY != null);
+        return roots.map(root => ({
+          root,
+          replies: comments.filter(c => c.parentId === root.id).sort((a, b) =>
+            (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0)
+          ),
+        }));
+      })();
 
   const visibleThreads = showResolved ? threads : threads.filter(t => !t.root.resolved);
 
@@ -470,7 +494,7 @@ export const FigmaComments = ({ applicationId, children }: FigmaCommentsProps) =
   return (
     <div className="relative">
       {/* 코멘트 툴바 */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-4" data-tour="applicant-comments">
         <button
           onClick={() => { setCommentMode(!commentMode); setNewCommentPos(null); setActiveThreadId(null); }}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-bold transition-all ${

@@ -5,11 +5,13 @@ interface SidebarItemProps {
   label: string;
   active: boolean;
   onClick: () => void;
+  dataTour?: string;
 }
 
-export const SidebarItem = ({ icon: Icon, label, active, onClick }: SidebarItemProps) => (
+export const SidebarItem = ({ icon: Icon, label, active, onClick, dataTour }: SidebarItemProps) => (
   <button 
     onClick={onClick}
+    data-tour={dataTour}
     className={`flex items-center w-full px-4 py-3.5 mb-1 text-[15px] font-medium rounded-xl transition-all duration-200 ${
       active 
         ? 'text-blue-600 bg-blue-50/80' 

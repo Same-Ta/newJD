@@ -2,7 +2,8 @@ import { Badge } from '@/components/common/Badge';
 import { useState, useEffect } from 'react';
 import { auth } from '@/config/firebase';
 import { jdAPI, applicationAPI } from '@/services/api';
-import { X, Upload, Image } from 'lucide-react';
+import { X, Upload, Image, Link2 } from 'lucide-react';
+import { useDemoMode } from '@/components/onboarding';
 
 interface MyJDsPageProps {
   onNavigate: (page: string) => void;
@@ -24,6 +25,7 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
   const [jdList, setJdList] = useState<JDItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [applicantCounts, setApplicantCounts] = useState<Record<string, number>>({});
+  const { isDemoMode, demoJDs, onDemoAction } = useDemoMode();
   
   // 이미지 편집 모달 상태
   const [showEditModal, setShowEditModal] = useState(false);
@@ -33,6 +35,14 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
   const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
+    // 데모 모드일 때 mock 데이터 주입
+    if (isDemoMode) {
+      setJdList(demoJDs as any);
+      setApplicantCounts({ 'demo-jd-001': 2, 'demo-jd-002': 1 });
+      setLoading(false);
+      return;
+    }
+
     const fetchJDs = async () => {
       const user = auth.currentUser;
       if (!user) {
@@ -74,7 +84,7 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
     };
 
     fetchJDs();
-  }, []);
+  }, [isDemoMode]);
 
   const handleDelete = async (jdId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // 카드 클릭 이벤트 방지
@@ -194,7 +204,7 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
       </div>
     ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
-        {jdList.map((job) => {
+        {jdList.map((job, index) => {
           // D-day 계산: recruitmentPeriod에서 마감일 파싱, 없으면 생성일+30일
           let dDay = '';
           const today = new Date();
@@ -231,8 +241,14 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
           return (
             <div 
               key={job.id} 
-              onClick={() => onNavigateToJD(job.id)} 
+              onClick={() => {
+                if (isDemoMode && index === 0) {
+                  onDemoAction?.('jd-card-clicked');
+                }
+                onNavigateToJD(job.id);
+              }}
               className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 group cursor-pointer flex flex-col"
+              {...(index === 0 ? { 'data-tour': 'jd-card-first' } : {})}
             >
               {/* 이미지 영역 */}
               <div className="h-44 relative">
@@ -254,6 +270,26 @@ export const MyJDsPage = ({ onNavigateToJD }: MyJDsPageProps) => {
                     title="이미지 편집"
                   >
                     <Image className="w-4 h-4" />
+                  </button>
+                  {/* 공유 링크 복사 버튼 */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const shareUrl = `${window.location.origin}/apply/${job.id}`;
+                      navigator.clipboard.writeText(shareUrl).then(() => {
+                        alert('공유 링크가 복사되었습니다!');
+                        if (isDemoMode) onDemoAction?.('link-copied');
+                      }).catch(() => {
+                        // clipboard 실패 시 fallback
+                        alert('공유 링크: ' + shareUrl);
+                        if (isDemoMode) onDemoAction?.('link-copied');
+                      });
+                    }}
+                    className="p-1.5 bg-white/90 backdrop-blur-sm text-gray-600 hover:text-green-600 hover:bg-white rounded-lg transition-colors shadow-sm"
+                    title="공유 링크 복사"
+                    {...(index === 0 ? { 'data-tour': 'jd-share-link' } : {})}
+                  >
+                    <Link2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={(e) => handleDelete(job.id, e)}

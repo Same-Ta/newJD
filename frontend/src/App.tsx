@@ -9,6 +9,7 @@ import {
   Users,
   Menu,
   X,
+  BookOpen,
 } from 'lucide-react';
 import { FONTS } from '@/constants/fonts';
 import { FunnelCSS } from '@/components/common/FunnelCSS';
@@ -16,6 +17,14 @@ import { SidebarItem } from '@/components/common/SidebarItem';
 import { auth } from '@/config/firebase';
 import { onAuthStateChanged, onIdTokenChanged, signOut } from 'firebase/auth';
 import { clearAuthCache } from '@/services/api';
+import {
+  DemoModeProvider,
+  useDemoMode,
+  dismissTutorial,
+  resetTutorial,
+  TutorialOverlay,
+  WelcomeDialog,
+} from '@/components/onboarding';
 
 // Lazy load all page components for code splitting
 const LandingPage = lazy(() => import('@/pages/LandingPage').then(m => ({ default: m.LandingPage })));
@@ -75,6 +84,11 @@ const App = () => {
   const [userEmail, setUserEmail] = useState('');
   const [userInitials, setUserInitials] = useState('U');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // 온보딩 상태 (라이브 시뮬레이션)
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const { isDemoMode, enableDemoMode, disableDemoMode } = useDemoMode();
 
   // 초기 URL 확인
   const initialJdId = getJdIdFromUrl();
@@ -222,6 +236,31 @@ const App = () => {
   const handleLogin = () => {
     setIsLoggedIn(true);
     navigateTo('dashboard');
+    // 로그인 시 항상 WelcomeDialog 표시 (매 로그인마다 체험 기회 제공)
+    setTimeout(() => setShowWelcome(true), 600);
+  };
+
+  // 온보딩 핸들러 (라이브 시뮬레이션)
+  const handleWelcomeStart = () => {
+    setShowWelcome(false);
+    enableDemoMode();
+    navigateTo('chat');
+    setTimeout(() => setShowTutorial(true), 400);
+  };
+
+  const handleWelcomeSkip = () => {
+    setShowWelcome(false);
+  };
+
+  const handleWelcomeDismiss = () => {
+    dismissTutorial();
+    setShowWelcome(false);
+  };
+
+  const handleTutorialComplete = () => {
+    setShowTutorial(false);
+    disableDemoMode();
+    navigateTo('dashboard');
   };
 
   const handleLogout = async () => {
@@ -239,6 +278,15 @@ const App = () => {
     setSelectedJdId(jdId);
     window.history.pushState({ page: 'jd-detail', jdId }, '');
     setCurrentPage('jd-detail');
+  };
+
+  // 튜토리얼 오버레이 전용 네비게이션: 데모 모드에서 jd-detail 이동 시 demo JD id 자동 설정
+  const handleTutorialNavigate = (page: string) => {
+    if (page === 'jd-detail') {
+      handleNavigateToJD('demo-jd-001');
+    } else {
+      navigateTo(page);
+    }
   };
 
   const renderContent = () => {
@@ -288,7 +336,8 @@ const App = () => {
   }
 
   // 공개 라우트: 공고 상세 페이지 (로그인 불필요)
-  if (currentPage === 'jd-detail') {
+  // 데모 모드일 때는 대시보드 레이아웃 안에서 렌더링 (튜토리얼 오버레이 유지)
+  if (currentPage === 'jd-detail' && !isDemoMode) {
     return (
       <div className="min-h-screen bg-[#F8FAFC]" style={{ fontFamily: FONTS.sans }}>
         <FunnelCSS />
@@ -372,14 +421,14 @@ const App = () => {
             </div>
             <div className="px-3 space-y-1 flex-1 overflow-y-auto pt-4">
               <div className="text-[11px] font-bold text-gray-400 px-4 mb-2 uppercase tracking-wider">채용 관리</div>
-              <SidebarItem icon={LayoutDashboard} label="대시보드" active={currentPage === 'dashboard'} onClick={() => { navigateTo('dashboard'); setSidebarOpen(false); }} />
-              <SidebarItem icon={FileText} label="내 공고 목록" active={currentPage === 'my-jds'} onClick={() => { navigateTo('my-jds'); setSidebarOpen(false); }} />
-              <SidebarItem icon={CheckCircle2} label="지원자 관리" active={currentPage === 'applicants'} onClick={() => { navigateTo('applicants'); setSidebarOpen(false); }} />
-              <SidebarItem icon={MessageSquare} label="공고 생성 (AI)" active={currentPage === 'chat'} onClick={() => { navigateTo('chat'); setSidebarOpen(false); }} />
+              <SidebarItem icon={LayoutDashboard} label="대시보드" active={currentPage === 'dashboard'} onClick={() => { navigateTo('dashboard'); setSidebarOpen(false); }} dataTour="sidebar-dashboard" />
+              <SidebarItem icon={FileText} label="내 공고 목록" active={currentPage === 'my-jds'} onClick={() => { navigateTo('my-jds'); setSidebarOpen(false); }} dataTour="sidebar-myjds" />
+              <SidebarItem icon={CheckCircle2} label="지원자 관리" active={currentPage === 'applicants'} onClick={() => { navigateTo('applicants'); setSidebarOpen(false); }} dataTour="sidebar-applicants" />
+              <SidebarItem icon={MessageSquare} label="공고 생성 (AI)" active={currentPage === 'chat'} onClick={() => { navigateTo('chat'); setSidebarOpen(false); }} dataTour="sidebar-chat" />
             </div>
             <div className="px-3 pb-6">
               <div className="text-[11px] font-bold text-gray-400 px-4 mb-2 uppercase tracking-wider">내 정보</div>
-              <SidebarItem icon={Users} label="팀 관리" active={currentPage === 'team'} onClick={() => { navigateTo('team'); setSidebarOpen(false); }} />
+              <SidebarItem icon={Users} label="팀 관리" active={currentPage === 'team'} onClick={() => { navigateTo('team'); setSidebarOpen(false); }} dataTour="sidebar-team" />
               <SidebarItem icon={Settings} label="계정 설정" active={currentPage === 'settings'} onClick={() => { navigateTo('settings'); setSidebarOpen(false); }} />
               <div className="mt-4 px-4 pt-5 border-t border-gray-50">
                 <div className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition-colors cursor-pointer group">
@@ -410,30 +459,34 @@ const App = () => {
                 label="대시보드" 
                 active={currentPage === 'dashboard'} 
                 onClick={() => navigateTo('dashboard')} 
+                dataTour="sidebar-dashboard"
             />
             <SidebarItem 
                 icon={FileText} 
                 label="내 공고 목록" 
                 active={currentPage === 'my-jds'} 
                 onClick={() => navigateTo('my-jds')} 
+                dataTour="sidebar-myjds"
             />
             <SidebarItem 
                 icon={CheckCircle2} 
                 label="지원자 관리" 
                 active={currentPage === 'applicants'} 
                 onClick={() => navigateTo('applicants')} 
+                dataTour="sidebar-applicants"
             />
              <SidebarItem 
                 icon={MessageSquare} 
                 label="공고 생성 (AI)" 
                 active={currentPage === 'chat'} 
                 onClick={() => navigateTo('chat')} 
+                dataTour="sidebar-chat"
             />
         </div>
 
         <div className="px-3 pb-6">
              <div className="text-[11px] font-bold text-gray-400 px-4 mb-2 uppercase tracking-wider">내 정보</div>
-             <SidebarItem icon={Users} label="팀 관리" active={currentPage === 'team'} onClick={() => navigateTo('team')} />
+             <SidebarItem icon={Users} label="팀 관리" active={currentPage === 'team'} onClick={() => navigateTo('team')} dataTour="sidebar-team" />
              <SidebarItem icon={Settings} label="계정 설정" active={currentPage === 'settings'} onClick={() => navigateTo('settings')} />
              <div className="mt-4 px-4 pt-5 border-t border-gray-50">
                  <div className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition-colors cursor-pointer group">
@@ -454,8 +507,48 @@ const App = () => {
               {renderContent()}
           </div>
       </main>
+
+      {/* 웰컴 다이얼로그 */}
+      <WelcomeDialog
+        isOpen={showWelcome}
+        onStart={handleWelcomeStart}
+        onSkip={handleWelcomeSkip}
+        onDismiss={handleWelcomeDismiss}
+      />
+
+      {/* 라이브 튜토리얼 오버레이 */}
+      {showTutorial && (
+        <TutorialOverlay
+          onComplete={handleTutorialComplete}
+          onNavigate={handleTutorialNavigate}
+        />
+      )}
+
+      {/* 온보딩 다시 보기 FAB */}
+      {!showWelcome && !showTutorial && (
+        <button
+          onClick={() => {
+            resetTutorial();
+            setShowWelcome(true);
+          }}
+          className="fixed bottom-6 right-6 z-40 w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg shadow-blue-500/30 flex items-center justify-center transition-all hover:scale-105 group"
+          title="서비스 가이드 다시 보기"
+        >
+          <BookOpen size={20} />
+          <span className="absolute right-14 bg-gray-900 text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+            서비스 가이드
+          </span>
+        </button>
+      )}
     </div>
   );
 };
 
-export default App;
+// App을 DemoModeProvider로 감싸서 내보내기
+const AppWithProviders = () => (
+  <DemoModeProvider>
+    <App />
+  </DemoModeProvider>
+);
+
+export default AppWithProviders;

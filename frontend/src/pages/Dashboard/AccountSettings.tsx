@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { auth } from '@/config/firebase';
 import { updatePassword, updateProfile, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { resetTutorial } from '@/components/onboarding';
+import { BookOpen } from 'lucide-react';
 
 export const AccountSettings = () => {
   const user = auth.currentUser;
@@ -248,6 +250,35 @@ export const AccountSettings = () => {
             <span className="text-[13px] font-bold text-gray-900">
               {user?.metadata.lastSignInTime ? new Date(user.metadata.lastSignInTime).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
             </span>
+          </div>
+        </div>
+      </div>
+      {/* 서비스 가이드 */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-5 sm:px-8 py-4 sm:py-5 border-b border-gray-100">
+          <h3 className="text-[15px] font-bold text-gray-900">서비스 가이드</h3>
+          <p className="text-[12px] text-gray-400 mt-0.5">WINNOW 사용법을 다시 확인할 수 있습니다</p>
+        </div>
+        <div className="p-5 sm:p-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
+                <BookOpen className="w-5 h-5 text-indigo-500" />
+              </div>
+              <div>
+                <p className="text-[13px] font-semibold text-gray-700">서비스 가이드 다시 보기</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">실제 화면을 통한 인터랙티브 가이드를 다시 체험합니다</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                resetTutorial();
+                alert('서비스 가이드가 초기화되었습니다. 다음 페이지 이동 시 가이드가 표시될 수 있습니다.\n\n즉시 시작하려면 우측 하단의 가이드 버튼을 클릭하세요.');
+              }}
+              className="px-4 py-2 text-[13px] font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors"
+            >
+              초기화
+            </button>
           </div>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { applicationAPI, jdAPI } from '@/services/api';
 import { FONTS } from '@/constants/fonts';
 import { AIAnalysisDashboard } from '@/components/ai/AIAnalysisComponents';
 import { FigmaComments } from '@/components/common/FigmaComments';
+import { useDemoMode, DEMO_APPLICANTS, DEMO_AI_ANALYSIS } from '@/components/onboarding';
 
 interface Application {
     id: string;
@@ -33,12 +34,27 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
     const [jdType, setJdType] = useState<'company' | 'club'>('club');
     const [aiSummary, setAiSummary] = useState<string>('');
     const [summaryLoading, setSummaryLoading] = useState(false);
+    const { isDemoMode, onDemoAction } = useDemoMode();
 
     useEffect(() => {
         fetchApplication();
     }, [applicationId]);
 
     const fetchApplication = async () => {
+        // 데모 모드: 데모 데이터 사용
+        if (isDemoMode || applicationId.startsWith('demo-')) {
+            const demoApp = DEMO_APPLICANTS.find(a => a.id === applicationId) ?? DEMO_APPLICANTS[0];
+            setApplication(demoApp as any);
+            setJdType('company');
+            setSummaryLoading(true);
+            setTimeout(() => {
+                setAiSummary(DEMO_AI_ANALYSIS);
+                setSummaryLoading(false);
+                setTimeout(() => onDemoAction?.('ai-modal-ready'), 300);
+            }, 1200);
+            setLoading(false);
+            return;
+        }
         try {
             const data = await applicationAPI.getById(applicationId);
             setApplication(data);
@@ -90,6 +106,11 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
 
     const handleRefreshAnalysis = async () => {
         if (!application || summaryLoading) return;
+        if (isDemoMode) {
+            setSummaryLoading(true);
+            setTimeout(() => { setAiSummary(DEMO_AI_ANALYSIS); setSummaryLoading(false); }, 1200);
+            return;
+        }
         setSummaryLoading(true);
         await runAnalysis(application);
         setSummaryLoading(false);
@@ -99,6 +120,11 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
 
     const handleStatusChange = async (newStatus: string) => {
         if (!application) return;
+        // 데모 모드: 로컸 상태만 변경
+        if (isDemoMode) {
+            setApplication(prev => prev ? { ...prev, status: newStatus } : null);
+            return;
+        }
         try {
             await applicationAPI.update(application.id, newStatus);
             setApplication(prev => prev ? { ...prev, status: newStatus } : null);
@@ -190,7 +216,7 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
                         <h3 className="font-bold text-gray-900 mb-4">
                             지원자 정보
                         </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <p className="text-xs text-gray-400 mb-1">이름</p>
                                 <p className="text-sm font-medium text-gray-900">{application.applicantName}</p>
@@ -235,7 +261,7 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
                                             <span className="text-sm text-gray-700 group-hover:text-blue-600 truncate">{application.portfolio}</span>
                                         </a>
                                     )}
-                                    {application.portfolioFileUrl && (
+                                    {!isDemoMode && application.portfolioFileUrl && (
                                         <button
                                             onClick={async () => {
                                                 try {
@@ -269,7 +295,7 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
                     </div>
 
                     {/* AI 분석 */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                    <div data-tour="applicant-ai-analysis" className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="font-bold text-gray-900">AI 스크리닝 분석</h3>
                             <button

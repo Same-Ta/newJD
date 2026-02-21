@@ -3,6 +3,7 @@ import { Filter, Download, X, Sparkles, FileText, Trash2, Search, Calendar, Chev
 import { auth } from '@/config/firebase';
 import { applicationAPI, jdAPI } from '@/services/api';
 import { AIAnalysisDashboard } from '@/components/ai/AIAnalysisComponents';
+import { useDemoMode } from '@/components/onboarding';
 
 interface Application {
     id: string;
@@ -21,6 +22,7 @@ interface Application {
 export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant?: (id: string) => void }) => {
     const [applications, setApplications] = useState<Application[]>([]);
     const [loading, setLoading] = useState(true);
+    const { isDemoMode, demoApplicants, demoAiAnalysis, onDemoAction, currentStepId } = useDemoMode();
     
     const [statusFilter, setStatusFilter] = useState<string[]>([]);
     const [jdFilter, setJdFilter] = useState<string[]>([]);
@@ -32,6 +34,29 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
     const [showJdMenu, setShowJdMenu] = useState(false);
     const [showGenderMenu, setShowGenderMenu] = useState(false);
     const [showDateMenu, setShowDateMenu] = useState(false);
+
+    // 튜토리얼 스텝 변경 시 모든 드롭다운 닫기 (currentStepId React state 방식 + 커스텀 이벤트 방식 병행)
+    useEffect(() => {
+      if (isDemoMode && currentStepId) {
+        setShowStatusMenu(false);
+        setShowJdMenu(false);
+        setShowGenderMenu(false);
+        setShowDateMenu(false);
+      }
+    }, [currentStepId, isDemoMode]);
+
+    // 커스텀 이벤트 기반 드롭다운 강제 닫기 (React state 타이밍 문제 보완)
+    useEffect(() => {
+      if (!isDemoMode) return;
+      const handleCloseMenus = () => {
+        setShowStatusMenu(false);
+        setShowJdMenu(false);
+        setShowGenderMenu(false);
+        setShowDateMenu(false);
+      };
+      window.addEventListener('tutorial:close-menus', handleCloseMenus);
+      return () => window.removeEventListener('tutorial:close-menus', handleCloseMenus);
+    }, [isDemoMode]);
     
     const [jdList, setJdList] = useState<Array<{ id: string; title: string; type?: string }>>([]);
     
@@ -43,8 +68,17 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
     const statusDropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        if (isDemoMode) {
+            setApplications(demoApplicants as any);
+            setJdList([
+                { id: 'demo-jd-001', title: '프론트엔드 개발자 (React/TypeScript)', type: 'company' },
+                { id: 'demo-jd-002', title: '백엔드 엔지니어 (Python/FastAPI)', type: 'company' },
+            ]);
+            setLoading(false);
+            return;
+        }
         Promise.all([fetchApplications(), fetchJDs()]);
-    }, []);
+    }, [isDemoMode]);
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
@@ -181,12 +215,26 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
     };
 
     const handleApplicantClick = (application: Application) => {
-        if (onNavigateToApplicant) {
+        if (isDemoMode && onNavigateToApplicant) {
+            // 데모 모드: 실제 페이지처럼 지원자 상세 페이지로 이동
+            onDemoAction?.('ai-analysis-opened');
+            onNavigateToApplicant(application.id);
+        } else if (onNavigateToApplicant && !isDemoMode) {
             onNavigateToApplicant(application.id);
         } else {
             setSelectedApplicant(application);
             setAiSummary('');
-            loadOrGenerateAnalysis(application);
+            if (isDemoMode) {
+                setSummaryLoading(true);
+                onDemoAction?.('ai-analysis-opened');
+                setTimeout(() => {
+                    setAiSummary(demoAiAnalysis);
+                    setSummaryLoading(false);
+                    setTimeout(() => onDemoAction?.('ai-modal-ready'), 300);
+                }, 1200);
+            } else {
+                loadOrGenerateAnalysis(application);
+            }
         }
     };
 
@@ -457,7 +505,7 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                             )}
                         </div>
 
-                        <div className="relative">
+                        <div className="relative" data-tour="applicant-jd-filter">
                             <button
                                 onClick={() => setShowJdMenu(!showJdMenu)}
                                 className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
@@ -643,8 +691,8 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {filteredApplications.map((application) => (
-                            <div key={application.id} className="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-md transition-all cursor-pointer active:scale-[0.99]" onClick={() => handleApplicantClick(application)}>
+                        {filteredApplications.map((application, appIndex) => (
+                            <div key={application.id} className="bg-white border border-gray-100 rounded-xl p-4 hover:shadow-md transition-all cursor-pointer active:scale-[0.99]" onClick={() => handleApplicantClick(application)} {...(appIndex === 0 ? { 'data-tour': 'applicant-row-first' } : {})}>
                                 <div className="flex items-start justify-between gap-3 mb-3">
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2 mb-1">
@@ -657,7 +705,7 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                                         <p className="text-[12px] text-gray-500 truncate">{application.jdTitle}</p>
                                     </div>
                                     <div className="flex items-center gap-1 flex-shrink-0">
-                                        <button onClick={(e) => { e.stopPropagation(); handleApplicantClick(application); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="AI 분석">
+                                        <button onClick={(e) => { e.stopPropagation(); handleApplicantClick(application); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="AI 분석" {...(appIndex === 0 ? { 'data-tour': 'ai-analysis-btn-first' } : {})}>
                                             <Sparkles size={16} />
                                         </button>
                                         <button onClick={(e) => { e.stopPropagation(); handleDeleteApplicant(application.id, application.applicantName); }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="삭제">
@@ -706,8 +754,8 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                                 </td>
                             </tr>
                         ) : (
-                            filteredApplications.map((application) => (
-                                <tr key={application.id} className="hover:bg-blue-50/30 transition-colors group cursor-pointer">
+                            filteredApplications.map((application, appIndex) => (
+                                <tr key={application.id} className="hover:bg-blue-50/30 transition-colors group cursor-pointer" {...(appIndex === 0 ? { 'data-tour': 'applicant-row-first' } : {})}>
                                     <td className="px-3 py-3 whitespace-nowrap" onClick={() => handleApplicantClick(application)}>
                                         <div className="font-bold text-[13px] text-gray-900">{application.applicantName}</div>
                                     </td>
@@ -721,7 +769,7 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                                     </td>
                                     <td className="px-3 py-3 text-[12px] text-gray-400 whitespace-nowrap" onClick={() => handleApplicantClick(application)}>{formatDate(application.appliedAt)}</td>
                                     <td className="px-3 py-3">
-                                        <button onClick={(e) => { e.stopPropagation(); handleApplicantClick(application); }} className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-[11px] font-medium mx-auto whitespace-nowrap">
+                                        <button onClick={(e) => { e.stopPropagation(); handleApplicantClick(application); }} className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-[11px] font-medium mx-auto whitespace-nowrap" {...(appIndex === 0 ? { 'data-tour': 'ai-analysis-btn-first' } : {})}>
                                             <Sparkles size={13} />
                                             AI 분석
                                         </button>
@@ -773,7 +821,7 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
 
             {selectedApplicant && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeModal}>
-                    <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                    <div data-tour="ai-analysis-modal" className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
                         <div className="bg-gradient-to-r from-blue-600 to-blue-500 p-6 text-white">
                             <div className="flex justify-between items-start">
                                 <div>
@@ -851,6 +899,41 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                                 </div>
                             </div>
                         </div>
+
+                        {/* 데모 전용: 팀원 코멘트 섹션 */}
+                        {isDemoMode && (
+                                <div data-tour="applicant-comments" className="mt-6 border-t border-gray-100 pt-6 px-6">
+                                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                        팀원 코멘트
+                                        <span className="ml-1 px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full text-xs font-bold">2</span>
+                                    </h3>
+                                    <div className="space-y-3 mb-4">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">김</div>
+                                            <div className="bg-gray-50 rounded-xl p-3 flex-1">
+                                                <p className="text-xs font-semibold text-gray-900 mb-1">김채용 <span className="text-gray-400 font-normal">2/20 14:30</span></p>
+                                                <p className="text-sm text-gray-600">React 경험이 풍부하고 포트폴리오가 인상적입니다. 기술 면접 진행해볼 만 합니다! 👍</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">이</div>
+                                            <div className="bg-gray-50 rounded-xl p-3 flex-1">
+                                                <p className="text-xs font-semibold text-gray-900 mb-1">이팀장 <span className="text-gray-400 font-normal">2/20 15:10</span></p>
+                                                <p className="text-sm text-gray-600">동의합니다. 팀 문화 적합성도 좋아 보여요. 최종 면접 추천! ✨</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="코멘트를 입력하세요..."
+                                            className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                        />
+                                        <button className="px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors flex-shrink-0">전송</button>
+                                    </div>
+                                </div>
+                        )}
 
                         <div className="border-t border-gray-100 p-6 bg-gray-50">
                             <div className="flex justify-between items-center">
