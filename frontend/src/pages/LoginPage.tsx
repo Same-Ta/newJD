@@ -76,7 +76,7 @@ export const LoginPage = ({ onLogin, onNavigateToSignUp, onBackToLanding }: Logi
                         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                         
                         <div className="absolute top-6 left-4 sm:top-10 sm:left-10 flex items-center gap-2.5">
-                                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-extrabold text-sm shadow-lg shadow-blue-600/20">W</div>
+                                <img src="/logo.png" alt="WINNOW" className="w-8 h-8 object-contain" />
                                 <span className="font-extrabold text-xl tracking-tight text-slate-900">WINNOW</span>
                         </div>
 

@@ -10,6 +10,8 @@ import {
   Menu,
   X,
   BookOpen,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import { FONTS } from '@/constants/fonts';
 import { FunnelCSS } from '@/components/common/FunnelCSS';
@@ -84,6 +86,7 @@ const App = () => {
   const [userEmail, setUserEmail] = useState('');
   const [userInitials, setUserInitials] = useState('U');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // 온보딩 상태 (라이브 시뮬레이션)
   const [showWelcome, setShowWelcome] = useState(false);
@@ -344,7 +347,7 @@ const App = () => {
         {/* 간단한 헤더 */}
         <header className="bg-white border-b border-gray-100 px-6 h-16 flex items-center justify-between fixed w-full z-10 shadow-sm">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-extrabold text-sm shadow-md shadow-blue-500/20">W</div>
+            <img src="/logo.png" alt="WINNOW" className="w-8 h-8 object-contain" />
             <span className="font-extrabold text-[19px] text-gray-900 tracking-tight">WINNOW</span>
           </div>
           <div className="flex items-center gap-3">
@@ -399,7 +402,7 @@ const App = () => {
           <button onClick={() => setSidebarOpen(true)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
             <Menu size={22} className="text-gray-700" />
           </button>
-          <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white font-extrabold text-xs shadow-md shadow-blue-500/20">W</div>
+          <img src="/logo.png" alt="WINNOW" className="w-7 h-7 object-contain" />
           <span className="font-extrabold text-[17px] text-gray-900 tracking-tight">WINNOW</span>
         </div>
         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[10px] border border-blue-200">{userInitials}</div>
@@ -412,7 +415,7 @@ const App = () => {
           <div className="relative w-[280px] bg-white h-full flex flex-col shadow-xl z-50 animate-slideIn">
             <div className="px-5 h-16 flex items-center justify-between flex-shrink-0 border-b border-gray-100">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white font-extrabold text-xs shadow-md shadow-blue-500/20">W</div>
+                <img src="/logo.png" alt="WINNOW" className="w-7 h-7 object-contain" />
                 <span className="font-extrabold text-[17px] text-gray-900 tracking-tight">WINNOW</span>
               </div>
               <button onClick={() => setSidebarOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
@@ -446,20 +449,29 @@ const App = () => {
       )}
       
       {/* Desktop Sidebar */}
-      <aside className="w-[260px] bg-white border-r border-gray-100 h-screen z-20 hidden md:flex flex-col shadow-[2px_0_20px_rgba(0,0,0,0.02)]">
-        <div className="px-6 h-20 flex items-center gap-2.5 mb-2 flex-shrink-0">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-extrabold text-sm shadow-md shadow-blue-500/20">W</div>
-            <span className="font-extrabold text-[19px] text-gray-900 tracking-tight">WINNOW</span>
+      <aside className={`${sidebarCollapsed ? 'w-[72px]' : 'w-[260px]'} bg-white border-r border-gray-100 h-screen z-20 hidden md:flex flex-col shadow-[2px_0_20px_rgba(0,0,0,0.02)] transition-all duration-300 flex-shrink-0`}>
+        <div className={`${sidebarCollapsed ? 'px-3 justify-center' : 'px-6'} h-20 flex items-center gap-2.5 mb-2 flex-shrink-0`}>
+            {!sidebarCollapsed && <img src="/logo.png" alt="WINNOW" className="w-8 h-8 object-contain flex-shrink-0" />}
+            {!sidebarCollapsed && <span className="font-extrabold text-[19px] text-gray-900 tracking-tight flex-1">WINNOW</span>}
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
+              title={sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
+            >
+              {sidebarCollapsed ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />}
+            </button>
         </div>
 
-        <div className="px-3 space-y-1 flex-1 overflow-y-auto">
-            <div className="text-[11px] font-bold text-gray-400 px-4 mb-2 mt-4 uppercase tracking-wider">채용 관리</div>
+        <div className={`${sidebarCollapsed ? 'px-2' : 'px-3'} space-y-1 flex-1 overflow-y-auto`}>
+            {!sidebarCollapsed && <div className="text-[11px] font-bold text-gray-400 px-4 mb-2 mt-4 uppercase tracking-wider">채용 관리</div>}
+            {sidebarCollapsed && <div className="mb-2 mt-4" />}
             <SidebarItem 
                 icon={LayoutDashboard} 
                 label="대시보드" 
                 active={currentPage === 'dashboard'} 
                 onClick={() => navigateTo('dashboard')} 
                 dataTour="sidebar-dashboard"
+                collapsed={sidebarCollapsed}
             />
             <SidebarItem 
                 icon={FileText} 
@@ -467,6 +479,7 @@ const App = () => {
                 active={currentPage === 'my-jds'} 
                 onClick={() => navigateTo('my-jds')} 
                 dataTour="sidebar-myjds"
+                collapsed={sidebarCollapsed}
             />
             <SidebarItem 
                 icon={CheckCircle2} 
@@ -474,6 +487,7 @@ const App = () => {
                 active={currentPage === 'applicants'} 
                 onClick={() => navigateTo('applicants')} 
                 dataTour="sidebar-applicants"
+                collapsed={sidebarCollapsed}
             />
              <SidebarItem 
                 icon={MessageSquare} 
@@ -481,14 +495,18 @@ const App = () => {
                 active={currentPage === 'chat'} 
                 onClick={() => navigateTo('chat')} 
                 dataTour="sidebar-chat"
+                collapsed={sidebarCollapsed}
             />
         </div>
 
-        <div className="px-3 pb-6">
-             <div className="text-[11px] font-bold text-gray-400 px-4 mb-2 uppercase tracking-wider">내 정보</div>
-             <SidebarItem icon={Users} label="팀 관리" active={currentPage === 'team'} onClick={() => navigateTo('team')} dataTour="sidebar-team" />
-             <SidebarItem icon={Settings} label="계정 설정" active={currentPage === 'settings'} onClick={() => navigateTo('settings')} />
-             <div className="mt-4 px-4 pt-5 border-t border-gray-50">
+        <div className={`${sidebarCollapsed ? 'px-2' : 'px-3'} pb-6`}>
+             {!sidebarCollapsed && <div className="text-[11px] font-bold text-gray-400 px-4 mb-2 uppercase tracking-wider">내 정보</div>}
+             {sidebarCollapsed && <div className="mb-2" />}
+             <SidebarItem icon={Users} label="팀 관리" active={currentPage === 'team'} onClick={() => navigateTo('team')} dataTour="sidebar-team" collapsed={sidebarCollapsed} />
+             <SidebarItem icon={Settings} label="계정 설정" active={currentPage === 'settings'} onClick={() => navigateTo('settings')} collapsed={sidebarCollapsed} />
+
+             {!sidebarCollapsed && (
+             <div className="mt-3 px-4 pt-5 border-t border-gray-50">
                  <div className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition-colors cursor-pointer group">
                      <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs border border-blue-200">{userInitials}</div>
                      <div className="flex-1 min-w-0">
@@ -498,11 +516,20 @@ const App = () => {
                      <LogOut size={16} className="text-gray-300 group-hover:text-red-500 transition-colors" onClick={(e) => { e.stopPropagation(); handleLogout(); }}/>
                  </div>
              </div>
+             )}
+             {sidebarCollapsed && (
+               <div className="mt-3 pt-3 border-t border-gray-50 flex flex-col items-center gap-2">
+                 <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs border border-blue-200">{userInitials}</div>
+                 <button onClick={handleLogout} className="p-2 text-gray-300 hover:text-red-500 transition-colors rounded-lg hover:bg-gray-50" title="로그아웃">
+                   <LogOut size={16} />
+                 </button>
+               </div>
+             )}
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 min-w-0 bg-[#F8FAFC] h-screen overflow-hidden pt-14 md:pt-0">
+      <main className="flex-1 min-w-0 bg-[#F8FAFC] h-screen overflow-hidden pt-14 md:pt-0 transition-all duration-300">
           <div className={currentPage === 'chat' ? 'h-full w-full p-2 md:p-4' : 'p-4 md:p-8 pb-20 h-full overflow-y-auto scroll-smooth'}>
               {renderContent()}
           </div>
