@@ -281,8 +281,13 @@ export default function TutorialOverlay({ onComplete, onNavigate }: TutorialOver
         }
         return { bottom: `${window.innerHeight - rect.top + margin}px`, left: `${absLeft(rect.left + rect.width / 2)}px` };
       }
-      case 'bottom':
-        return { top: `${rect.bottom + margin}px`, left: `${absLeft(rect.left + rect.width / 2)}px` };
+      case 'bottom': {
+        const topVal = rect.bottom + margin;
+        if (topVal + 240 > window.innerHeight) {
+          return { bottom: `${window.innerHeight - rect.top + margin}px`, left: `${absLeft(rect.left + rect.width / 2)}px` };
+        }
+        return { top: `${topVal}px`, left: `${absLeft(rect.left + rect.width / 2)}px` };
+      }
       case 'left': {
         const leftVal = rect.left - tooltipWidth - margin;
         if (leftVal < margin) {
@@ -293,11 +298,12 @@ export default function TutorialOverlay({ onComplete, onNavigate }: TutorialOver
       }
       case 'right': {
         const rightLeft = rect.right + margin;
+        const rawTop = rect.top + rect.height / 2;
+        const clampedTop = Math.min(rawTop, window.innerHeight - 300);
         if (rightLeft + tooltipWidth > window.innerWidth - margin) {
-          // 오른쪽 공간 부족 시 왼쪽으로
-          return { top: `${rect.top + rect.height / 2}px`, left: `${Math.max(margin, rect.left - tooltipWidth - margin)}px`, transform: 'translateY(-50%)' };
+          return { top: `${clampedTop}px`, left: `${Math.max(margin, rect.left - tooltipWidth - margin)}px`, transform: 'translateY(-50%)' };
         }
-        return { top: `${rect.top + rect.height / 2}px`, left: `${rightLeft}px`, transform: 'translateY(-50%)' };
+        return { top: `${clampedTop}px`, left: `${rightLeft}px`, transform: 'translateY(-50%)' };
       }
       default:
         return { top: `${rect.bottom + margin}px`, left: `${absLeft(rect.left)}px` };
@@ -496,14 +502,6 @@ export default function TutorialOverlay({ onComplete, onNavigate }: TutorialOver
               </div>
 
               {/* 인터랙션 힌트 */}
-              {step.interaction === 'input' && (
-                <div className="px-5 pb-3">
-                  <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
-                    <span className="text-amber-500 text-xs">⌨️</span>
-                    <span className="text-[11px] text-amber-700 font-medium">직접 입력해보세요</span>
-                  </div>
-                </div>
-              )}
               {step.interaction === 'wait' && (
                 <div className="px-5 pb-3">
                   <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
@@ -514,17 +512,15 @@ export default function TutorialOverlay({ onComplete, onNavigate }: TutorialOver
               )}
               {step.waitForClick && (
                 <div className="px-5 pb-3">
-                  <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
-                    <span className="text-green-500 text-xs">👆</span>
-                    <span className="text-[11px] text-green-700 font-medium">하이라이트된 영역을 클릭하세요</span>
+                  <div className="px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                    <span className="text-[11px] text-blue-700 font-medium">하이라이트된 영역을 클릭하세요</span>
                   </div>
                 </div>
               )}
               {!step.waitForClick && step.interaction === 'click' && (
                 <div className="px-5 pb-3">
-                  <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
-                    <span className="text-green-500 text-xs">👆</span>
-                    <span className="text-[11px] text-green-700 font-medium">하이라이트된 버튼을 클릭하세요</span>
+                  <div className="px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                    <span className="text-[11px] text-blue-700 font-medium">하이라이트된 버튼을 클릭하세요</span>
                   </div>
                 </div>
               )}
@@ -555,6 +551,22 @@ export default function TutorialOverlay({ onComplete, onNavigate }: TutorialOver
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 스크롤 안내 인디케이터 - AI 분석 결과 확인 단계에서 항상 표시 */}
+      {!showPhaseTransition && ['p4-analysis-result', 'p4-comments'].includes(step.id) && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9998] flex flex-col items-center gap-1.5 pointer-events-none">
+          <span className="text-white/90 text-[11px] font-medium bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">아래로 스크롤하세요</span>
+          <motion.div
+            animate={{ y: [0, 6, 0] }}
+            transition={{ repeat: Infinity, duration: 1.1, ease: 'easeInOut' }}
+            className="w-7 h-7 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center"
+          >
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </motion.div>
+        </div>
+      )}
 
       {/* 하단 — 다시 보지 않기 / 건너뛰기 */}
       {!showPhaseTransition && (
