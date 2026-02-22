@@ -17,7 +17,7 @@ def _ensure_gemini_configured():
             print("⚠️ Warning: GEMINI_API_KEY not found in environment variables")
             raise ValueError("GEMINI_API_KEY not found")
 
-def get_gemini_model(model_name: str = "gemini-1.5-flash"):
+def get_gemini_model(model_name: str = "gemini-2.5-flash"):
     """지연 초기화된 Gemini 모델 반환"""
     _ensure_gemini_configured()
     return genai.GenerativeModel(model_name)

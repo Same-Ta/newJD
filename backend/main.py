@@ -13,6 +13,7 @@ from routes.applications import router as applications_router
 from routes.gemini import router as gemini_router
 from routes.comments import router as comments_router
 from routes.team import router as team_router
+from routes.pdf_analysis import router as pdf_router
 
 app = FastAPI(title="Winnow API", version="1.0.0")
 
@@ -62,6 +63,7 @@ app.include_router(applications_router)
 app.include_router(gemini_router)
 app.include_router(comments_router)
 app.include_router(team_router)
+app.include_router(pdf_router)
 
 
 # ==================== Health Check ====================

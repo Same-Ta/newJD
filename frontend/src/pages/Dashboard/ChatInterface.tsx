@@ -1,8 +1,8 @@
-import { ChevronRight, MessageSquare, X, FileText } from 'lucide-react';
+import { ChevronRight, MessageSquare, X, FileText, Upload, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { maskSensitiveData } from '../../utils/security';
 import { auth } from '../../config/firebase';
-import { jdAPI, geminiAPI } from '@/services/api';
+import { jdAPI, geminiAPI, pdfAPI } from '@/services/api';
 import { useDemoMode, DEMO_AI_JD_RESPONSE } from '@/components/onboarding/DemoModeContext';
 
 interface CurrentJD {
@@ -89,6 +89,15 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
     });
 
+    // 공고 생성 방식 선택 상태 (null = 선택 화면, 'new' = 새 작성, 'pdf' = PDF 업로드)
+    const [creationMode, setCreationMode] = useState<null | 'new' | 'pdf'>(null);
+    // PDF 업로드 상태
+    const [pdfFile, setPdfFile] = useState<File | null>(null);
+    const [pdfUploading, setPdfUploading] = useState(false);
+    const [pdfError, setPdfError] = useState<string | null>(null);
+    const [pdfSuccess, setPdfSuccess] = useState(false);
+    const pdfInputRef = useRef<HTMLInputElement>(null);
+
     // 공고 유형 상태
     const [jdType, setJdType] = useState<'company' | 'club'>('club');
     // 사무적인 이미지 배열
@@ -172,6 +181,8 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 const parsedJD = JSON.parse(savedJD);
                 setCurrentJD(parsedJD);
                 if (parsedJD.type) setJdType(parsedJD.type);
+                // 저장된 데이터가 있으면 모드 선택 화면을 건너뛰고 바로 채팅으로
+                setCreationMode('new');
                 console.log('✅ 저장된 공고 데이터 복원:', parsedJD);
             } catch (e) {
                 console.error('공고 데이터 복원 실패:', e);
@@ -425,10 +436,15 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         setCurrentJD(getDefaultJD('club'));
         setJdType('club');
         setMessages([getTypeSelectionMessage()]);
+        setMessageHistory([[getTypeSelectionMessage()]]);
         localStorage.removeItem('currentJD');
         localStorage.removeItem('chatMessages');
         setRequiredCheckCount(0);
         setPreferredCheckCount(0);
+        setPdfFile(null);
+        setPdfError(null);
+        setPdfSuccess(false);
+        setCreationMode(null);
         alert('공고 작성이 초기화되었습니다.');
     };
 
@@ -834,6 +850,191 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             setIsLoading(false);
         }
     };
+
+    // PDF 파일 선택 핸들러
+    const handlePdfFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!file.name.toLowerCase().endsWith('.pdf')) {
+            setPdfError('PDF 파일만 업로드 가능합니다.');
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            setPdfError('파일 크기는 10MB 이하여야 합니다.');
+            return;
+        }
+        setPdfFile(file);
+        setPdfError(null);
+        setPdfSuccess(false);
+    };
+
+    // PDF 분석 및 JD 자동 채우기 핸들러
+    const handlePdfAnalyze = async () => {
+        if (!pdfFile) return;
+        setPdfUploading(true);
+        setPdfError(null);
+        try {
+            const result = await pdfAPI.analyze(pdfFile);
+            // 백엔드는 { success, jobData, message } 형태로 반환
+            const analyzed = result.jobData || result;
+            // 분석된 데이터로 currentJD 채우기
+            const detectedType: 'company' | 'club' = analyzed.activitySchedule || analyzed.membershipFee ? 'club' : 'company';
+            setJdType(detectedType);
+            setCurrentJD(prev => ({
+                ...prev,
+                ...analyzed,
+                type: detectedType,
+                responsibilities: Array.isArray(analyzed.responsibilities) ? analyzed.responsibilities : [],
+                requirements: Array.isArray(analyzed.requirements) ? analyzed.requirements : [],
+                preferred: Array.isArray(analyzed.preferred) ? analyzed.preferred : [],
+                benefits: Array.isArray(analyzed.benefits) ? analyzed.benefits : [],
+                techStacks: Array.isArray(analyzed.techStacks) ? analyzed.techStacks : [],
+                recruitmentProcess: Array.isArray(analyzed.recruitmentProcess) ? analyzed.recruitmentProcess : [],
+            }));
+            // 초기 AI 메시지를 PDF 분석 결과 안내로 교체
+            const pdfIntroMessage: ChatMessage = {
+                role: 'ai',
+                text: `PDF 분석이 완료되었습니다! 🎉\n\n기존 공고 내용을 바탕으로 아래 항목들이 자동으로 채워졌습니다.\n\n📌 **${analyzed.title || '공고 제목'}**${analyzed.company ? `\n🏢 ${analyzed.company}` : ''}${analyzed.jobRole ? `\n💼 ${analyzed.jobRole}` : ''}\n\n오른쪽 미리보기에서 내용을 확인하고, 수정하거나 추가하고 싶은 부분을 알려주세요!`,
+                timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+            };
+            setMessages([pdfIntroMessage]);
+            setMessageHistory([[pdfIntroMessage]]);
+            setPdfSuccess(true);
+            // 잠깐 성공 화면 보여준 후 채팅으로 진입
+            setTimeout(() => {
+                setCreationMode('pdf');
+            }, 1200);
+        } catch (err: any) {
+            setPdfError(err.message || 'PDF 분석에 실패했습니다. 다시 시도해주세요.');
+        } finally {
+            setPdfUploading(false);
+        }
+    };
+
+    // 모드 선택 화면 렌더링
+    if (creationMode === null && !isDemoMode) {
+        return (
+            <div className="flex items-center justify-center min-h-[calc(100vh-160px)]">
+                <div className="w-full max-w-2xl px-4">
+                    {/* 헤더 */}
+                    <div className="text-center mb-10">
+                        <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-500/30 mx-auto mb-4">
+                            <Sparkles size={26} />
+                        </div>
+                        <h2 className="text-2xl font-extrabold text-gray-900 mb-2">AI 공고 생성</h2>
+                        <p className="text-gray-500 text-sm">공고를 어떤 방식으로 시작할까요?</p>
+                    </div>
+
+                    {/* 선택 카드 */}
+                    {!pdfFile && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            {/* 기존 공고 업로드 */}
+                            <button
+                                onClick={() => pdfInputRef.current?.click()}
+                                className="group relative bg-white border-2 border-gray-200 hover:border-blue-400 rounded-2xl p-7 text-left transition-all hover:shadow-lg hover:shadow-blue-500/10 cursor-pointer"
+                            >
+                                <div className="w-12 h-12 bg-blue-50 group-hover:bg-blue-100 rounded-xl flex items-center justify-center mb-4 transition-colors">
+                                    <Upload className="w-6 h-6 text-blue-600" />
+                                </div>
+                                <h3 className="font-bold text-[16px] text-gray-900 mb-1.5">기존 공고 업로드</h3>
+                                <p className="text-[13px] text-gray-500 leading-relaxed">기존에 작성된 PDF 공고를 업로드하면 AI가 자동으로 내용을 분석해 채워드립니다.</p>
+                                <div className="mt-4 flex items-center gap-1.5 text-blue-600 text-[13px] font-semibold">
+                                    <span>PDF 선택하기</span>
+                                    <ArrowRight size={14} />
+                                </div>
+                            </button>
+
+                            {/* 새로운 공고 작성 */}
+                            <button
+                                onClick={() => setCreationMode('new')}
+                                className="group relative bg-white border-2 border-gray-200 hover:border-purple-400 rounded-2xl p-7 text-left transition-all hover:shadow-lg hover:shadow-purple-500/10 cursor-pointer"
+                            >
+                                <div className="w-12 h-12 bg-purple-50 group-hover:bg-purple-100 rounded-xl flex items-center justify-center mb-4 transition-colors">
+                                    <MessageSquare className="w-6 h-6 text-purple-600" />
+                                </div>
+                                <h3 className="font-bold text-[16px] text-gray-900 mb-1.5">새로운 공고 작성</h3>
+                                <p className="text-[13px] text-gray-500 leading-relaxed">AI 채팅과 함께 처음부터 공고를 작성합니다. 질문에 답하는 것만으로 완성됩니다.</p>
+                                <div className="mt-4 flex items-center gap-1.5 text-purple-600 text-[13px] font-semibold">
+                                    <span>AI와 시작하기</span>
+                                    <ArrowRight size={14} />
+                                </div>
+                            </button>
+                        </div>
+                    )}
+
+                    {/* PDF 파일 선택 후 업로드 영역 */}
+                    {pdfFile && !pdfSuccess && (
+                        <div className="bg-white border-2 border-blue-200 rounded-2xl p-7 mb-4">
+                            <div className="flex items-start gap-4 mb-5">
+                                <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                                    <FileText className="w-6 h-6 text-blue-600" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-gray-900 text-[15px] truncate">{pdfFile.name}</p>
+                                    <p className="text-[13px] text-gray-500 mt-0.5">{(pdfFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                                </div>
+                                <button
+                                    onClick={() => { setPdfFile(null); setPdfError(null); if (pdfInputRef.current) pdfInputRef.current.value = ''; }}
+                                    className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+                            {pdfError && (
+                                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-[13px] text-red-700 font-medium">
+                                    {pdfError}
+                                </div>
+                            )}
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => { setPdfFile(null); setPdfError(null); if (pdfInputRef.current) pdfInputRef.current.value = ''; }}
+                                    className="flex-1 py-3 border-2 border-gray-200 rounded-xl text-[14px] font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+                                    disabled={pdfUploading}
+                                >
+                                    다시 선택
+                                </button>
+                                <button
+                                    onClick={handlePdfAnalyze}
+                                    disabled={pdfUploading}
+                                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[14px] font-bold transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {pdfUploading ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                            AI 분석 중...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles size={16} />
+                                            AI로 분석하기
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 성공 메시지 */}
+                    {pdfSuccess && (
+                        <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-7 text-center mb-4">
+                            <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
+                            <p className="font-bold text-green-800 text-[16px]">분석 완료!</p>
+                            <p className="text-green-600 text-[13px] mt-1">채팅 화면으로 이동합니다...</p>
+                        </div>
+                    )}
+
+                    {/* 숨긴 파일 인풋 */}
+                    <input
+                        ref={pdfInputRef}
+                        type="file"
+                        accept=".pdf"
+                        onChange={handlePdfFileChange}
+                        className="hidden"
+                    />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="relative w-full" style={isMobile ? {} : { transform: 'scale(0.95)', transformOrigin: 'top center', width: '105.26%', marginLeft: '-2.63%' }}>

@@ -396,6 +396,41 @@ export const commentAPI = {
   },
 };
 
+// ==================== PDF API ====================
+export const pdfAPI = {
+  analyze: async (file: File) => {
+    const token = await getAuthToken();
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE_URL}/api/pdf/analyze`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+    if (response.status === 401) {
+      // 토큰 만료 시 재시도
+      const newToken = await getAuthToken(true);
+      const retryResponse = await fetch(`${API_BASE_URL}/api/pdf/analyze`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${newToken}` },
+        body: formData,
+      });
+      if (!retryResponse.ok) {
+        const error = await retryResponse.json().catch(() => ({ detail: retryResponse.statusText }));
+        throw new Error(error.detail || `PDF 분석 실패: ${retryResponse.status}`);
+      }
+      return await retryResponse.json();
+    }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(error.detail || `PDF 분석 실패: ${response.status}`);
+    }
+    return await response.json();
+  },
+};
+
 // ==================== Team API ====================
 export const teamAPI = {
   getCollaborators: async (jdId: string) => {
