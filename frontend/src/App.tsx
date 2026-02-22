@@ -19,6 +19,8 @@ import { SidebarItem } from '@/components/common/SidebarItem';
 import { auth } from '@/config/firebase';
 import { onAuthStateChanged, onIdTokenChanged, signOut } from 'firebase/auth';
 import { clearAuthCache } from '@/services/api';
+import { useSessionTimeout } from '@/hooks/useSessionTimeout';
+import { SessionTimeoutModal } from '@/components/common/SessionTimeoutModal';
 import {
   DemoModeProvider,
   useDemoMode,
@@ -87,6 +89,10 @@ const App = () => {
   const [userInitials, setUserInitials] = useState('U');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // 자동 로그아웃 경고 모달 상태
+  const SESSION_WARNING_DURATION = 2 * 60 * 1000; // 2분
+  const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
 
   // 온보딩 상태 (라이브 시뮬레이션)
   const [showWelcome, setShowWelcome] = useState(false);
@@ -271,10 +277,28 @@ const App = () => {
       clearAuthCache();
       await signOut(auth);
       setIsLoggedIn(false);
+      setShowTimeoutWarning(false);
       navigateTo('landing');
     } catch (error) {
       console.error('로그아웃 오류:', error);
     }
+  };
+
+  // 자동 로그아웃 훅
+  const { extendSession } = useSessionTimeout({
+    idleTimeout: 30 * 60 * 1000,           // 30분 비활동 시 경고
+    warningDuration: SESSION_WARNING_DURATION, // 2분 내 응답 없으면 로그아웃
+    isLoggedIn,
+    onWarning: () => setShowTimeoutWarning(true),
+    onTimeout: () => {
+      console.log('⏰ 세션 만료: 자동 로그아웃');
+      handleLogout();
+    },
+  });
+
+  const handleExtendSession = () => {
+    setShowTimeoutWarning(false);
+    extendSession();
   };
 
   const handleNavigateToJD = (jdId: string) => {
@@ -534,6 +558,14 @@ const App = () => {
               {renderContent()}
           </div>
       </main>
+
+      {/* 자동 로그아웃 경고 모달 */}
+      <SessionTimeoutModal
+        isVisible={showTimeoutWarning}
+        remainingMs={SESSION_WARNING_DURATION}
+        onExtend={handleExtendSession}
+        onLogout={handleLogout}
+      />
 
       {/* 웰컴 다이얼로그 */}
       <WelcomeDialog
