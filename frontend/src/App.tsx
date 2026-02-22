@@ -426,8 +426,10 @@ const App = () => {
           <button onClick={() => setSidebarOpen(true)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
             <Menu size={22} className="text-gray-700" />
           </button>
-          <img src="/logo.png" alt="WINNOW" className="w-7 h-7 object-contain" />
-          <span className="font-extrabold text-[17px] text-gray-900 tracking-tight">WINNOW</span>
+          <button onClick={() => navigateTo('dashboard')} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+            <img src="/logo.png" alt="WINNOW" className="w-7 h-7 object-contain" />
+            <span className="font-extrabold text-[17px] text-gray-900 tracking-tight">WINNOW</span>
+          </button>
         </div>
         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[10px] border border-blue-200">{userInitials}</div>
       </div>
@@ -438,10 +440,10 @@ const App = () => {
           <div className="fixed inset-0 bg-black/40" onClick={() => setSidebarOpen(false)} />
           <div className="relative w-[280px] bg-white h-full flex flex-col shadow-xl z-50 animate-slideIn">
             <div className="px-5 h-16 flex items-center justify-between flex-shrink-0 border-b border-gray-100">
-              <div className="flex items-center gap-2">
+              <button onClick={() => { navigateTo('dashboard'); setSidebarOpen(false); }} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
                 <img src="/logo.png" alt="WINNOW" className="w-7 h-7 object-contain" />
                 <span className="font-extrabold text-[17px] text-gray-900 tracking-tight">WINNOW</span>
-              </div>
+              </button>
               <button onClick={() => setSidebarOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
                 <X size={20} className="text-gray-500" />
               </button>
@@ -475,8 +477,12 @@ const App = () => {
       {/* Desktop Sidebar */}
       <aside className={`${sidebarCollapsed ? 'w-[72px]' : 'w-[260px]'} bg-white border-r border-gray-100 h-screen z-20 hidden md:flex flex-col shadow-[2px_0_20px_rgba(0,0,0,0.02)] transition-all duration-300 flex-shrink-0`}>
         <div className={`${sidebarCollapsed ? 'px-3 justify-center' : 'px-6'} h-20 flex items-center gap-2.5 mb-2 flex-shrink-0`}>
-            {!sidebarCollapsed && <img src="/logo.png" alt="WINNOW" className="w-8 h-8 object-contain flex-shrink-0" />}
-            {!sidebarCollapsed && <span className="font-extrabold text-[19px] text-gray-900 tracking-tight flex-1">WINNOW</span>}
+            {!sidebarCollapsed && (
+              <button onClick={() => navigateTo('dashboard')} className="flex items-center gap-2.5 flex-1 min-w-0 hover:opacity-80 transition-opacity">
+                <img src="/logo.png" alt="WINNOW" className="w-8 h-8 object-contain flex-shrink-0" />
+                <span className="font-extrabold text-[19px] text-gray-900 tracking-tight truncate">WINNOW</span>
+              </button>
+            )}
             <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
               className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
