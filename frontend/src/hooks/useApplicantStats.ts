@@ -146,26 +146,23 @@ export const useApplicantStats = (): UseApplicantStatsResult => {
 /**
  * SVG 차트 경로 생성 유틸
  */
-export const generateChartPath = (dailyData: DailyCount[]): { mainPath: string; areaPath: string } => {
+export const generateChartPath = (dailyData: DailyCount[]): { mainPath: string; areaPath: string; points: { x: number; y: number; count: number }[] } => {
     if (dailyData.length === 0) {
         const mainPath = "M0,130 L400,130";
-        return { mainPath, areaPath: mainPath + " V150 H0 Z" };
+        return { mainPath, areaPath: mainPath + " V150 H0 Z", points: [] };
     }
 
     const maxCount = Math.max(...dailyData.map(d => d.count), 1);
     const points = dailyData.map((d, i) => {
         const x = (i / (dailyData.length - 1)) * 400;
         const y = 150 - (d.count / maxCount) * 120;
-        return { x, y };
+        return { x, y, count: d.count };
     });
 
     let mainPath = `M${points[0].x},${points[0].y}`;
     for (let i = 1; i < points.length; i++) {
-        const prev = points[i - 1];
-        const curr = points[i];
-        const cpX = (prev.x + curr.x) / 2;
-        mainPath += ` Q${cpX},${prev.y} ${curr.x},${curr.y}`;
+        mainPath += ` L${points[i].x},${points[i].y}`;
     }
 
-    return { mainPath, areaPath: mainPath + " V150 H0 Z" };
+    return { mainPath, areaPath: mainPath + " V150 H0 Z", points };
 };

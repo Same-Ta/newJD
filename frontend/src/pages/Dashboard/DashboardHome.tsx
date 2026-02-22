@@ -128,7 +128,40 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
         }
     };
 
-    const { mainPath, areaPath } = generateChartPath(dailyData);
+    // 차트 모드 상태
+    const [chartMode, setChartMode] = useState<'all' | 'passed' | 'interview'>('all');
+
+    // 모드별 최근 7일 데이터 계산
+    const buildDailyData = (filterStatus?: string) => {
+        const last7Days: { [key: string]: number } = {};
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            last7Days[date.toISOString().split('T')[0]] = 0;
+        }
+        applicantData.forEach((app: any) => {
+            if (filterStatus && app.status !== filterStatus) return;
+            if (!app.appliedAt) return;
+            const d = app.appliedAt.seconds
+                ? new Date(app.appliedAt.seconds * 1000)
+                : new Date(app.appliedAt);
+            const key = d.toISOString().split('T')[0];
+            if (key in last7Days) last7Days[key]++;
+        });
+        return Object.entries(last7Days).map(([date, count]) => ({ date, count }));
+    };
+
+    const chartRawData =
+        chartMode === 'all' ? dailyData :
+        chartMode === 'passed' ? buildDailyData('합격') :
+        buildDailyData('면접통과');
+
+    const { mainPath, points: chartPoints } = generateChartPath(chartRawData);
+    const activeChartData = {
+        mainPath,
+        points: chartPoints,
+        dates: chartRawData.map(d => d.date),
+    };
 
     if (loading) {
         return (
@@ -476,26 +509,50 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
                         <h3 className="font-bold text-gray-800">지원자 추이</h3>
                         <div className="flex gap-2">
-                            <button className="px-3 py-1 text-xs font-bold bg-blue-600 text-white rounded-lg">지원자</button>
-                            <button className="px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded-lg">서류합격</button>
-                            <button className="px-3 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded-lg">면접통과</button>
+                            {(['all', 'passed', 'interview'] as const).map((mode) => (
+                                <button
+                                    key={mode}
+                                    onClick={() => setChartMode(mode)}
+                                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-colors ${
+                                        chartMode === mode ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    {mode === 'all' ? '지원자' : mode === 'passed' ? '서류합격' : '면접통과'}
+                                </button>
+                            ))}
                         </div>
                     </div>
                     
-                    <div className="h-48 relative">
+                    <div className="h-52 relative">
                         <svg className="w-full h-full" viewBox="0 0 400 150" preserveAspectRatio="none">
-                            <defs>
-                                <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3"/>
-                                    <stop offset="100%" stopColor="#3B82F6" stopOpacity="0"/>
-                                </linearGradient>
-                            </defs>
-                            <path d={areaPath} fill="url(#chartGradient)" />
-                            <path d={mainPath} fill="none" stroke="#3B82F6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d={activeChartData.mainPath} fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
+                            {activeChartData.points.map((p, i) => (
+                                <circle key={i} cx={p.x} cy={p.y} r="3.5" fill="white" stroke="#3B82F6" strokeWidth="2" vectorEffect="non-scaling-stroke"/>
+                            ))}
                         </svg>
+                        {/* 명수 레이블 (HTML 오버레이) */}
+                        <div className="absolute inset-0 pointer-events-none">
+                            {activeChartData.points.map((p, i) => (
+                                p.count > 0 && (
+                                    <div
+                                        key={i}
+                                        className="absolute -translate-x-1/2"
+                                        style={{
+                                            left: `${(p.x / 400) * 100}%`,
+                                            top: `calc(${(p.y / 150) * 100}% - 24px)`,
+                                        }}
+                                    >
+                                        <span className="text-[10px] font-bold text-blue-600 bg-white px-1 py-0.5 rounded border border-blue-100 shadow-sm whitespace-nowrap">
+                                            {p.count}명
+                                        </span>
+                                    </div>
+                                )
+                            ))}
+                        </div>
+                        {/* 날짜 레이블 */}
                         <div className="absolute bottom-0 left-0 right-0 flex justify-between px-2 text-xs text-gray-400">
-                            {dailyData.map((d, i) => (
-                                <span key={i}>{new Date(d.date).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })}</span>
+                            {activeChartData.dates.map((d, i) => (
+                                <span key={i}>{new Date(d).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })}</span>
                             ))}
                         </div>
                     </div>

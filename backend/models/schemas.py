@@ -199,9 +199,11 @@ class ApplicationResponse(BaseModel):
     preferredAnswers: Optional[List[Dict[str, Any]]] = None
     selectedSkills: Optional[Dict[str, Any]] = None
     status: Optional[str] = None
+    appliedAt: Optional[str] = None
     createdAt: Optional[str] = None
     updatedAt: Optional[str] = None
     applicationId: Optional[str] = None
+    recruiterId: Optional[str] = None
 
     @model_validator(mode='before')
     @classmethod
