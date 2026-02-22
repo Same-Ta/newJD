@@ -370,10 +370,13 @@ const App = () => {
         <FunnelCSS />
         {/* 간단한 헤더 */}
         <header className="bg-white border-b border-gray-100 px-6 h-16 flex items-center justify-between fixed w-full z-10 shadow-sm">
-          <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => navigateTo(isLoggedIn ? 'dashboard' : 'landing')}
+            className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+          >
             <img src="/logo.png" alt="WINNOW" className="w-8 h-8 object-contain" />
             <span className="font-extrabold text-[19px] text-gray-900 tracking-tight">WINNOW</span>
-          </div>
+          </button>
           <div className="flex items-center gap-3">
             {isLoggedIn ? (
               <button 
