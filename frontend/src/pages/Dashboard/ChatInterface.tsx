@@ -61,6 +61,21 @@ interface ChatInterfaceProps {
     onNavigate: (page: string) => void;
 }
 
+
+// ===== Section Type System (drag-and-drop) =====
+type SectionType = 'description' | 'recruitment' | 'visionMission' | 'requirements' | 'preferred' | 'benefits';
+
+const SECTION_META: Record<SectionType, { label: string }> = {
+    description: { label: '소개' },
+    recruitment: { label: '모집 일정' },
+    visionMission: { label: '비전/미션' },
+    requirements: { label: '필수 체크리스트' },
+    preferred: { label: '우대 체크리스트' },
+    benefits: { label: '혜택/복리후생' },
+};
+
+const ALL_SECTION_TYPES: SectionType[] = ['description', 'recruitment', 'visionMission', 'requirements', 'preferred', 'benefits'];
+
 export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     const { isDemoMode, shouldSimulateAI, setShouldSimulateAI, setAiSimulationComplete, onDemoAction, setDemoCreatedJDId } = useDemoMode();
 
@@ -126,6 +141,15 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     const chatEndRef = useRef<HTMLDivElement>(null);
     const [isEditMode, setIsEditMode] = useState(false);
     const [editedJD, setEditedJD] = useState<CurrentJD>(currentJD);
+
+    // Section drag & drop state
+    const [sectionOrder, setSectionOrder] = useState<SectionType[]>(['description', 'recruitment', 'visionMission', 'requirements', 'preferred', 'benefits']);
+    const [draggedSection, setDraggedSection] = useState<string | null>(null);
+    const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+    
+    // Section-click-to-chat state
+    const [focusedSection, setFocusedSection] = useState<SectionType | null>(null);
+
     
     // 채팅방 크기 조절 상태
     const [chatWidth, setChatWidth] = useState(35); // 퍼센트 단위
@@ -406,6 +430,60 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         setEditedJD(currentJD);
         setIsEditMode(false);
     };
+
+    // ===== Section Drag & Drop Handlers =====
+    const handleSectionDragStart = (e: React.DragEvent, section: string) => {
+        e.dataTransfer.effectAllowed = 'move';
+        setDraggedSection(section);
+    };
+    const handleSectionDragOver = (e: React.DragEvent, idx: number) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setDragOverIdx(idx);
+    };
+    const handleSectionDrop = (dropIdx: number) => {
+        if (!draggedSection) return;
+        const t = draggedSection as SectionType;
+        if (!sectionOrder.includes(t)) {
+            const o = [...sectionOrder]; o.splice(dropIdx, 0, t); setSectionOrder(o);
+        } else {
+            const ci = sectionOrder.indexOf(t);
+            if (ci === dropIdx) { setDraggedSection(null); setDragOverIdx(null); return; }
+            const o = [...sectionOrder]; o.splice(ci, 1);
+            o.splice(dropIdx > ci ? dropIdx - 1 : dropIdx, 0, t); setSectionOrder(o);
+        }
+        setDraggedSection(null); setDragOverIdx(null);
+    };
+    const handleSectionDragEnd = () => { setDraggedSection(null); setDragOverIdx(null); };
+    const removeSection = (s: SectionType) => setSectionOrder(prev => prev.filter(x => x !== s));
+
+    // Active/palette sections
+    const getActiveSections = (): SectionType[] => {
+        if (isEditMode) return sectionOrder;
+        // In view mode, only show sections that have content
+        const has: Record<SectionType, boolean> = {
+            description: !!currentJD.description,
+            recruitment: jdType === 'club' && !!(currentJD.recruitmentPeriod || currentJD.recruitmentTarget || currentJD.recruitmentCount || (currentJD.recruitmentProcess && currentJD.recruitmentProcess.length > 0) || currentJD.activitySchedule || currentJD.membershipFee),
+            visionMission: !!(currentJD.vision || currentJD.mission),
+            requirements: currentJD.requirements.length > 0,
+            preferred: currentJD.preferred.length > 0,
+            benefits: !!(currentJD.benefits && currentJD.benefits.length > 0),
+        };
+        return sectionOrder.filter(s => has[s]);
+    };
+    const activeSections = getActiveSections();
+    const paletteSections = isEditMode ? ALL_SECTION_TYPES.filter(s => !sectionOrder.includes(s)) : [];
+
+    // Section click-to-chat handler
+    const handleSectionClick = (section: SectionType) => {
+        if (focusedSection === section) {
+            setFocusedSection(null); // toggle off
+        } else {
+            setFocusedSection(section);
+        }
+    };
+
+
 
     // 배열 항목 업데이트
     const updateArrayItem = (field: keyof CurrentJD, index: number, value: string) => {
@@ -726,7 +804,14 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
 
             // 민감 정보 마스킹 후 API 호출
             const sanitizedMessage = maskSensitiveData(currentInput);
-            const response = await geminiAPI.chat(sanitizedMessage, conversationHistory, jdType);
+            
+            // 섹션 포커스가 있으면 AI에게 해당 섹션 수정 컨텍스트 전달
+            let finalMessage = sanitizedMessage;
+            if (focusedSection) {
+                const sectionLabel = SECTION_META[focusedSection]?.label || focusedSection;
+                finalMessage = `[섹션 포커스: "${sectionLabel}"] 사용자가 "${sectionLabel}" 섹션을 선택한 상태입니다. 해당 섹션의 내용만 집중적으로 수정해주세요. 사용자 메시지: ${sanitizedMessage}`;
+            }
+            const response = await geminiAPI.chat(finalMessage, conversationHistory, jdType);
             
             // 응답 검증
             if (!response || typeof response !== 'object') {
@@ -1036,6 +1121,302 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         );
     }
 
+    // ===== Render individual section content =====
+    const renderSectionContent = (type: SectionType) => {
+        switch (type) {
+            case 'description':
+                return (currentJD.description || isEditMode) ? (
+                    <div className="space-y-3">
+                        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-100 rounded-lg p-5">
+                            <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-3">
+                                {jdType === 'company' ? '회사 소개' : '동아리 소개'}
+                            </h4>
+                            {isEditMode ? (
+                                <textarea
+                                    value={editedJD.description}
+                                    onChange={(e) => setEditedJD({ ...editedJD, description: e.target.value })}
+                                    placeholder={jdType === 'company' ? '회사의 사업 분야, 문화, 특징 등을 소개하는 글을 입력하세요' : '동아리의 활동, 분위기, 특징 등을 소개하는 글을 입력하세요'}
+                                    className="w-full text-[14px] text-gray-700 leading-relaxed bg-transparent border border-dashed border-blue-200 rounded-lg outline-none focus:border-blue-400 px-2 py-1 resize-none transition-colors"
+                                    rows={4}
+                                />
+                            ) : (
+                                <p className="text-[14px] text-gray-700 leading-relaxed">
+                                    {typingText['description'] !== undefined ? typingText['description'] : currentJD.description}
+                                    {typingText['description'] !== undefined && <span className="animate-pulse">|</span>}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                ) : null;
+
+            case 'recruitment':
+                return (jdType === 'club' && (currentJD.recruitmentPeriod || currentJD.recruitmentTarget || currentJD.recruitmentCount || (currentJD.recruitmentProcess && currentJD.recruitmentProcess.length > 0) || currentJD.activitySchedule || currentJD.membershipFee || isEditMode)) ? (
+                    <div className="space-y-3">
+                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-lg p-5">
+                            <h4 className="text-[11px] font-bold text-green-600 uppercase tracking-wider mb-4">모집 일정 및 정보</h4>
+                            <div className="space-y-3">
+                                <div className="flex items-start gap-3">
+                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 기간</span>
+                                    {isEditMode ? (
+                                        <input type="text" value={editedJD.recruitmentPeriod || ''} onChange={(e) => setEditedJD({ ...editedJD, recruitmentPeriod: e.target.value })} placeholder="예: 2025.03.01 ~ 2025.03.15" className="flex-1 text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors" />
+                                    ) : (
+                                        <span className="text-[13px] text-gray-700">{currentJD.recruitmentPeriod || <span className="text-gray-400">미정</span>}</span>
+                                    )}
+                                </div>
+                                <div className="flex items-start gap-3">
+                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 대상</span>
+                                    {isEditMode ? (
+                                        <input type="text" value={editedJD.recruitmentTarget || ''} onChange={(e) => setEditedJD({ ...editedJD, recruitmentTarget: e.target.value })} placeholder="예: 전 학년 재학생" className="flex-1 text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors" />
+                                    ) : (
+                                        <span className="text-[13px] text-gray-700">{currentJD.recruitmentTarget || <span className="text-gray-400">미정</span>}</span>
+                                    )}
+                                </div>
+                                <div className="flex items-start gap-3">
+                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 인원</span>
+                                    {isEditMode ? (
+                                        <input type="text" value={editedJD.recruitmentCount || ''} onChange={(e) => setEditedJD({ ...editedJD, recruitmentCount: e.target.value })} placeholder="예: 00명 내외" className="flex-1 text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors" />
+                                    ) : (
+                                        <span className="text-[13px] text-gray-700">{currentJD.recruitmentCount || <span className="text-gray-400">미정</span>}</span>
+                                    )}
+                                </div>
+                                <div className="flex items-start gap-3">
+                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 절차</span>
+                                    {isEditMode ? (
+                                        <input type="text" value={(editedJD.recruitmentProcess || []).join(', ')} onChange={(e) => setEditedJD({ ...editedJD, recruitmentProcess: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} placeholder="예: 서류 접수, 면접, 최종 합격 발표" className="flex-1 text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors" />
+                                    ) : (
+                                        <span className="text-[13px] text-gray-700">
+                                            {currentJD.recruitmentProcess && currentJD.recruitmentProcess.length > 0 
+                                                ? currentJD.recruitmentProcess.map((step, i) => (
+                                                    <span key={i}>
+                                                        {i > 0 && <span className="text-green-400 mx-1">→</span>}
+                                                        {step}
+                                                    </span>
+                                                ))
+                                                : <span className="text-gray-400">미정</span>
+                                            }
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex items-start gap-3">
+                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">활동 일정</span>
+                                    {isEditMode ? (
+                                        <input type="text" value={editedJD.activitySchedule || ''} onChange={(e) => setEditedJD({ ...editedJD, activitySchedule: e.target.value })} placeholder="예: 매주 수요일 18:00 정기 모임" className="flex-1 text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors" />
+                                    ) : (
+                                        <span className="text-[13px] text-gray-700">{currentJD.activitySchedule || <span className="text-gray-400">미정</span>}</span>
+                                    )}
+                                </div>
+                                <div className="flex items-start gap-3">
+                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">회비</span>
+                                    {isEditMode ? (
+                                        <input type="text" value={editedJD.membershipFee || ''} onChange={(e) => setEditedJD({ ...editedJD, membershipFee: e.target.value })} placeholder="예: 학기당 3만원" className="flex-1 text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors" />
+                                    ) : (
+                                        <span className="text-[13px] text-gray-700">{currentJD.membershipFee || <span className="text-gray-400">미정</span>}</span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : null;
+
+            case 'visionMission':
+                return ((currentJD.vision || currentJD.mission) || isEditMode) ? (
+                    <div className="space-y-4">
+                        <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-5">
+                            <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-2">VISION & MISSION</h4>
+                            <div className="space-y-3">
+                                {(currentJD.vision || isEditMode) && (
+                                    <div>
+                                        <h5 className="font-bold text-[13px] text-gray-800 mb-1">우리의 비전</h5>
+                                        {isEditMode ? (
+                                            <textarea
+                                                value={editedJD.vision}
+                                                onChange={(e) => setEditedJD({ ...editedJD, vision: e.target.value })}
+                                                placeholder="비전을 입력하세요"
+                                                className="w-full text-[13px] text-gray-700 leading-relaxed bg-transparent border border-dashed border-blue-200 rounded-lg outline-none focus:border-blue-400 px-2 py-1 resize-none transition-colors"
+                                                rows={3}
+                                            />
+                                        ) : (
+                                            <p className="text-[13px] text-gray-700 leading-relaxed">
+                                                {typingText['vision'] !== undefined ? typingText['vision'] : currentJD.vision}
+                                                {typingText['vision'] !== undefined && <span className="animate-pulse">|</span>}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                                {(currentJD.mission || isEditMode) && (
+                                    <div>
+                                        <h5 className="font-bold text-[13px] text-gray-800 mb-1">우리의 미션</h5>
+                                        {isEditMode ? (
+                                            <textarea
+                                                value={editedJD.mission}
+                                                onChange={(e) => setEditedJD({ ...editedJD, mission: e.target.value })}
+                                                placeholder="미션을 입력하세요"
+                                                className="w-full text-[13px] text-gray-700 leading-relaxed bg-transparent border border-dashed border-blue-200 rounded-lg outline-none focus:border-blue-400 px-2 py-1 resize-none transition-colors"
+                                                rows={3}
+                                            />
+                                        ) : (
+                                            <p className="text-[13px] text-gray-700 leading-relaxed">
+                                                {typingText['mission'] !== undefined ? typingText['mission'] : currentJD.mission}
+                                                {typingText['mission'] !== undefined && <span className="animate-pulse">|</span>}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ) : null;
+
+            case 'requirements':
+                return (
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{jdType === 'company' ? '자격 요건 (CHECKLIST)' : '지원자 체크리스트 (필수)'}</h4>
+                            {isEditMode && (
+                                <button onClick={() => addArrayItem('requirements')} className="text-[11px] font-semibold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors">+ 추가</button>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            {isEditMode ? (
+                                editedJD.requirements && editedJD.requirements.length > 0 ? (
+                                    editedJD.requirements.map((item, idx) => {
+                                        const itemType = editedJD.requirementTypes?.[idx] || 'checkbox';
+                                        return (
+                                            <div key={idx} className="space-y-1">
+                                                <div className="flex items-start gap-2">
+                                                    <span className="text-gray-300 text-sm mt-1">☐</span>
+                                                    <input type="text" value={item} onChange={(e) => updateArrayItem('requirements', idx, e.target.value)} placeholder={jdType === 'company' ? '자격 요건을 입력하세요' : '체크리스트 항목을 입력하세요'} className="flex-1 text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors" />
+                                                    <button onClick={() => removeArrayItem('requirements', idx)} className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors">✕</button>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 pl-1">
+                                                    <button onClick={() => setEditedJD({ ...editedJD, requirementTypes: { ...editedJD.requirementTypes, [idx]: 'checkbox' } })} className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${itemType === 'checkbox' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-400 hover:border-blue-300'}`}>✓ 체크형</button>
+                                                    <button onClick={() => setEditedJD({ ...editedJD, requirementTypes: { ...editedJD.requirementTypes, [idx]: 'text' } })} className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${itemType === 'text' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-400 hover:border-blue-300'}`}>✎ 서술형</button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <p className="text-[13px] text-gray-400 p-3">항목을 추가하세요.</p>
+                                )
+                            ) : (
+                                currentJD.requirements.length > 0 ? currentJD.requirements.map((item, idx) => {
+                                    const itemType = currentJD.requirementTypes?.[idx] || 'checkbox';
+                                    return (
+                                        <div key={idx} className="space-y-1">
+                                            <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
+                                                {itemType === 'checkbox' && <input type="checkbox" className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />}
+                                                {itemType === 'text' && <span className="text-blue-400 mt-0.5 flex-shrink-0">•</span>}
+                                                <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
+                                            </label>
+                                            <div className="flex items-center gap-1.5 pl-3">
+                                                <button onClick={() => setCurrentJD(prev => ({ ...prev, requirementTypes: { ...prev.requirementTypes, [idx]: 'checkbox' } }))} className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${itemType === 'checkbox' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-400 hover:border-blue-300'}`}>✓ 체크형</button>
+                                                <button onClick={() => setCurrentJD(prev => ({ ...prev, requirementTypes: { ...prev.requirementTypes, [idx]: 'text' } }))} className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${itemType === 'text' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-400 hover:border-blue-300'}`}>✎ 서술형</button>
+                                            </div>
+                                        </div>
+                                    );
+                                }) : (
+                                    <p className="text-[13px] text-gray-400 p-3">아직 설정되지 않았습니다.</p>
+                                )
+                            )}
+                        </div>
+                    </div>
+                );
+
+            case 'preferred':
+                return (
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{jdType === 'company' ? '우대 사항 (PREFERRED)' : '지원자 체크리스트 (우대)'}</h4>
+                            {isEditMode && (
+                                <button onClick={() => addArrayItem('preferred')} className="text-[11px] font-semibold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors">+ 추가</button>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            {isEditMode ? (
+                                editedJD.preferred && editedJD.preferred.length > 0 ? (
+                                    editedJD.preferred.map((item, idx) => {
+                                        const itemType = editedJD.preferredTypes?.[idx] || 'checkbox';
+                                        return (
+                                            <div key={idx} className="space-y-1">
+                                                <div className="flex items-start gap-2">
+                                                    <span className="text-gray-300 text-sm mt-1">&#9744;</span>
+                                                    <input type="text" value={item} onChange={(e) => updateArrayItem('preferred', idx, e.target.value)} placeholder={jdType === 'company' ? '우대 사항을 입력하세요' : '우대 체크리스트 항목을 입력하세요'} className="flex-1 text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors" />
+                                                    <button onClick={() => removeArrayItem('preferred', idx)} className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors">✕</button>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 pl-1">
+                                                    <button onClick={() => setEditedJD({ ...editedJD, preferredTypes: { ...editedJD.preferredTypes, [idx]: 'checkbox' } })} className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${itemType === 'checkbox' ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white border-gray-200 text-gray-400 hover:border-purple-300'}`}>✓ 체크형</button>
+                                                    <button onClick={() => setEditedJD({ ...editedJD, preferredTypes: { ...editedJD.preferredTypes, [idx]: 'text' } })} className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${itemType === 'text' ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white border-gray-200 text-gray-400 hover:border-purple-300'}`}>✎ 서술형</button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <p className="text-[13px] text-gray-400 p-3">항목을 추가하세요.</p>
+                                )
+                            ) : (
+                                currentJD.preferred.length > 0 ? currentJD.preferred.map((item, idx) => {
+                                    const itemType = currentJD.preferredTypes?.[idx] || 'checkbox';
+                                    return (
+                                        <div key={idx} className="space-y-1">
+                                            <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
+                                                {itemType === 'checkbox' && <input type="checkbox" className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />}
+                                                {itemType === 'text' && <span className="text-purple-400 mt-0.5 flex-shrink-0">•</span>}
+                                                <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
+                                            </label>
+                                            <div className="flex items-center gap-1.5 pl-3">
+                                                <button onClick={() => setCurrentJD(prev => ({ ...prev, preferredTypes: { ...prev.preferredTypes, [idx]: 'checkbox' } }))} className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${itemType === 'checkbox' ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white border-gray-200 text-gray-400 hover:border-purple-300'}`}>✓ 체크형</button>
+                                                <button onClick={() => setCurrentJD(prev => ({ ...prev, preferredTypes: { ...prev.preferredTypes, [idx]: 'text' } }))} className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${itemType === 'text' ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white border-gray-200 text-gray-400 hover:border-purple-300'}`}>✎ 서술형</button>
+                                            </div>
+                                        </div>
+                                    );
+                                }) : (
+                                    <p className="text-[13px] text-gray-400 p-3">아직 설정되지 않았습니다.</p>
+                                )
+                            )}
+                        </div>
+                    </div>
+                );
+
+            case 'benefits':
+                return (currentJD.benefits && currentJD.benefits.length > 0 || isEditMode) ? (
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{jdType === 'company' ? '복리후생 (BENEFITS)' : '활동 혜택 (BENEFITS)'}</h4>
+                            {isEditMode && (
+                                <button onClick={() => addArrayItem('benefits')} className="text-[11px] font-semibold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors">+ 추가</button>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            {isEditMode ? (
+                                editedJD.benefits && editedJD.benefits.length > 0 ? (
+                                    editedJD.benefits.map((item, idx) => (
+                                        <div key={idx} className="flex items-start gap-2">
+                                            <span className="text-orange-400 mt-0.5 flex-shrink-0">&#8226;</span>
+                                            <input type="text" value={item} onChange={(e) => updateArrayItem('benefits', idx, e.target.value)} placeholder={jdType === 'company' ? '복리후생을 입력하세요' : '활동 혜택을 입력하세요'} className="flex-1 text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors" />
+                                            <button onClick={() => removeArrayItem('benefits', idx)} className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors">✕</button>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-[13px] text-gray-400 p-3">항목을 추가하세요.</p>
+                                )
+                            ) : (
+                                currentJD.benefits.map((item, idx) => (
+                                    <div key={idx} className="flex items-start gap-3 px-3 py-2">
+                                        <span className="text-orange-400 mt-0.5 flex-shrink-0">•</span>
+                                        <span className="text-[13px] text-gray-700 leading-relaxed">{item}</span>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                ) : null;
+
+            default:
+                return null;
+        }
+    };
+
+
     return (
         <div className="relative w-full" style={isMobile ? {} : { transform: 'scale(0.95)', transformOrigin: 'top center', width: '105.26%', marginLeft: '-2.63%' }}>
         {/* 모바일 탭 전환 */}
@@ -1321,11 +1702,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                     <div className="px-6 space-y-4 mb-6">
                         <div>
                             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">LOCATION</div>
-                            <div className="flex items-center gap-2 text-[13px]">
-                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
+                            <div className="text-[13px]">
                                 {currentJD.location ? (
                                     <span className="text-gray-700">
                                         {typingText['location'] !== undefined ? typingText['location'] : currentJD.location}
@@ -1339,10 +1716,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                         
                         <div>
                             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">SCALE</div>
-                            <div className="flex items-center gap-2 text-[13px]">
-                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                </svg>
+                            <div className="text-[13px]">
                                 {currentJD.scale ? (
                                     <span className="text-gray-700">
                                         {typingText['scale'] !== undefined ? typingText['scale'] : currentJD.scale}
@@ -1359,9 +1733,6 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                     {currentJD.techStacks && currentJD.techStacks.length > 0 && (
                         <div className="px-6 mb-6">
                             <div className="flex items-center gap-2 mb-3">
-                                <svg className="w-4 h-4 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                                </svg>
                                 <span className="font-bold text-[13px] text-gray-800">Tech Stack & Skills</span>
                             </div>
                             <div className="space-y-2">
@@ -1408,7 +1779,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                                 value={editedJD.title}
                                                 onChange={(e) => setEditedJD({ ...editedJD, title: e.target.value })}
                                                 placeholder="공고 제목을 입력하세요"
-                                                className="w-full px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                className="w-full bg-transparent border-0 border-b-2 border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-1 transition-colors"
                                             />
                                         ) : currentJD.title ? (
                                             <>
@@ -1422,7 +1793,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                     
                                     {/* 편집 모드 전용: 기본 정보 입력 필드 */}
                                     {isEditMode && (
-                                        <div className="space-y-3 mb-6 bg-blue-50/30 p-4 rounded-lg border border-blue-200">
+                                        <div className="space-y-3 mb-6">
                                             <div>
                                                 <label className="block text-[11px] font-bold text-gray-600 mb-1.5">{jdType === 'company' ? '회사명' : '동아리명'}</label>
                                                 <input
@@ -1430,7 +1801,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                                     value={editedJD.companyName}
                                                     onChange={(e) => setEditedJD({ ...editedJD, companyName: e.target.value })}
                                                     placeholder={jdType === 'company' ? '회사 이름을 입력하세요' : '동아리 이름을 입력하세요'}
-                                                    className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
+                                                    className="w-full text-[13px] bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-1 transition-colors"
                                                 />
                                             </div>
                                             <div>
@@ -1440,7 +1811,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                                     value={editedJD.jobRole}
                                                     onChange={(e) => setEditedJD({ ...editedJD, jobRole: e.target.value })}
                                                     placeholder={jdType === 'company' ? '채용 직무를 입력하세요' : '모집 분야를 입력하세요'}
-                                                    className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
+                                                    className="w-full text-[13px] bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-1 transition-colors"
                                                 />
                                             </div>
                                             <div>
@@ -1450,7 +1821,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                                     value={editedJD.location}
                                                     onChange={(e) => setEditedJD({ ...editedJD, location: e.target.value })}
                                                     placeholder={jdType === 'company' ? '근무지를 입력하세요' : '활동 장소를 입력하세요'}
-                                                    className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
+                                                    className="w-full text-[13px] bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-1 transition-colors"
                                                 />
                                             </div>
                                             <div>
@@ -1460,427 +1831,72 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                                     value={editedJD.scale}
                                                     onChange={(e) => setEditedJD({ ...editedJD, scale: e.target.value })}
                                                     placeholder={jdType === 'company' ? '회사 규모를 입력하세요 (예: 스타트업/중소기업/대기업)' : '동아리 규모를 입력하세요 (예: 소규모/중규모 동아리)'}
-                                                    className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
+                                                    className="w-full text-[13px] bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-1 transition-colors"
                                                 />
                                             </div>
                                         </div>
                                     )}
                                 </div>
 
-                                {/* 동아리 소개 (ABOUT US) */}
-                                {(currentJD.description || isEditMode) && (
-                                    <div className="space-y-3">
-                                        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-100 rounded-lg p-5">
-                                            <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path d="M10 2a8 8 0 100 16 8 8 0 000-16zM9 9a1 1 0 112 0v4a1 1 0 11-2 0V9zm1-5a1 1 0 100 2 1 1 0 000-2z"/>
-                                                </svg>
-                                                {jdType === 'company' ? '회사 소개' : '동아리 소개'}
-                                            </h4>
-                                            {isEditMode ? (
-                                                <textarea
-                                                    value={editedJD.description}
-                                                    onChange={(e) => setEditedJD({ ...editedJD, description: e.target.value })}
-                                                    placeholder={jdType === 'company' ? '회사의 사업 분야, 문화, 특징 등을 소개하는 글을 입력하세요' : '동아리의 활동, 분위기, 특징 등을 소개하는 글을 입력하세요'}
-                                                    className="w-full px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
-                                                    rows={4}
-                                                />
-                                            ) : (
-                                                <p className="text-[14px] text-gray-700 leading-relaxed">
-                                                    {typingText['description'] !== undefined ? typingText['description'] : currentJD.description}
-                                                    {typingText['description'] !== undefined && <span className="animate-pulse">|</span>}
-                                                </p>
-                                            )}
-                                        </div>
+                                {/* 섹션 팔레트 */}
+                                {isEditMode && paletteSections.length > 0 && (
+                                    <div className="flex flex-wrap items-center gap-2 p-3 bg-gradient-to-r from-gray-50 to-blue-50/50 border border-blue-100 rounded-xl">
+                                        <span className="text-[11px] font-bold text-gray-400 mr-1">섹션 추가</span>
+                                        {paletteSections.map(s => (
+                                            <div
+                                                key={s}
+                                                draggable
+                                                onDragStart={(e) => handleSectionDragStart(e, s)}
+                                                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] font-medium text-gray-600 cursor-grab hover:border-blue-300 hover:shadow-sm active:cursor-grabbing transition-all select-none"
+                                            >
+                                                {SECTION_META[s].label}
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
 
-                                {/* 모집 일정 및 정보 (동아리 모드 전용) */}
-                                {jdType === 'club' && (
-                                    (currentJD.recruitmentPeriod || currentJD.recruitmentTarget || currentJD.recruitmentCount || 
-                                     (currentJD.recruitmentProcess && currentJD.recruitmentProcess.length > 0) ||
-                                     currentJD.activitySchedule || currentJD.membershipFee || isEditMode) && (
-                                    <div className="space-y-3">
-                                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-lg p-5">
-                                            <h4 className="text-[11px] font-bold text-green-600 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                                                </svg>
-                                                모집 일정 및 정보
-                                            </h4>
-                                            <div className="space-y-3">
-                                                {/* 모집 기간 */}
-                                                <div className="flex items-start gap-3">
-                                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 기간</span>
-                                                    {isEditMode ? (
-                                                        <input type="text" value={editedJD.recruitmentPeriod || ''} onChange={(e) => setEditedJD({ ...editedJD, recruitmentPeriod: e.target.value })} placeholder="예: 2025.03.01 ~ 2025.03.15" className="flex-1 px-3 py-1.5 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-[13px]" />
-                                                    ) : (
-                                                        <span className="text-[13px] text-gray-700">{currentJD.recruitmentPeriod || <span className="text-gray-400">미정</span>}</span>
-                                                    )}
-                                                </div>
-                                                {/* 모집 대상 */}
-                                                <div className="flex items-start gap-3">
-                                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 대상</span>
-                                                    {isEditMode ? (
-                                                        <input type="text" value={editedJD.recruitmentTarget || ''} onChange={(e) => setEditedJD({ ...editedJD, recruitmentTarget: e.target.value })} placeholder="예: 전 학년 재학생" className="flex-1 px-3 py-1.5 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-[13px]" />
-                                                    ) : (
-                                                        <span className="text-[13px] text-gray-700">{currentJD.recruitmentTarget || <span className="text-gray-400">미정</span>}</span>
-                                                    )}
-                                                </div>
-                                                {/* 모집 인원 */}
-                                                <div className="flex items-start gap-3">
-                                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 인원</span>
-                                                    {isEditMode ? (
-                                                        <input type="text" value={editedJD.recruitmentCount || ''} onChange={(e) => setEditedJD({ ...editedJD, recruitmentCount: e.target.value })} placeholder="예: 00명 내외" className="flex-1 px-3 py-1.5 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-[13px]" />
-                                                    ) : (
-                                                        <span className="text-[13px] text-gray-700">{currentJD.recruitmentCount || <span className="text-gray-400">미정</span>}</span>
-                                                    )}
-                                                </div>
-                                                {/* 모집 절차 */}
-                                                <div className="flex items-start gap-3">
-                                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 절차</span>
-                                                    {isEditMode ? (
-                                                        <input type="text" value={(editedJD.recruitmentProcess || []).join(', ')} onChange={(e) => setEditedJD({ ...editedJD, recruitmentProcess: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} placeholder="예: 서류 접수, 면접, 최종 합격 발표" className="flex-1 px-3 py-1.5 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-[13px]" />
-                                                    ) : (
-                                                        <span className="text-[13px] text-gray-700">
-                                                            {currentJD.recruitmentProcess && currentJD.recruitmentProcess.length > 0 
-                                                                ? currentJD.recruitmentProcess.map((step, i) => (
-                                                                    <span key={i}>
-                                                                        {i > 0 && <span className="text-green-400 mx-1">→</span>}
-                                                                        {step}
-                                                                    </span>
-                                                                ))
-                                                                : <span className="text-gray-400">미정</span>
-                                                            }
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {/* 활동 일정 */}
-                                                <div className="flex items-start gap-3">
-                                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">활동 일정</span>
-                                                    {isEditMode ? (
-                                                        <input type="text" value={editedJD.activitySchedule || ''} onChange={(e) => setEditedJD({ ...editedJD, activitySchedule: e.target.value })} placeholder="예: 매주 수요일 18:00 정기 모임" className="flex-1 px-3 py-1.5 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-[13px]" />
-                                                    ) : (
-                                                        <span className="text-[13px] text-gray-700">{currentJD.activitySchedule || <span className="text-gray-400">미정</span>}</span>
-                                                    )}
-                                                </div>
-                                                {/* 회비 */}
-                                                <div className="flex items-start gap-3">
-                                                    <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">회비</span>
-                                                    {isEditMode ? (
-                                                        <input type="text" value={editedJD.membershipFee || ''} onChange={(e) => setEditedJD({ ...editedJD, membershipFee: e.target.value })} placeholder="예: 학기당 3만원" className="flex-1 px-3 py-1.5 border border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-[13px]" />
-                                                    ) : (
-                                                        <span className="text-[13px] text-gray-700">{currentJD.membershipFee || <span className="text-gray-400">미정</span>}</span>
-                                                    )}
-                                                </div>
+                                {/* 동적 섹션 렌더링 */}
+                                {activeSections.map((section, idx) => (
+                                    <div
+                                        key={section}
+                                        draggable={isEditMode}
+                                        onDragStart={(e) => isEditMode && handleSectionDragStart(e, section)}
+                                        onDragOver={(e) => isEditMode && handleSectionDragOver(e, idx)}
+                                        onDrop={() => isEditMode && handleSectionDrop(idx)}
+                                        onDragEnd={handleSectionDragEnd}
+                                        onClick={() => !isEditMode && handleSectionClick(section)}
+                                        className={`relative group/section transition-all ${isEditMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${dragOverIdx === idx ? 'ring-2 ring-blue-400 ring-offset-2 rounded-lg' : ''} ${focusedSection === section && !isEditMode ? 'ring-2 ring-indigo-500 ring-offset-2 rounded-lg bg-indigo-50/30' : ''}`}
+                                    >
+                                        {/* 편집 모드 드래그 핸들 */}
+                                        {isEditMode && (
+                                            <div className="flex items-center justify-between mb-1 py-1 opacity-0 group-hover/section:opacity-100 transition-opacity">
+                                                <span className="text-[10px] text-gray-400 flex items-center gap-1 select-none">
+                                                    <span className="cursor-grab text-gray-300 hover:text-gray-500">⠇</span>
+                                                    {SECTION_META[section]?.label}
+                                                </span>
+                                                <button onClick={() => removeSection(section)} className="text-[10px] text-red-300 hover:text-red-500 font-medium transition-colors">제거</button>
                                             </div>
-                                        </div>
+                                        )}
+                                        {/* 포커스 섹션 표시 (보기 모드) */}
+                                        {!isEditMode && focusedSection === section && (
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">AI 대화 대상</span>
+                                                <button onClick={(e) => { e.stopPropagation(); setFocusedSection(null); }} className="text-[10px] text-gray-400 hover:text-gray-600 font-medium transition-colors">해제</button>
+                                            </div>
+                                        )}
+                                        {renderSectionContent(section)}
                                     </div>
                                 ))}
 
-                                {/* VISION & MISSION */}
-                                {((currentJD.vision || currentJD.mission) || isEditMode) && (
-                                    <div className="space-y-4">
-                                        <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-5">
-                                            <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-2">VISION & MISSION</h4>
-                                            <div className="space-y-3">
-                                                {(currentJD.vision || isEditMode) && (
-                                                    <div>
-                                                        <h5 className="font-bold text-[13px] text-gray-800 mb-1">우리의 비전</h5>
-                                                        {isEditMode ? (
-                                                            <textarea
-                                                                value={editedJD.vision}
-                                                                onChange={(e) => setEditedJD({ ...editedJD, vision: e.target.value })}
-                                                                placeholder="비전을 입력하세요"
-                                                                className="w-full px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
-                                                                rows={3}
-                                                            />
-                                                        ) : (
-                                                            <p className="text-[13px] text-gray-700 leading-relaxed">
-                                                                {typingText['vision'] !== undefined ? typingText['vision'] : currentJD.vision}
-                                                                {typingText['vision'] !== undefined && <span className="animate-pulse">|</span>}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                )}
-                                                {(currentJD.mission || isEditMode) && (
-                                                    <div>
-                                                        <h5 className="font-bold text-[13px] text-gray-800 mb-1">우리의 미션</h5>
-                                                        {isEditMode ? (
-                                                            <textarea
-                                                                value={editedJD.mission}
-                                                                onChange={(e) => setEditedJD({ ...editedJD, mission: e.target.value })}
-                                                                placeholder="미션을 입력하세요"
-                                                                className="w-full px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
-                                                                rows={3}
-                                                            />
-                                                        ) : (
-                                                            <p className="text-[13px] text-gray-700 leading-relaxed">
-                                                                {typingText['mission'] !== undefined ? typingText['mission'] : currentJD.mission}
-                                                                {typingText['mission'] !== undefined && <span className="animate-pulse">|</span>}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* 자격 요건 / 지원자 체크리스트 */}
-                                <div className="space-y-3">
-                                    <div className="flex justify-between items-center">
-                                        <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{jdType === 'company' ? '자격 요건 (CHECKLIST)' : '지원자 체크리스트 (필수)'}</h4>
-                                        {isEditMode && (
-                                            <button
-                                                onClick={() => addArrayItem('requirements')}
-                                                className="text-[11px] font-semibold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
-                                            >
-                                                + 추가
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div className="space-y-2">
-                                        {isEditMode ? (
-                                            editedJD.requirements && editedJD.requirements.length > 0 ? (
-                                                editedJD.requirements.map((item, idx) => {
-                                                    const itemType = editedJD.requirementTypes?.[idx] || 'checkbox';
-                                                    return (
-                                                        <div key={idx} className="space-y-1">
-                                                            <div className="flex items-start gap-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={item}
-                                                                    onChange={(e) => updateArrayItem('requirements', idx, e.target.value)}
-                                                                    placeholder={jdType === 'company' ? '자격 요건을 입력하세요' : '체크리스트 항목을 입력하세요'}
-                                                                    className="flex-1 px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
-                                                                />
-                                                                <button
-                                                                    onClick={() => removeArrayItem('requirements', idx)}
-                                                                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                                                                >
-                                                                    ✕
-                                                                </button>
-                                                            </div>
-                                                            <div className="flex items-center gap-1.5 pl-1">
-                                                                <button
-                                                                    onClick={() => setEditedJD({ ...editedJD, requirementTypes: { ...editedJD.requirementTypes, [idx]: 'checkbox' } })}
-                                                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
-                                                                        itemType === 'checkbox'
-                                                                            ? 'bg-blue-600 border-blue-600 text-white'
-                                                                            : 'bg-white border-gray-200 text-gray-400 hover:border-blue-300'
-                                                                    }`}
-                                                                >
-                                                                    ✓ 체크형
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => setEditedJD({ ...editedJD, requirementTypes: { ...editedJD.requirementTypes, [idx]: 'text' } })}
-                                                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
-                                                                        itemType === 'text'
-                                                                            ? 'bg-blue-600 border-blue-600 text-white'
-                                                                            : 'bg-white border-gray-200 text-gray-400 hover:border-blue-300'
-                                                                    }`}
-                                                                >
-                                                                    ✎ 서술형
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })
-                                            ) : (
-                                                <p className="text-[13px] text-gray-400 p-3">항목을 추가하세요.</p>
-                                            )
-                                        ) : (
-                                            currentJD.requirements.length > 0 ? currentJD.requirements.map((item, idx) => {
-                                                const itemType = currentJD.requirementTypes?.[idx] || 'checkbox';
-                                                return (
-                                                    <div key={idx} className="space-y-1">
-                                                        <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
-                                                            {itemType === 'checkbox' && <input type="checkbox" className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />}
-                                                            {itemType === 'text' && <span className="text-blue-400 mt-0.5 flex-shrink-0">•</span>}
-                                                            <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
-                                                        </label>
-                                                        <div className="flex items-center gap-1.5 pl-3">
-                                                            <button
-                                                                onClick={() => setCurrentJD(prev => ({ ...prev, requirementTypes: { ...prev.requirementTypes, [idx]: 'checkbox' } }))}
-                                                                className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
-                                                                    itemType === 'checkbox'
-                                                                        ? 'bg-blue-600 border-blue-600 text-white'
-                                                                        : 'bg-white border-gray-200 text-gray-400 hover:border-blue-300'
-                                                                }`}
-                                                            >
-                                                                ✓ 체크형
-                                                            </button>
-                                                            <button
-                                                                onClick={() => setCurrentJD(prev => ({ ...prev, requirementTypes: { ...prev.requirementTypes, [idx]: 'text' } }))}
-                                                                className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
-                                                                    itemType === 'text'
-                                                                        ? 'bg-blue-600 border-blue-600 text-white'
-                                                                        : 'bg-white border-gray-200 text-gray-400 hover:border-blue-300'
-                                                                }`}
-                                                            >
-                                                                ✎ 서술형
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }) : (
-                                                <p className="text-[13px] text-gray-400 p-3">아직 설정되지 않았습니다.</p>
-                                            )
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* 우대 사항 / 우대 체크리스트 */}
-                                <div className="space-y-3">
-                                    <div className="flex justify-between items-center">
-                                        <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{jdType === 'company' ? '우대 사항 (PREFERRED)' : '지원자 체크리스트 (우대)'}</h4>
-                                        {isEditMode && (
-                                            <button
-                                                onClick={() => addArrayItem('preferred')}
-                                                className="text-[11px] font-semibold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
-                                            >
-                                                + 추가
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div className="space-y-2">
-                                        {isEditMode ? (
-                                            editedJD.preferred && editedJD.preferred.length > 0 ? (
-                                                editedJD.preferred.map((item, idx) => {
-                                                    const itemType = editedJD.preferredTypes?.[idx] || 'checkbox';
-                                                    return (
-                                                        <div key={idx} className="space-y-1">
-                                                            <div className="flex items-start gap-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={item}
-                                                                    onChange={(e) => updateArrayItem('preferred', idx, e.target.value)}
-                                                                    placeholder={jdType === 'company' ? '우대 사항을 입력하세요' : '우대 체크리스트 항목을 입력하세요'}
-                                                                    className="flex-1 px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
-                                                                />
-                                                                <button
-                                                                    onClick={() => removeArrayItem('preferred', idx)}
-                                                                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                                                                >
-                                                                    ✕
-                                                                </button>
-                                                            </div>
-                                                            <div className="flex items-center gap-1.5 pl-1">
-                                                                <button
-                                                                    onClick={() => setEditedJD({ ...editedJD, preferredTypes: { ...editedJD.preferredTypes, [idx]: 'checkbox' } })}
-                                                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
-                                                                        itemType === 'checkbox'
-                                                                            ? 'bg-purple-600 border-purple-600 text-white'
-                                                                            : 'bg-white border-gray-200 text-gray-400 hover:border-purple-300'
-                                                                    }`}
-                                                                >
-                                                                    ✓ 체크형
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => setEditedJD({ ...editedJD, preferredTypes: { ...editedJD.preferredTypes, [idx]: 'text' } })}
-                                                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
-                                                                        itemType === 'text'
-                                                                            ? 'bg-purple-600 border-purple-600 text-white'
-                                                                            : 'bg-white border-gray-200 text-gray-400 hover:border-purple-300'
-                                                                    }`}
-                                                                >
-                                                                    ✎ 서술형
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })
-                                            ) : (
-                                                <p className="text-[13px] text-gray-400 p-3">항목을 추가하세요.</p>
-                                            )
-                                        ) : (
-                                            currentJD.preferred.length > 0 ? currentJD.preferred.map((item, idx) => {
-                                                const itemType = currentJD.preferredTypes?.[idx] || 'checkbox';
-                                                return (
-                                                    <div key={idx} className="space-y-1">
-                                                        <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
-                                                            {itemType === 'checkbox' && <input type="checkbox" className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />}
-                                                            {itemType === 'text' && <span className="text-purple-400 mt-0.5 flex-shrink-0">•</span>}
-                                                            <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
-                                                        </label>
-                                                        <div className="flex items-center gap-1.5 pl-3">
-                                                            <button
-                                                                onClick={() => setCurrentJD(prev => ({ ...prev, preferredTypes: { ...prev.preferredTypes, [idx]: 'checkbox' } }))}
-                                                                className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
-                                                                    itemType === 'checkbox'
-                                                                        ? 'bg-purple-600 border-purple-600 text-white'
-                                                                        : 'bg-white border-gray-200 text-gray-400 hover:border-purple-300'
-                                                                }`}
-                                                            >
-                                                                ✓ 체크형
-                                                            </button>
-                                                            <button
-                                                                onClick={() => setCurrentJD(prev => ({ ...prev, preferredTypes: { ...prev.preferredTypes, [idx]: 'text' } }))}
-                                                                className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
-                                                                    itemType === 'text'
-                                                                        ? 'bg-purple-600 border-purple-600 text-white'
-                                                                        : 'bg-white border-gray-200 text-gray-400 hover:border-purple-300'
-                                                                }`}
-                                                            >
-                                                                ✎ 서술형
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }) : (
-                                                <p className="text-[13px] text-gray-400 p-3">아직 설정되지 않았습니다.</p>
-                                            )
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* 혜택 / 복리후생 */}
-                                {(currentJD.benefits && currentJD.benefits.length > 0 || isEditMode) && (
-                                    <div className="space-y-3">
-                                        <div className="flex justify-between items-center">
-                                            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{jdType === 'company' ? '복리후생 (BENEFITS)' : '활동 혜택 (BENEFITS)'}</h4>
-                                            {isEditMode && (
-                                                <button
-                                                    onClick={() => addArrayItem('benefits')}
-                                                    className="text-[11px] font-semibold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
-                                                >
-                                                    + 추가
-                                                </button>
-                                            )}
-                                        </div>
-                                        <div className="space-y-2">
-                                            {isEditMode ? (
-                                                editedJD.benefits && editedJD.benefits.length > 0 ? (
-                                                    editedJD.benefits.map((item, idx) => (
-                                                        <div key={idx} className="flex items-start gap-2">
-                                                            <input
-                                                                type="text"
-                                                                value={item}
-                                                                onChange={(e) => updateArrayItem('benefits', idx, e.target.value)}
-                                                                placeholder={jdType === 'company' ? '복리후생을 입력하세요' : '활동 혜택을 입력하세요'}
-                                                                className="flex-1 px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-[13px]"
-                                                            />
-                                                            <button
-                                                                onClick={() => removeArrayItem('benefits', idx)}
-                                                                className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                            >
-                                                                ✕
-                                                            </button>
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <p className="text-[13px] text-gray-400 p-3">항목을 추가하세요.</p>
-                                                )
-                                            ) : (
-                                                currentJD.benefits.map((item, idx) => (
-                                                    <div key={idx} className="flex items-start gap-3 px-3 py-2">
-                                                        <span className="text-orange-400 mt-0.5 flex-shrink-0">•</span>
-                                                        <span className="text-[13px] text-gray-700 leading-relaxed">{item}</span>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
+                                {/* 드롭 존 */}
+                                {isEditMode && (
+                                    <div
+                                        onDragOver={(e) => { e.preventDefault(); setDragOverIdx(activeSections.length); }}
+                                        onDrop={() => handleSectionDrop(activeSections.length)}
+                                        onDragLeave={() => setDragOverIdx(null)}
+                                        className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${dragOverIdx === activeSections.length ? 'border-blue-400 bg-blue-50/50' : 'border-gray-200 hover:border-gray-300'}`}
+                                    >
+                                        <p className="text-sm text-gray-400">여기에 섹션을 드래그하여 추가</p>
                                     </div>
                                 )}
 

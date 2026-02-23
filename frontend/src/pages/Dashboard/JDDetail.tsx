@@ -54,7 +54,23 @@ interface JDData {
         customQuestions: string[];
         skillOptions?: { category: string; skills: string[] }[];
     };
+    sectionOrder?: string[];
 }
+
+type SectionType = 'description' | 'recruitment' | 'visionMission' | 'requirements' | 'preferred' | 'benefits' | 'skills' | 'applicationForm';
+
+const SECTION_META: Record<SectionType, { label: string }> = {
+    description: { label: '소개' },
+    recruitment: { label: '모집 일정' },
+    visionMission: { label: '비전/미션' },
+    requirements: { label: '필수 체크리스트' },
+    preferred: { label: '우대 체크리스트' },
+    benefits: { label: '혜택/복리후생' },
+    skills: { label: '스킬 체크리스트' },
+    applicationForm: { label: '지원 양식' },
+};
+
+const ALL_SECTION_TYPES: SectionType[] = ['description', 'recruitment', 'visionMission', 'requirements', 'preferred', 'benefits', 'skills', 'applicationForm'];
 
 export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     const [jdData, setJdData] = useState<JDData | null>(null);
@@ -92,6 +108,11 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     const [profileFile, setProfileFile] = useState<File | null>(null);
     const [profilePreview, setProfilePreview] = useState<string | null>(null);
     const [isUploadingProfile, setIsUploadingProfile] = useState(false);
+
+    // Section drag & drop
+    const [sectionOrder, setSectionOrder] = useState<SectionType[]>([]);
+    const [draggedSection, setDraggedSection] = useState<string | null>(null);
+    const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
     
     // 프로필 이미지 (저장된 이미지 또는 랜덤 이미지)
     const [profileImage] = useState(() => {
@@ -121,6 +142,21 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     // 수정 관련 함수
     const handleEdit = () => {
         setEditedData({ ...jdData } as JDData);
+        const stored = jdData?.sectionOrder as SectionType[] | undefined;
+        if (stored && stored.length > 0) {
+            setSectionOrder([...stored]);
+        } else {
+            const derived: SectionType[] = [];
+            if (jdData?.description) derived.push('description');
+            if ((jdData?.type || 'club') === 'club' && (jdData?.recruitmentPeriod || jdData?.recruitmentTarget || jdData?.recruitmentCount || jdData?.recruitmentProcess?.length || jdData?.activitySchedule || jdData?.membershipFee)) derived.push('recruitment');
+            if (jdData?.vision || jdData?.mission) derived.push('visionMission');
+            derived.push('requirements');
+            derived.push('preferred');
+            if (jdData?.benefits?.length) derived.push('benefits');
+            if (jdData?.applicationFields?.skillOptions?.length) derived.push('skills');
+            derived.push('applicationForm');
+            setSectionOrder(derived);
+        }
         setIsEditing(true);
     };
 
@@ -134,7 +170,8 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
 
         // 데모 모드: API 호웈 없이 즉시 저장 처리
         if (isDemoMode) {
-            setJdData(editedData);
+            const demoSave = { ...editedData, sectionOrder: sectionOrder.filter(s => s !== 'applicationForm') };
+            setJdData(demoSave);
             setIsEditing(false);
             setEditedData(null);
             onDemoAction?.('jd-save-complete');
@@ -143,8 +180,9 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
         
         try {
             setSubmitting(true);
-            await jdAPI.update(jdId, editedData);
-            setJdData(editedData);
+            const saveData = { ...editedData, sectionOrder: sectionOrder.filter(s => s !== 'applicationForm') };
+            await jdAPI.update(jdId, saveData);
+            setJdData(saveData);
             setIsEditing(false);
             setEditedData(null);
             alert('공고가 성공적으로 수정되었습니다.');
@@ -160,6 +198,51 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
         if (!editedData) return;
         setEditedData({ ...editedData, [field]: value });
     };
+
+    // Section drag & drop handlers
+    const handleSectionDragStart = (e: React.DragEvent, section: string) => {
+        e.dataTransfer.effectAllowed = 'move';
+        setDraggedSection(section);
+    };
+    const handleSectionDragOver = (e: React.DragEvent, idx: number) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setDragOverIdx(idx);
+    };
+    const handleSectionDrop = (dropIdx: number) => {
+        if (!draggedSection) return;
+        const t = draggedSection as SectionType;
+        if (!sectionOrder.includes(t)) {
+            const o = [...sectionOrder]; o.splice(dropIdx, 0, t); setSectionOrder(o);
+        } else {
+            const ci = sectionOrder.indexOf(t);
+            if (ci === dropIdx) { setDraggedSection(null); setDragOverIdx(null); return; }
+            const o = [...sectionOrder]; o.splice(ci, 1);
+            o.splice(dropIdx > ci ? dropIdx - 1 : dropIdx, 0, t); setSectionOrder(o);
+        }
+        setDraggedSection(null); setDragOverIdx(null);
+    };
+    const handleSectionDragEnd = () => { setDraggedSection(null); setDragOverIdx(null); };
+    const removeSection = (s: SectionType) => setSectionOrder(prev => prev.filter(x => x !== s));
+
+    const getDisplaySections = (): SectionType[] => {
+        if (!jdData) return [];
+        const stored = jdData.sectionOrder as SectionType[] | undefined;
+        const has: Record<SectionType, boolean> = {
+            description: !!jdData.description,
+            recruitment: (jdData.type || 'club') === 'club' && !!(jdData.recruitmentPeriod || jdData.recruitmentTarget || jdData.recruitmentCount || (jdData.recruitmentProcess && jdData.recruitmentProcess.length > 0) || jdData.activitySchedule || jdData.membershipFee),
+            visionMission: !!(jdData.vision || jdData.mission),
+            requirements: !!(jdData.requirements && jdData.requirements.length > 0),
+            preferred: !!(jdData.preferred && jdData.preferred.length > 0),
+            benefits: !!(jdData.benefits && jdData.benefits.length > 0),
+            skills: !!(jdData.applicationFields?.skillOptions && jdData.applicationFields.skillOptions.length > 0),
+            applicationForm: false,
+        };
+        if (stored && stored.length > 0) return stored.filter(s => has[s]);
+        return ALL_SECTION_TYPES.filter(s => has[s]);
+    };
+    const activeSections = isEditing ? sectionOrder : getDisplaySections();
+    const paletteSections = isEditing ? ALL_SECTION_TYPES.filter(s => !sectionOrder.includes(s)) : [];
 
     // 프로필 이미지 업로드 핸들러
     const handleProfileFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -374,6 +457,671 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
         }
     };
 
+
+    // 섹션별 콘텐츠 렌더링 함수
+    const renderSectionContent = (type: SectionType): React.ReactNode => {
+        if (!jdData) return null;
+        switch (type) {
+            case 'description':
+                return (
+                    <>
+                    {(jdData.description || isEditing) && (
+                        <div className="space-y-3">
+                            <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-100 rounded-lg p-5">
+                                <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-3">
+                                    {(jdData.type || 'club') === 'company' ? '회사 소개' : '동아리 소개'}
+                                </h4>
+                                {isEditing ? (
+                                    <textarea
+                                        value={editedData?.description || ''}
+                                        onChange={(e) => updateEditedField('description', e.target.value)}
+                                        rows={4}
+                                        className="w-full text-[14px] text-gray-700 leading-relaxed bg-transparent border border-dashed border-blue-200 rounded-lg outline-none focus:border-blue-400 px-2 py-1 resize-none transition-colors"
+                                        placeholder="회사/동아리 소개를 입력하세요"
+                                    />
+                                ) : (
+                                    <p className="text-[14px] text-gray-700 leading-relaxed">{jdData.description}</p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    </>
+                );
+            case 'recruitment':
+                return (
+                    <>
+                    {((jdData.type || 'club') === 'club') && (
+                        (isEditing || jdData.recruitmentPeriod || jdData.recruitmentTarget || jdData.recruitmentCount ||
+                        (jdData.recruitmentProcess && jdData.recruitmentProcess.length > 0) ||
+                        jdData.activitySchedule || jdData.membershipFee) && (
+                            <div className="space-y-3">
+                                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-lg p-5">
+                                    <h4 className="text-[11px] font-bold text-green-600 uppercase tracking-wider mb-4">
+                                        모집 일정 및 정보
+                                    </h4>
+                                    <div className="space-y-3">
+                                        {(isEditing || jdData.recruitmentPeriod) && (
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 기간</span>
+                                                {isEditing ? (
+                                                    <input type="text" value={editedData?.recruitmentPeriod || ''} onChange={(e) => updateEditedField('recruitmentPeriod', e.target.value)} className="flex-1 text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors" placeholder="예: 2025.03.01 ~ 2025.03.15" />
+                                                ) : (
+                                                    <span className="text-[13px] text-gray-700">{jdData.recruitmentPeriod}</span>
+                                                )}
+                                            </div>
+                                        )}
+                                        {(isEditing || jdData.recruitmentTarget) && (
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 대상</span>
+                                                {isEditing ? (
+                                                    <input type="text" value={editedData?.recruitmentTarget || ''} onChange={(e) => updateEditedField('recruitmentTarget', e.target.value)} className="flex-1 text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors" placeholder="예: 전공 무관 대학생" />
+                                                ) : (
+                                                    <span className="text-[13px] text-gray-700">{jdData.recruitmentTarget}</span>
+                                                )}
+                                            </div>
+                                        )}
+                                        {(isEditing || jdData.recruitmentCount) && (
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 인원</span>
+                                                {isEditing ? (
+                                                    <input type="text" value={editedData?.recruitmentCount || ''} onChange={(e) => updateEditedField('recruitmentCount', e.target.value)} className="flex-1 text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors" placeholder="예: 10명" />
+                                                ) : (
+                                                    <span className="text-[13px] text-gray-700">{jdData.recruitmentCount}</span>
+                                                )}
+                                            </div>
+                                        )}
+                                        {(isEditing || (jdData.recruitmentProcess && jdData.recruitmentProcess.length > 0)) && (
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 절차</span>
+                                                {isEditing ? (
+                                                    <div className="flex-1">
+                                                        <div className="flex flex-wrap items-center gap-1">
+                                                            {((editedData?.recruitmentProcess && editedData.recruitmentProcess.length > 0) ? editedData.recruitmentProcess : ['']).map((proc, i) => (
+                                                                <span key={i} className="inline-flex items-center">
+                                                                    {i > 0 && <span className="text-green-400 mx-1">→</span>}
+                                                                    <input type="text" value={proc} onChange={(e) => { const arr = [...((editedData?.recruitmentProcess && editedData.recruitmentProcess.length > 0) ? editedData.recruitmentProcess : [''])]; arr[i] = e.target.value; updateEditedField('recruitmentProcess', arr); }} className="text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 w-24 transition-colors" placeholder={`절차${i + 1}`} />
+                                                                    <button type="button" onClick={() => { const arr = [...((editedData?.recruitmentProcess && editedData.recruitmentProcess.length > 0) ? editedData.recruitmentProcess : [''])]; arr.splice(i, 1); updateEditedField('recruitmentProcess', arr.length > 0 ? arr : ['']); }} className="text-red-300 hover:text-red-500 text-[10px] ml-0.5">✕</button>
+                                                                </span>
+                                                            ))}
+                                                            <button type="button" onClick={() => { const arr = [...(editedData?.recruitmentProcess || []), '']; updateEditedField('recruitmentProcess', arr); }} className="text-[11px] text-green-500 hover:text-green-700 font-medium ml-1">+</button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[13px] text-gray-700">
+                                                        {jdData.recruitmentProcess?.map((step, i) => (
+                                                            <span key={i}>
+                                                                {i > 0 && <span className="text-green-400 mx-1">→</span>}
+                                                                {step}
+                                                            </span>
+                                                        ))}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                        {(isEditing || jdData.activitySchedule) && (
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">활동 일정</span>
+                                                {isEditing ? (
+                                                    <input type="text" value={editedData?.activitySchedule || ''} onChange={(e) => updateEditedField('activitySchedule', e.target.value)} className="flex-1 text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors" placeholder="예: 매주 수요일 오후 7시" />
+                                                ) : (
+                                                    <span className="text-[13px] text-gray-700">{jdData.activitySchedule}</span>
+                                                )}
+                                            </div>
+                                        )}
+                                        {(isEditing || jdData.membershipFee) && (
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">회비</span>
+                                                {isEditing ? (
+                                                    <input type="text" value={editedData?.membershipFee || ''} onChange={(e) => updateEditedField('membershipFee', e.target.value)} className="flex-1 text-[13px] text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors" placeholder="예: 월 1만원" />
+                                                ) : (
+                                                    <span className="text-[13px] text-gray-700">{jdData.membershipFee}</span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    )}
+                    </>
+                );
+            case 'visionMission':
+                return (
+                    <>
+                    {(jdData.vision || jdData.mission || isEditing) && (
+                        <div className="space-y-4">
+                            <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-5">
+                                <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-2">VISION & MISSION</h4>
+                                <div className="space-y-3">
+                                    <div>
+                                        <h5 className="font-bold text-[13px] text-gray-800 mb-1">우리의 비전</h5>
+                                        {isEditing ? (
+                                            <textarea
+                                                value={editedData?.vision || ''}
+                                                onChange={(e) => updateEditedField('vision', e.target.value)}
+                                                rows={2}
+                                                className="w-full text-[13px] text-gray-700 leading-relaxed bg-transparent border border-dashed border-blue-200 rounded-lg outline-none focus:border-blue-400 px-2 py-1 resize-none transition-colors"
+                                                placeholder="비전을 입력하세요"
+                                            />
+                                        ) : (
+                                            jdData.vision && <p className="text-[13px] text-gray-700 leading-relaxed">{jdData.vision}</p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <h5 className="font-bold text-[13px] text-gray-800 mb-1">우리의 미션</h5>
+                                        {isEditing ? (
+                                            <textarea
+                                                value={editedData?.mission || ''}
+                                                onChange={(e) => updateEditedField('mission', e.target.value)}
+                                                rows={2}
+                                                className="w-full text-[13px] text-gray-700 leading-relaxed bg-transparent border border-dashed border-blue-200 rounded-lg outline-none focus:border-blue-400 px-2 py-1 resize-none transition-colors"
+                                                placeholder="미션을 입력하세요"
+                                            />
+                                        ) : (
+                                            jdData.mission && <p className="text-[13px] text-gray-700 leading-relaxed">{jdData.mission}</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    </>
+                );
+            case 'requirements':
+                return (
+                    <>
+                    <div className="space-y-3">
+                        <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{(jdData.type || 'club') === 'company' ? '자격 요건 (CHECKLIST)' : '지원자 체크리스트 (필수)'}</h4>
+                        <div className="space-y-2">
+                            {(isEditing ? ((editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : ['']) : (jdData.requirements || [])).map((item, idx) => {
+                                const itemType = isEditing 
+                                    ? (editedData?.requirementTypes?.[idx] || 'text')
+                                    : (jdData.requirementTypes?.[idx] || 'checkbox');
+                                return (
+                                <div key={idx} className="space-y-2">
+                                    <div className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors group">
+                                        {!isEditing && (
+                                            <input 
+                                                type="checkbox" 
+                                                checked={viewRequirementChecks[idx]?.checked || false}
+                                                onChange={(e) => {
+                                                    setViewRequirementChecks({
+                                                        ...viewRequirementChecks,
+                                                        [idx]: {
+                                                            checked: e.target.checked,
+                                                            detail: viewRequirementChecks[idx]?.detail || ''
+                                                        }
+                                                    });
+                                                }}
+                                                className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
+                                            />
+                                        )}
+                                        {isEditing ? (
+                                            <div className="flex-1 flex items-center gap-2">
+                                                <span className="text-gray-300 text-sm">☐</span>
+                                                <input
+                                                    type="text"
+                                                    value={item}
+                                                    onChange={(e) => {
+                                                        const current = (editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : [''];
+                                                        const newReqs = [...current];
+                                                        newReqs[idx] = e.target.value;
+                                                        updateEditedField('requirements', newReqs);
+                                                    }}
+                                                    className="flex-1 text-[13px] text-gray-700 leading-relaxed bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors"
+                                                    placeholder="자격 요건 입력"
+                                                />
+                                                {/* 답변 형식 토글 */}
+                                                <button
+                                                    onClick={() => {
+                                                        const types = { ...(editedData?.requirementTypes || {}) };
+                                                        types[idx] = itemType === 'checkbox' ? 'text' : 'checkbox';
+                                                        updateEditedField('requirementTypes', types);
+                                                    }}
+                                                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-all flex-shrink-0 ${
+                                                        itemType === 'text' 
+                                                            ? 'bg-blue-50 text-blue-600 border border-blue-200' 
+                                                            : 'bg-gray-50 text-gray-400 border border-gray-200'
+                                                    }`}
+                                                    title={itemType === 'text' ? '서술형' : '체크만'}
+                                                >
+                                                    {itemType === 'text' ? '✎' : '✓'}
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        const current = (editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : [''];
+                                                        const newReqs = current.filter((_, i) => i !== idx);
+                                                        const currentTypes = { ...(editedData?.requirementTypes || {}) };
+                                                        const newTypes: Record<number, 'checkbox' | 'text'> = {};
+                                                        Object.keys(currentTypes).forEach(k => {
+                                                            const ki = parseInt(k);
+                                                            if (ki < idx) newTypes[ki] = currentTypes[ki];
+                                                            else if (ki > idx) newTypes[ki - 1] = currentTypes[ki];
+                                                        });
+                                                        updateEditedField('requirements', newReqs.length ? newReqs : ['']);
+                                                        updateEditedField('requirementTypes', newTypes);
+                                                    }}
+                                                    className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors"
+                                                >✕</button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
+                                                {itemType === 'text' && (
+                                                    <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded font-medium">서술</span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {!isEditing && viewRequirementChecks[idx]?.checked && itemType === 'text' && (
+                                        <div className="ml-10">
+                                            <textarea
+                                                value={viewRequirementChecks[idx]?.detail || ''}
+                                                onChange={(e) => setViewRequirementChecks({
+                                                    ...viewRequirementChecks,
+                                                    [idx]: { checked: true, detail: e.target.value }
+                                                })}
+                                                placeholder="관련 경험이나 역량을 구체적으로 작성해주세요"
+                                                rows={3}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                                );
+                            })}
+                            {!isEditing && (!jdData.requirements || jdData.requirements.length === 0) && (
+                                <p className="text-[13px] text-gray-400 p-3">{(jdData.type || 'club') === 'company' ? '자격 요건이 설정되지 않았습니다.' : '체크리스트가 설정되지 않았습니다.'}</p>
+                            )}
+                            {isEditing && (
+                                <button
+                                    onClick={() => {
+                                        const current = (editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : [''];
+                                        updateEditedField('requirements', [...current, '']);
+                                    }}
+                                    className="text-[12px] text-blue-500 hover:text-blue-700 font-medium ml-3 transition-colors"
+                                >
+                                    + 항목 추가
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    </>
+                );
+            case 'preferred':
+                return (
+                    <>
+                    <div className="space-y-3">
+                        <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{(jdData.type || 'club') === 'company' ? '우대 사항 (PREFERRED)' : '지원자 체크리스트 (우대)'}</h4>
+                        <div className="space-y-2">
+                            {(isEditing ? ((editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : ['']) : (jdData.preferred || [])).map((item, idx) => {
+                                const itemType = isEditing
+                                    ? (editedData?.preferredTypes?.[idx] || 'text')
+                                    : (jdData.preferredTypes?.[idx] || 'checkbox');
+                                return (
+                                <div key={idx} className="space-y-2">
+                                    <div className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors group">
+                                        {!isEditing && (
+                                            <input 
+                                                type="checkbox" 
+                                                checked={viewPreferredChecks[idx]?.checked || false}
+                                                onChange={(e) => {
+                                                    setViewPreferredChecks({
+                                                        ...viewPreferredChecks,
+                                                        [idx]: {
+                                                            checked: e.target.checked,
+                                                            detail: viewPreferredChecks[idx]?.detail || ''
+                                                        }
+                                                    });
+                                                }}
+                                                className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
+                                            />
+                                        )}
+                                        {isEditing ? (
+                                            <div className="flex-1 flex items-center gap-2">
+                                                <span className="text-gray-300 text-sm">☐</span>
+                                                <input
+                                                    type="text"
+                                                    value={item}
+                                                    onChange={(e) => {
+                                                        const current = (editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : [''];
+                                                        const newPref = [...current];
+                                                        newPref[idx] = e.target.value;
+                                                        updateEditedField('preferred', newPref);
+                                                    }}
+                                                    className="flex-1 text-[13px] text-gray-700 leading-relaxed bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors"
+                                                    placeholder="우대 사항 입력"
+                                                />
+                                                <button
+                                                    onClick={() => {
+                                                        const types = { ...(editedData?.preferredTypes || {}) };
+                                                        types[idx] = itemType === 'checkbox' ? 'text' : 'checkbox';
+                                                        updateEditedField('preferredTypes', types);
+                                                    }}
+                                                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-all flex-shrink-0 ${
+                                                        itemType === 'text' 
+                                                            ? 'bg-purple-50 text-purple-600 border border-purple-200' 
+                                                            : 'bg-gray-50 text-gray-400 border border-gray-200'
+                                                    }`}
+                                                    title={itemType === 'text' ? '서술형' : '체크만'}
+                                                >
+                                                    {itemType === 'text' ? '✎' : '✓'}
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        const current = (editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : [''];
+                                                        const newPref = current.filter((_, i) => i !== idx);
+                                                        const currentTypes = { ...(editedData?.preferredTypes || {}) };
+                                                        const newTypes: Record<number, 'checkbox' | 'text'> = {};
+                                                        Object.keys(currentTypes).forEach(k => {
+                                                            const ki = parseInt(k);
+                                                            if (ki < idx) newTypes[ki] = currentTypes[ki];
+                                                            else if (ki > idx) newTypes[ki - 1] = currentTypes[ki];
+                                                        });
+                                                        updateEditedField('preferred', newPref.length ? newPref : ['']);
+                                                        updateEditedField('preferredTypes', newTypes);
+                                                    }}
+                                                    className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors"
+                                                >✕</button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
+                                                {itemType === 'text' && (
+                                                    <span className="text-[10px] text-purple-500 bg-purple-50 px-1.5 py-0.5 rounded font-medium">서술</span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {!isEditing && viewPreferredChecks[idx]?.checked && itemType === 'text' && (
+                                        <div className="ml-10">
+                                            <textarea
+                                                value={viewPreferredChecks[idx]?.detail || ''}
+                                                onChange={(e) => setViewPreferredChecks({
+                                                    ...viewPreferredChecks,
+                                                    [idx]: { checked: true, detail: e.target.value }
+                                                })}
+                                                placeholder="관련 경험이나 역량을 구체적으로 작성해주세요"
+                                                rows={3}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                                );
+                            })}
+                            {!isEditing && (!jdData.preferred || jdData.preferred.length === 0) && (
+                                <p className="text-[13px] text-gray-400 p-3">{(jdData.type || 'club') === 'company' ? '우대 사항이 설정되지 않았습니다.' : '우대 체크리스트가 설정되지 않았습니다.'}</p>
+                            )}
+                            {isEditing && (
+                                <button
+                                    onClick={() => {
+                                        const current = (editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : [''];
+                                        updateEditedField('preferred', [...current, '']);
+                                    }}
+                                    className="text-[12px] text-blue-500 hover:text-blue-700 font-medium ml-3 transition-colors"
+                                >
+                                    + 항목 추가
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    </>
+                );
+            case 'benefits':
+                return (
+                    <>
+                    {((jdData.benefits && jdData.benefits.length > 0) || isEditing) && (
+                        <div className="space-y-3">
+                            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{(jdData.type || 'club') === 'company' ? '복리후생 (BENEFITS)' : '활동 혜택 (BENEFITS)'}</h4>
+                            <div className="space-y-1">
+                                {(isEditing ? ((editedData?.benefits && editedData.benefits.length > 0) ? editedData.benefits : ['']) : (jdData.benefits || [])).map((item, idx) => (
+                                    <div key={idx} className="flex items-start gap-3 px-3 py-2 group">
+                                        <span className="text-orange-400 mt-0.5 flex-shrink-0">•</span>
+                                        {isEditing ? (
+                                            <div className="flex-1 flex items-center gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={item}
+                                                    onChange={(e) => {
+                                                        const current = (editedData?.benefits && editedData.benefits.length > 0) ? editedData.benefits : [''];
+                                                        const newBenefits = [...current];
+                                                        newBenefits[idx] = e.target.value;
+                                                        updateEditedField('benefits', newBenefits);
+                                                    }}
+                                                    className="flex-1 text-[13px] text-gray-700 leading-relaxed bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors"
+                                                    placeholder="혜택/복리후생 입력"
+                                                />
+                                                <button
+                                                    onClick={() => {
+                                                        const current = (editedData?.benefits && editedData.benefits.length > 0) ? editedData.benefits : [''];
+                                                        const newBenefits = current.filter((_, i) => i !== idx);
+                                                        updateEditedField('benefits', newBenefits.length ? newBenefits : ['']);
+                                                    }}
+                                                    className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors"
+                                                >✕</button>
+                                            </div>
+                                        ) : (
+                                            <span className="text-[13px] text-gray-700 leading-relaxed">{item}</span>
+                                        )}
+                                    </div>
+                                ))}
+                                {isEditing && (
+                                    <button
+                                        onClick={() => {
+                                            const current = (editedData?.benefits && editedData.benefits.length > 0) ? editedData.benefits : [''];
+                                            updateEditedField('benefits', [...current, '']);
+                                        }}
+                                        className="text-[12px] text-blue-500 hover:text-blue-700 font-medium ml-3 transition-colors"
+                                    >
+                                        + 항목 추가
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    </>
+                );
+            case 'skills':
+                return (
+                    <>
+                    {((jdData?.applicationFields?.skillOptions && jdData.applicationFields.skillOptions.length > 0) || isEditing) && (
+                        <div className="space-y-3">
+                            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                                스킬 / 도구 체크리스트
+                            </h4>
+                            <div className="bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 rounded-lg p-5 space-y-5">
+                                <p className="text-[12px] text-indigo-500 font-medium">
+                                    {isEditing ? '지원자가 선택할 수 있는 스킬 목록을 수정하세요' : isOwner ? '지원자가 선택할 수 있는 스킬 목록입니다' : '보유하고 있는 스킬을 선택해주세요'}
+                                </p>
+                                {(isEditing ? (editedData?.applicationFields?.skillOptions || []) : (jdData?.applicationFields?.skillOptions || [])).map((cat, catIdx) => (
+                                    <div key={catIdx}>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            {isEditing ? (
+                                                <>
+                                                    <input
+                                                        type="text"
+                                                        value={cat.category}
+                                                        onChange={(e) => {
+                                                            const newOptions = [...(editedData?.applicationFields?.skillOptions || [])];
+                                                            newOptions[catIdx] = { ...newOptions[catIdx], category: e.target.value };
+                                                            updateEditedField('applicationFields', { ...editedData?.applicationFields, skillOptions: newOptions });
+                                                        }}
+                                                        className="text-[12px] font-bold text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-0 transition-colors"
+                                                        placeholder="카테고리명"
+                                                    />
+                                                    <button
+                                                        onClick={() => {
+                                                            const newOptions = (editedData?.applicationFields?.skillOptions || []).filter((_, i) => i !== catIdx);
+                                                            updateEditedField('applicationFields', { ...editedData?.applicationFields, skillOptions: newOptions });
+                                                        }}
+                                                        className="text-red-300 hover:text-red-500 text-[11px] transition-colors"
+                                                    >✕</button>
+                                                </>
+                                            ) : (
+                                                <span className="text-[12px] font-bold text-gray-700">{cat.category}</span>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {cat.skills.map((skill, skillIdx) => {
+                                                const isSelected = !isEditing && (applicationForm.selectedSkills[cat.category] || []).includes(skill);
+                                                return isEditing ? (
+                                                    <span key={skillIdx} className="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-[12px] text-indigo-700 font-medium">
+                                                        {skill}
+                                                        <button
+                                                            onClick={() => {
+                                                                const newOptions = [...(editedData?.applicationFields?.skillOptions || [])];
+                                                                newOptions[catIdx] = { ...newOptions[catIdx], skills: newOptions[catIdx].skills.filter((_, i) => i !== skillIdx) };
+                                                                updateEditedField('applicationFields', { ...editedData?.applicationFields, skillOptions: newOptions });
+                                                            }}
+                                                            className="text-indigo-400 hover:text-red-500 ml-0.5"
+                                                        >✕</button>
+                                                    </span>
+                                                ) : (
+                                                    <button
+                                                        key={skillIdx}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (!isOwner) {
+                                                                setApplicationForm(prev => {
+                                                                    const current = prev.selectedSkills[cat.category] || [];
+                                                                    const updated = isSelected
+                                                                        ? current.filter(s => s !== skill)
+                                                                        : [...current, skill];
+                                                                    return { ...prev, selectedSkills: { ...prev.selectedSkills, [cat.category]: updated } };
+                                                                });
+                                                            }
+                                                        }}
+                                                        disabled={!!isOwner}
+                                                        className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${
+                                                            isOwner
+                                                                ? 'bg-white text-gray-500 border-gray-200 cursor-default'
+                                                                : isSelected
+                                                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                                                    : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300 hover:text-indigo-600 cursor-pointer'
+                                                        }`}
+                                                    >
+                                                        {!isOwner && isSelected && <span className="mr-1">✓</span>}
+                                                        {skill}
+                                                    </button>
+                                                );
+                                            })}
+                                            {isEditing && (
+                                                <input
+                                                    type="text"
+                                                    placeholder="+ 스킬 추가 (Enter)"
+                                                    className="px-3 py-1.5 bg-transparent border border-dashed border-indigo-300 rounded-lg text-[12px] text-indigo-600 outline-none focus:border-indigo-500 w-32 transition-colors"
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
+                                                            const val = (e.target as HTMLInputElement).value.trim();
+                                                            const newOptions = [...(editedData?.applicationFields?.skillOptions || [])];
+                                                            if (!newOptions[catIdx].skills.includes(val)) {
+                                                                newOptions[catIdx] = { ...newOptions[catIdx], skills: [...newOptions[catIdx].skills, val] };
+                                                                updateEditedField('applicationFields', { ...editedData?.applicationFields, skillOptions: newOptions });
+                                                            }
+                                                            (e.target as HTMLInputElement).value = '';
+                                                        }
+                                                    }}
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                                {isEditing && (
+                                    <button
+                                        onClick={() => {
+                                            const newOptions = [...(editedData?.applicationFields?.skillOptions || []), { category: '', skills: [] }];
+                                            updateEditedField('applicationFields', { ...editedData?.applicationFields, skillOptions: newOptions });
+                                        }}
+                                        className="text-[12px] text-indigo-500 hover:text-indigo-700 font-medium transition-colors"
+                                    >
+                                        + 카테고리 추가
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    </>
+                );
+            case 'applicationForm':
+                return (
+                    <>
+                    {isEditing && (
+                        <div className="space-y-3 border-t border-gray-200 pt-6">
+                            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">지원 양식 설정</h4>
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-5 space-y-4">
+                                <p className="text-[12px] text-gray-500">지원자가 작성할 항목을 선택하세요</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {[
+                                        { key: 'phone', label: '연락처' },
+                                        { key: 'gender', label: '성별' },
+                                        { key: 'birthDate', label: '생년월일' },
+                                        { key: 'university', label: '학교' },
+                                        { key: 'major', label: '전공' },
+                                        { key: 'portfolio', label: '포트폴리오' },
+                                    ].map(({ key, label }) => (
+                                        <label key={key} className="flex items-center gap-2 p-2 rounded-lg hover:bg-white cursor-pointer transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                checked={!!(editedData?.applicationFields as any)?.[key]}
+                                                onChange={(e) => {
+                                                    const fields = editedData?.applicationFields || { name: true, email: true, phone: false, gender: false, birthDate: false, university: false, major: false, portfolio: false, customQuestions: [], skillOptions: [] };
+                                                    updateEditedField('applicationFields', { ...fields, [key]: e.target.checked });
+                                                }}
+                                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                            />
+                                            <span className="text-[13px] text-gray-700">{label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+
+                                {/* 커스텀 질문 수정 */}
+                                <div className="border-t border-gray-200 pt-4 mt-4">
+                                    <span className="text-[12px] font-bold text-gray-600 mb-2 block">커스텀 질문</span>
+                                    {(editedData?.applicationFields?.customQuestions || []).map((q, idx) => (
+                                        <div key={idx} className="flex gap-2 mb-2">
+                                            <input
+                                                type="text"
+                                                value={q}
+                                                onChange={(e) => {
+                                                    const questions = [...(editedData?.applicationFields?.customQuestions || [])];
+                                                    questions[idx] = e.target.value;
+                                                    updateEditedField('applicationFields', { ...editedData?.applicationFields, customQuestions: questions });
+                                                }}
+                                                className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[12px] focus:ring-2 focus:ring-blue-500"
+                                                placeholder="질문 입력"
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    const questions = (editedData?.applicationFields?.customQuestions || []).filter((_, i) => i !== idx);
+                                                    updateEditedField('applicationFields', { ...editedData?.applicationFields, customQuestions: questions });
+                                                }}
+                                                className="px-2 py-1.5 bg-red-500 text-white rounded-lg text-[11px] hover:bg-red-600"
+                                            >
+                                                삭제
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <button
+                                        onClick={() => {
+                                            const questions = [...(editedData?.applicationFields?.customQuestions || []), ''];
+                                            updateEditedField('applicationFields', { ...editedData?.applicationFields, customQuestions: questions });
+                                        }}
+                                        className="px-3 py-1.5 bg-purple-500 text-white rounded-lg text-[11px] font-bold hover:bg-purple-600"
+                                    >
+                                        + 질문 추가
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    </>
+                );
+            default:
+                return null;
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-screen">
@@ -431,37 +1179,70 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                             </button>
                         )}
                     </div>
-                    <h3 className="font-bold text-[17px] text-gray-900 mb-1">
-                        {jdData.teamName || jdData.companyName || jdData.company || 'WINNOW'}
-                    </h3>
-                    <p className="text-[12px] text-gray-500 font-semibold mb-6">
-                        {jdData.jobRole || '모집 분야'}
-                    </p>
+                    {isEditing ? (
+                        <input
+                            type="text"
+                            value={editedData?.teamName || editedData?.companyName || ''}
+                            onChange={(e) => updateEditedField('teamName', e.target.value)}
+                            className="font-bold text-[17px] text-gray-900 mb-1 w-full bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 text-center px-1"
+                            placeholder="팀/동아리명"
+                        />
+                    ) : (
+                        <h3 className="font-bold text-[17px] text-gray-900 mb-1">
+                            {jdData.teamName || jdData.companyName || jdData.company || 'WINNOW'}
+                        </h3>
+                    )}
+                    {isEditing ? (
+                        <input
+                            type="text"
+                            value={editedData?.jobRole || ''}
+                            onChange={(e) => updateEditedField('jobRole', e.target.value)}
+                            className="text-[12px] text-gray-500 font-semibold mb-6 w-full bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 text-center px-1"
+                            placeholder="모집 분야"
+                        />
+                    ) : (
+                        <p className="text-[12px] text-gray-500 font-semibold mb-6">
+                            {jdData.jobRole || '모집 분야'}
+                        </p>
+                    )}
                 </div>
 
                 {/* Location & Scale */}
                 <div className="px-6 space-y-4 mb-6">
-                    {jdData.location && (
+                    {(jdData.location || isEditing) && (
                         <div>
                             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">LOCATION</div>
-                            <div className="flex items-center gap-2 text-[13px]">
-                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                                <span className="text-gray-700">{jdData.location}</span>
+                            <div className="text-[13px]">
+                                {isEditing ? (
+                                    <input
+                                        type="text"
+                                        value={editedData?.location || ''}
+                                        onChange={(e) => updateEditedField('location', e.target.value)}
+                                        className="text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 w-full text-[13px]"
+                                        placeholder="위치 입력"
+                                    />
+                                ) : (
+                                    <span className="text-gray-700">{jdData.location}</span>
+                                )}
                             </div>
                         </div>
                     )}
                     
-                    {jdData.scale && (
+                    {(jdData.scale || isEditing) && (
                         <div>
                             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">SCALE</div>
-                            <div className="flex items-center gap-2 text-[13px]">
-                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                </svg>
-                                <span className="text-gray-700">{jdData.scale}</span>
+                            <div className="text-[13px]">
+                                {isEditing ? (
+                                    <input
+                                        type="text"
+                                        value={editedData?.scale || ''}
+                                        onChange={(e) => updateEditedField('scale', e.target.value)}
+                                        className="text-gray-700 bg-transparent border-b border-dashed border-blue-300 outline-none focus:border-blue-500 w-full text-[13px]"
+                                        placeholder="규모 입력"
+                                    />
+                                ) : (
+                                    <span className="text-gray-700">{jdData.scale}</span>
+                                )}
                             </div>
                         </div>
                     )}
@@ -471,9 +1252,6 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                 {jdData.techStacks && jdData.techStacks.length > 0 && (
                     <div className="px-6 mb-6">
                         <div className="flex items-center gap-2 mb-3">
-                            <svg className="w-4 h-4 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
                             <span className="font-bold text-[13px] text-gray-800">Tech Stack & Skills</span>
                         </div>
                         <div className="space-y-2">
@@ -499,7 +1277,10 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
             {/* Right Content Section */}
             <div className="flex-1 flex flex-col">
                 <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-white">
-                    <h3 className="font-bold text-lg text-gray-800">{isEditing ? '공고 수정' : '공고 상세'}</h3>
+                    <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-lg text-gray-800">공고 상세</h3>
+                        {isEditing && <span className="text-[11px] font-medium text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200 animate-pulse">편집 중</span>}
+                    </div>
                     <div className="flex gap-2">
                         {isOwner && !isEditing && (
                             <>
@@ -515,7 +1296,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                     onClick={handleShare}
                                     className="px-4 py-2 bg-blue-600 text-white rounded-lg text-[12px] font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
                                 >
-                                    🔗 링크 공유
+                                    링크 공유
                                 </button>
                             </>
                         )}
@@ -525,27 +1306,25 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                     data-tour="jd-save-btn"
                                     onClick={handleSave}
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-[12px] font-bold hover:bg-blue-700 disabled:bg-gray-400 transition-all"
+                                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-[12px] font-bold hover:bg-green-700 disabled:bg-gray-400 transition-all"
                                 >
                                     {submitting ? '저장 중...' : '저장'}
                                 </button>
                                 <button
                                     onClick={handleCancel}
                                     disabled={submitting}
-                                    className="px-4 py-2 bg-gray-500 text-white rounded-lg text-[12px] font-bold hover:bg-gray-600 disabled:bg-gray-300 transition-all"
+                                    className="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-[12px] font-bold hover:bg-gray-50 disabled:bg-gray-100 transition-all"
                                 >
                                     취소
                                 </button>
                             </>
                         )}
-                        {!isEditing && (
-                            <button 
-                                onClick={() => onNavigate('my-jds')}
-                                className="px-4 py-2 border border-gray-200 rounded-lg text-[12px] font-bold text-gray-600 hover:bg-gray-50 transition-colors"
-                            >
-                                목록으로
-                            </button>
-                        )}
+                        <button 
+                            onClick={() => onNavigate('my-jds')}
+                            className="px-4 py-2 border border-gray-200 rounded-lg text-[12px] font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+                        >
+                            목록으로
+                        </button>
                     </div>
                 </div>
                 
@@ -558,7 +1337,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                     type="text"
                                     value={editedData?.title || ''}
                                     onChange={(e) => updateEditedField('title', e.target.value)}
-                                    className="text-2xl font-bold text-gray-900 mb-4 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    className="text-2xl font-bold text-gray-900 mb-4 w-full bg-transparent border-0 border-b-2 border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-1 transition-colors"
                                     placeholder="공고 제목을 입력하세요"
                                 />
                             ) : (
@@ -568,705 +1347,56 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                             )}
                         </div>
 
-                        {/* 소개 (ABOUT US) */}
-                        {(jdData.description || isEditing) && (
-                            <div className="space-y-3">
-                                <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-100 rounded-lg p-5">
-                                    <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M10 2a8 8 0 100 16 8 8 0 000-16zM9 9a1 1 0 112 0v4a1 1 0 11-2 0V9zm1-5a1 1 0 100 2 1 1 0 000-2z"/>
-                                        </svg>
-                                        {(jdData.type || 'club') === 'company' ? '회사 소개' : '동아리 소개'}
-                                    </h4>
-                                    {isEditing ? (
-                                        <textarea
-                                            value={editedData?.description || ''}
-                                            onChange={(e) => updateEditedField('description', e.target.value)}
-                                            rows={4}
-                                            className="w-full text-[14px] text-gray-700 leading-relaxed px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
-                                            placeholder="회사/동아리 소개를 입력하세요"
-                                        />
-                                    ) : (
-                                        <p className="text-[14px] text-gray-700 leading-relaxed">{jdData.description}</p>
-                                    )}
-                                </div>
+                        {/* 섹션 팔레트 */}
+                        {isEditing && paletteSections.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 p-3 bg-gradient-to-r from-gray-50 to-blue-50/50 border border-blue-100 rounded-xl">
+                                <span className="text-[11px] font-bold text-gray-400 mr-1">섹션 추가</span>
+                                {paletteSections.map(s => (
+                                    <div
+                                        key={s}
+                                        draggable
+                                        onDragStart={(e) => handleSectionDragStart(e, s)}
+                                        className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] font-medium text-gray-600 cursor-grab hover:border-blue-300 hover:shadow-sm active:cursor-grabbing transition-all select-none"
+                                    >
+                                        {SECTION_META[s].label}
+                                    </div>
+                                ))}
                             </div>
                         )}
 
-                        {/* 모집 일정 및 정보 (동아리 모드) */}
-                        {((jdData.type || 'club') === 'club' || isEditing) && (
-                            isEditing ? (
-                                <div className="space-y-3">
-                                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-lg p-5">
-                                        <h4 className="text-[11px] font-bold text-green-600 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                                            </svg>
-                                            모집 일정 및 정보
-                                        </h4>
-                                        <div className="space-y-3">
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0">모집 기간</span>
-                                                <input
-                                                    type="text"
-                                                    value={editedData?.recruitmentPeriod || ''}
-                                                    onChange={(e) => updateEditedField('recruitmentPeriod', e.target.value)}
-                                                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-green-500"
-                                                    placeholder="예: 2025.03.01 ~ 2025.03.15"
-                                                />
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0">모집 대상</span>
-                                                <input
-                                                    type="text"
-                                                    value={editedData?.recruitmentTarget || ''}
-                                                    onChange={(e) => updateEditedField('recruitmentTarget', e.target.value)}
-                                                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-green-500"
-                                                    placeholder="예: 전공 무관 대학생"
-                                                />
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0">모집 인원</span>
-                                                <input
-                                                    type="text"
-                                                    value={editedData?.recruitmentCount || ''}
-                                                    onChange={(e) => updateEditedField('recruitmentCount', e.target.value)}
-                                                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-green-500"
-                                                    placeholder="예: 10명"
-                                                />
-                                            </div>
-                                            <div className="flex items-start gap-3">
-                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-2">모집 절차</span>
-                                                <div className="flex-1 space-y-2">
-                                                    {((editedData?.recruitmentProcess && editedData.recruitmentProcess.length > 0) ? editedData.recruitmentProcess : ['']).map((proc, i) => (
-                                                        <div key={i} className="flex gap-2">
-                                                            <input
-                                                                type="text"
-                                                                value={proc}
-                                                                onChange={(e) => {
-                                                                    const arr = [...((editedData?.recruitmentProcess && editedData.recruitmentProcess.length > 0) ? editedData.recruitmentProcess : [''])];
-                                                                    arr[i] = e.target.value;
-                                                                    updateEditedField('recruitmentProcess', arr);
-                                                                }}
-                                                                className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-green-500"
-                                                                placeholder={`절차 ${i + 1} 예: 서류 심사`}
-                                                            />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const arr = [...((editedData?.recruitmentProcess && editedData.recruitmentProcess.length > 0) ? editedData.recruitmentProcess : [''])];
-                                                                    arr.splice(i, 1);
-                                                                    updateEditedField('recruitmentProcess', arr.length > 0 ? arr : ['']);
-                                                                }}
-                                                                className="px-2 py-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-xs transition-colors"
-                                                            >✕</button>
-                                                        </div>
-                                                    ))}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const arr = [...(editedData?.recruitmentProcess || []), ''];
-                                                            updateEditedField('recruitmentProcess', arr);
-                                                        }}
-                                                        className="text-[11px] text-green-600 hover:text-green-700 font-medium"
-                                                    >+ 절차 추가</button>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0">활동 일정</span>
-                                                <input
-                                                    type="text"
-                                                    value={editedData?.activitySchedule || ''}
-                                                    onChange={(e) => updateEditedField('activitySchedule', e.target.value)}
-                                                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-green-500"
-                                                    placeholder="예: 매주 수요일 오후 7시"
-                                                />
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0">회비</span>
-                                                <input
-                                                    type="text"
-                                                    value={editedData?.membershipFee || ''}
-                                                    onChange={(e) => updateEditedField('membershipFee', e.target.value)}
-                                                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-green-500"
-                                                    placeholder="예: 월 1만원"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : (
-                                (jdData.recruitmentPeriod || jdData.recruitmentTarget || jdData.recruitmentCount ||
-                                (jdData.recruitmentProcess && jdData.recruitmentProcess.length > 0) ||
-                                jdData.activitySchedule || jdData.membershipFee) && (
-                                    <div className="space-y-3">
-                                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-lg p-5">
-                                            <h4 className="text-[11px] font-bold text-green-600 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                                                </svg>
-                                                모집 일정 및 정보
-                                            </h4>
-                                            <div className="space-y-3">
-                                                {jdData.recruitmentPeriod && (
-                                                    <div className="flex items-start gap-3">
-                                                        <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 기간</span>
-                                                        <span className="text-[13px] text-gray-700">{jdData.recruitmentPeriod}</span>
-                                                    </div>
-                                                )}
-                                                {jdData.recruitmentTarget && (
-                                                    <div className="flex items-start gap-3">
-                                                        <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 대상</span>
-                                                        <span className="text-[13px] text-gray-700">{jdData.recruitmentTarget}</span>
-                                                    </div>
-                                                )}
-                                                {jdData.recruitmentCount && (
-                                                    <div className="flex items-start gap-3">
-                                                        <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 인원</span>
-                                                        <span className="text-[13px] text-gray-700">{jdData.recruitmentCount}</span>
-                                                    </div>
-                                                )}
-                                                {jdData.recruitmentProcess && jdData.recruitmentProcess.length > 0 && (
-                                                    <div className="flex items-start gap-3">
-                                                        <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">모집 절차</span>
-                                                        <span className="text-[13px] text-gray-700">
-                                                            {jdData.recruitmentProcess.map((step, i) => (
-                                                                <span key={i}>
-                                                                    {i > 0 && <span className="text-green-400 mx-1">→</span>}
-                                                                    {step}
-                                                                </span>
-                                                            ))}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                                {jdData.activitySchedule && (
-                                                    <div className="flex items-start gap-3">
-                                                        <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">활동 일정</span>
-                                                        <span className="text-[13px] text-gray-700">{jdData.activitySchedule}</span>
-                                                    </div>
-                                                )}
-                                                {jdData.membershipFee && (
-                                                    <div className="flex items-start gap-3">
-                                                        <span className="text-[11px] font-bold text-gray-500 w-20 flex-shrink-0 pt-0.5">회비</span>
-                                                        <span className="text-[13px] text-gray-700">{jdData.membershipFee}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )
-                            )
-                        )}
-
-                        {/* VISION & MISSION */}
-                        {(jdData.vision || jdData.mission || isEditing) && (
-                            <div className="space-y-4">
-                                <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-5">
-                                    <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-2">VISION & MISSION</h4>
-                                    <div className="space-y-3">
-                                        <div>
-                                            <h5 className="font-bold text-[13px] text-gray-800 mb-1">우리의 비전</h5>
-                                            {isEditing ? (
-                                                <textarea
-                                                    value={editedData?.vision || ''}
-                                                    onChange={(e) => updateEditedField('vision', e.target.value)}
-                                                    rows={3}
-                                                    className="w-full text-[13px] text-gray-700 leading-relaxed px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
-                                                    placeholder="비전을 입력하세요"
-                                                />
-                                            ) : (
-                                                jdData.vision && <p className="text-[13px] text-gray-700 leading-relaxed">{jdData.vision}</p>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <h5 className="font-bold text-[13px] text-gray-800 mb-1">우리의 미션</h5>
-                                            {isEditing ? (
-                                                <textarea
-                                                    value={editedData?.mission || ''}
-                                                    onChange={(e) => updateEditedField('mission', e.target.value)}
-                                                    rows={3}
-                                                    className="w-full text-[13px] text-gray-700 leading-relaxed px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
-                                                    placeholder="미션을 입력하세요"
-                                                />
-                                            ) : (
-                                                jdData.mission && <p className="text-[13px] text-gray-700 leading-relaxed">{jdData.mission}</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 자격 요건 / 지원자 체크리스트 */}
-                        <div className="space-y-3">
-                            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{(jdData.type || 'club') === 'company' ? '자격 요건 (CHECKLIST)' : '지원자 체크리스트 (필수)'}</h4>
-                            {isEditing ? (
-                                <div className="space-y-2">
-                                    {((editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : ['']).map((item, idx) => {
-                                        const itemType = editedData?.requirementTypes?.[idx] || 'text';
-                                        return (
-                                            <div key={idx} className="space-y-1">
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        value={item}
-                                                        onChange={(e) => {
-                                                            const current = (editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : [''];
-                                                            const newRequirements = [...current];
-                                                            newRequirements[idx] = e.target.value;
-                                                            updateEditedField('requirements', newRequirements);
-                                                        }}
-                                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="자격 요건 입력"
-                                                    />
-                                                    <button
-                                                        onClick={() => {
-                                                            const current = (editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : [''];
-                                                            const newRequirements = current.filter((_, i) => i !== idx);
-                                                            // 타입 맵도 인덱스 재매핑
-                                                            const currentTypes = { ...(editedData?.requirementTypes || {}) };
-                                                            const newTypes: Record<number, 'checkbox' | 'text'> = {};
-                                                            Object.keys(currentTypes).forEach(k => {
-                                                                const ki = parseInt(k);
-                                                                if (ki < idx) newTypes[ki] = currentTypes[ki];
-                                                                else if (ki > idx) newTypes[ki - 1] = currentTypes[ki];
-                                                            });
-                                                            updateEditedField('requirements', newRequirements.length ? newRequirements : ['']);
-                                                            updateEditedField('requirementTypes', newTypes);
-                                                        }}
-                                                        className="px-3 py-2 bg-red-500 text-white rounded-lg text-[12px] hover:bg-red-600"
-                                                    >
-                                                        삭제
-                                                    </button>
-                                                </div>
-                                                {/* 답변 형식 토글 */}
-                                                <div className="flex items-center gap-2 ml-1">
-                                                    <span className="text-[11px] text-gray-400">답변 형식:</span>
-                                                    <button
-                                                        onClick={() => {
-                                                            const types = { ...(editedData?.requirementTypes || {}) };
-                                                            types[idx] = 'checkbox';
-                                                            updateEditedField('requirementTypes', types);
-                                                        }}
-                                                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
-                                                            itemType === 'checkbox' 
-                                                                ? 'bg-green-100 text-green-700 border border-green-300' 
-                                                                : 'bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100'
-                                                        }`}
-                                                    >
-                                                        ✓ 체크만
-                                                    </button>
-                                                    <button
-                                                        onClick={() => {
-                                                            const types = { ...(editedData?.requirementTypes || {}) };
-                                                            types[idx] = 'text';
-                                                            updateEditedField('requirementTypes', types);
-                                                        }}
-                                                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
-                                                            itemType === 'text' 
-                                                                ? 'bg-blue-100 text-blue-700 border border-blue-300' 
-                                                                : 'bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100'
-                                                        }`}
-                                                    >
-                                                        ✎ 서술형
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                    <button
-                                        onClick={() => {
-                                            const current = (editedData?.requirements && editedData.requirements.length > 0) ? editedData.requirements : [''];
-                                            const newRequirements = [...current, ''];
-                                            updateEditedField('requirements', newRequirements);
-                                        }}
-                                        className="px-4 py-2 bg-blue-500 text-white rounded-lg text-[12px] hover:bg-blue-600"
-                                    >
-                                        + 항목 추가
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    {jdData.requirements && jdData.requirements.length > 0 ? jdData.requirements.map((item, idx) => {
-                                        const itemType = jdData.requirementTypes?.[idx] || 'checkbox';
-                                        return (
-                                        <div key={idx} className="space-y-2">
-                                            <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={viewRequirementChecks[idx]?.checked || false}
-                                                    onChange={(e) => {
-                                                        setViewRequirementChecks({
-                                                            ...viewRequirementChecks,
-                                                            [idx]: {
-                                                                checked: e.target.checked,
-                                                                detail: viewRequirementChecks[idx]?.detail || ''
-                                                            }
-                                                        });
-                                                    }}
-                                                    className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
-                                                />
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
-                                                    {itemType === 'text' && (
-                                                        <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded font-medium">서술</span>
-                                                    )}
-                                                </div>
-                                            </label>
-                                            {viewRequirementChecks[idx]?.checked && itemType === 'text' && (
-                                                <div className="ml-10">
-                                                    <textarea
-                                                        value={viewRequirementChecks[idx]?.detail || ''}
-                                                        onChange={(e) => setViewRequirementChecks({
-                                                            ...viewRequirementChecks,
-                                                            [idx]: {
-                                                                checked: true,
-                                                                detail: e.target.value
-                                                            }
-                                                        })}
-                                                        placeholder="관련 경험이나 역량을 구체적으로 작성해주세요"
-                                                        rows={3}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                        );
-                                    }) : (
-                                        <p className="text-[13px] text-gray-400 p-3">{(jdData.type || 'club') === 'company' ? '자격 요건이 설정되지 않았습니다.' : '체크리스트가 설정되지 않았습니다.'}</p>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* 우대 사항 / 우대 체크리스트 */}
-                        <div className="space-y-3">
-                            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{(jdData.type || 'club') === 'company' ? '우대 사항 (PREFERRED)' : '지원자 체크리스트 (우대)'}</h4>
-                            {isEditing ? (
-                                <div className="space-y-2">
-                                    {((editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : ['']).map((item, idx) => {
-                                        const itemType = editedData?.preferredTypes?.[idx] || 'text';
-                                        return (
-                                            <div key={idx} className="space-y-1">
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        value={item}
-                                                        onChange={(e) => {
-                                                            const current = (editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : [''];
-                                                            const newPreferred = [...current];
-                                                            newPreferred[idx] = e.target.value;
-                                                            updateEditedField('preferred', newPreferred);
-                                                        }}
-                                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="우대 사항 입력"
-                                                    />
-                                                    <button
-                                                        onClick={() => {
-                                                            const current = (editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : [''];
-                                                            const newPreferred = current.filter((_, i) => i !== idx);
-                                                            // 타입 맵도 인덱스 재매핑
-                                                            const currentTypes = { ...(editedData?.preferredTypes || {}) };
-                                                            const newTypes: Record<number, 'checkbox' | 'text'> = {};
-                                                            Object.keys(currentTypes).forEach(k => {
-                                                                const ki = parseInt(k);
-                                                                if (ki < idx) newTypes[ki] = currentTypes[ki];
-                                                                else if (ki > idx) newTypes[ki - 1] = currentTypes[ki];
-                                                            });
-                                                            updateEditedField('preferred', newPreferred.length ? newPreferred : ['']);
-                                                            updateEditedField('preferredTypes', newTypes);
-                                                        }}
-                                                        className="px-3 py-2 bg-red-500 text-white rounded-lg text-[12px] hover:bg-red-600"
-                                                    >
-                                                        삭제
-                                                    </button>
-                                                </div>
-                                                {/* 답변 형식 토글 */}
-                                                <div className="flex items-center gap-2 ml-1">
-                                                    <span className="text-[11px] text-gray-400">답변 형식:</span>
-                                                    <button
-                                                        onClick={() => {
-                                                            const types = { ...(editedData?.preferredTypes || {}) };
-                                                            types[idx] = 'checkbox';
-                                                            updateEditedField('preferredTypes', types);
-                                                        }}
-                                                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
-                                                            itemType === 'checkbox' 
-                                                                ? 'bg-green-100 text-green-700 border border-green-300' 
-                                                                : 'bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100'
-                                                        }`}
-                                                    >
-                                                        ✓ 체크만
-                                                    </button>
-                                                    <button
-                                                        onClick={() => {
-                                                            const types = { ...(editedData?.preferredTypes || {}) };
-                                                            types[idx] = 'text';
-                                                            updateEditedField('preferredTypes', types);
-                                                        }}
-                                                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
-                                                            itemType === 'text' 
-                                                                ? 'bg-blue-100 text-blue-700 border border-blue-300' 
-                                                                : 'bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100'
-                                                        }`}
-                                                    >
-                                                        ✎ 서술형
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                    <button
-                                        onClick={() => {
-                                            const current = (editedData?.preferred && editedData.preferred.length > 0) ? editedData.preferred : [''];
-                                            const newPreferred = [...current, ''];
-                                            updateEditedField('preferred', newPreferred);
-                                        }}
-                                        className="px-4 py-2 bg-blue-500 text-white rounded-lg text-[12px] hover:bg-blue-600"
-                                    >
-                                        + 항목 추가
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    {jdData.preferred && jdData.preferred.length > 0 ? jdData.preferred.map((item, idx) => {
-                                        const itemType = jdData.preferredTypes?.[idx] || 'checkbox';
-                                        return (
-                                        <div key={idx} className="space-y-2">
-                                            <label className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={viewPreferredChecks[idx]?.checked || false}
-                                                    onChange={(e) => {
-                                                        setViewPreferredChecks({
-                                                            ...viewPreferredChecks,
-                                                            [idx]: {
-                                                                checked: e.target.checked,
-                                                                detail: viewPreferredChecks[idx]?.detail || ''
-                                                            }
-                                                        });
-                                                    }}
-                                                    className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
-                                                />
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-[13px] text-gray-700 leading-relaxed group-hover:text-gray-900">{item}</span>
-                                                    {itemType === 'text' && (
-                                                        <span className="text-[10px] text-purple-500 bg-purple-50 px-1.5 py-0.5 rounded font-medium">서술</span>
-                                                    )}
-                                                </div>
-                                            </label>
-                                            {viewPreferredChecks[idx]?.checked && itemType === 'text' && (
-                                                <div className="ml-10">
-                                                    <textarea
-                                                        value={viewPreferredChecks[idx]?.detail || ''}
-                                                        onChange={(e) => setViewPreferredChecks({
-                                                            ...viewPreferredChecks,
-                                                            [idx]: {
-                                                                checked: true,
-                                                                detail: e.target.value
-                                                            }
-                                                        })}
-                                                        placeholder="관련 경험이나 역량을 구체적으로 작성해주세요"
-                                                        rows={3}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                        );
-                                    }) : (
-                                        <p className="text-[13px] text-gray-400 p-3">{(jdData.type || 'club') === 'company' ? '우대 사항이 설정되지 않았습니다.' : '우대 체크리스트가 설정되지 않았습니다.'}</p>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* 혜택 / 복리후생 */}
-                        {((jdData.benefits && jdData.benefits.length > 0) || isEditing) && (
-                            <div className="space-y-3">
-                                <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{(jdData.type || 'club') === 'company' ? '복리후생 (BENEFITS)' : '활동 혜택 (BENEFITS)'}</h4>
-                                {isEditing ? (
-                                    <div className="space-y-2">
-                                        {((editedData?.benefits && editedData.benefits.length > 0) ? editedData.benefits : ['']).map((item, idx) => (
-                                            <div key={idx} className="flex gap-2">
-                                                <input
-                                                    type="text"
-                                                    value={item}
-                                                    onChange={(e) => {
-                                                        const current = (editedData?.benefits && editedData.benefits.length > 0) ? editedData.benefits : [''];
-                                                        const newBenefits = [...current];
-                                                        newBenefits[idx] = e.target.value;
-                                                        updateEditedField('benefits', newBenefits);
-                                                    }}
-                                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-[13px] focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="혜택/복리후생 입력"
-                                                />
-                                                <button
-                                                    onClick={() => {
-                                                        const current = (editedData?.benefits && editedData.benefits.length > 0) ? editedData.benefits : [''];
-                                                        const newBenefits = current.filter((_, i) => i !== idx);
-                                                        updateEditedField('benefits', newBenefits.length ? newBenefits : ['']);
-                                                    }}
-                                                    className="px-3 py-2 bg-red-500 text-white rounded-lg text-[12px] hover:bg-red-600"
-                                                >
-                                                    삭제
-                                                </button>
-                                            </div>
-                                        ))}
-                                        <button
-                                            onClick={() => {
-                                                const current = (editedData?.benefits && editedData.benefits.length > 0) ? editedData.benefits : [''];
-                                                updateEditedField('benefits', [...current, '']);
-                                            }}
-                                            className="px-4 py-2 bg-blue-500 text-white rounded-lg text-[12px] hover:bg-blue-600"
-                                        >
-                                            + 항목 추가
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-1">
-                                        {jdData.benefits.map((item, idx) => (
-                                            <div key={idx} className="flex items-start gap-3 px-3 py-2">
-                                                <span className="text-orange-400 mt-0.5 flex-shrink-0">•</span>
-                                                <span className="text-[13px] text-gray-700 leading-relaxed">{item}</span>
-                                            </div>
-                                        ))}
+                        {/* 동적 섹션 렌더링 */}
+                        {activeSections.map((section, idx) => (
+                            <div
+                                key={section}
+                                draggable={isEditing}
+                                onDragStart={(e) => isEditing && handleSectionDragStart(e, section)}
+                                onDragOver={(e) => isEditing && handleSectionDragOver(e, idx)}
+                                onDrop={() => isEditing && handleSectionDrop(idx)}
+                                onDragEnd={handleSectionDragEnd}
+                                className={`relative group/section transition-all ${isEditing ? 'cursor-grab active:cursor-grabbing' : ''} ${dragOverIdx === idx ? 'ring-2 ring-blue-400 ring-offset-2 rounded-lg' : ''}`}
+                            >
+                                {isEditing && (
+                                    <div className="flex items-center justify-between mb-1 py-1 opacity-0 group-hover/section:opacity-100 transition-opacity">
+                                        <span className="text-[10px] text-gray-400 flex items-center gap-1 select-none">
+                                            <span className="cursor-grab text-gray-300 hover:text-gray-500">⠇</span>
+                                            {SECTION_META[section as SectionType]?.label}
+                                        </span>
+                                        <button onClick={() => removeSection(section as SectionType)} className="text-[10px] text-red-300 hover:text-red-500 font-medium transition-colors">제거</button>
                                     </div>
                                 )}
+                                {renderSectionContent(section as SectionType)}
                             </div>
-                        )}
+                        ))}
 
-                        {/* 스킬/도구 체크리스트 섹션 */}
-                        {((jdData?.applicationFields?.skillOptions && jdData.applicationFields.skillOptions.length > 0) || isEditing) && (
-                            <div className="space-y-3">
-                                <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                                    스킬 / 도구 체크리스트
-                                </h4>
-                                {isEditing ? (
-                                    <div className="bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 rounded-lg p-5 space-y-4">
-                                        <p className="text-[12px] text-indigo-500 font-medium">지원자가 선택할 수 있는 스킬 목록을 수정하세요</p>
-                                        {(editedData?.applicationFields?.skillOptions || []).map((cat, catIdx) => (
-                                            <div key={catIdx} className="bg-white rounded-lg p-4 border border-indigo-100">
-                                                <div className="flex items-center gap-2 mb-3">
-                                                    <input
-                                                        type="text"
-                                                        value={cat.category}
-                                                        onChange={(e) => {
-                                                            const newOptions = [...(editedData?.applicationFields?.skillOptions || [])];
-                                                            newOptions[catIdx] = { ...newOptions[catIdx], category: e.target.value };
-                                                            updateEditedField('applicationFields', { ...editedData?.applicationFields, skillOptions: newOptions });
-                                                        }}
-                                                        className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[13px] font-bold focus:ring-2 focus:ring-indigo-500"
-                                                        placeholder="카테고리명"
-                                                    />
-                                                    <button
-                                                        onClick={() => {
-                                                            const newOptions = (editedData?.applicationFields?.skillOptions || []).filter((_, i) => i !== catIdx);
-                                                            updateEditedField('applicationFields', { ...editedData?.applicationFields, skillOptions: newOptions });
-                                                        }}
-                                                        className="px-2 py-1.5 bg-red-500 text-white rounded-lg text-[11px] hover:bg-red-600"
-                                                    >
-                                                        삭제
-                                                    </button>
-                                                </div>
-                                                <div className="flex flex-wrap gap-2 mb-2">
-                                                    {cat.skills.map((skill, skillIdx) => (
-                                                        <span key={skillIdx} className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg text-[12px] text-indigo-700 font-medium">
-                                                            {skill}
-                                                            <button
-                                                                onClick={() => {
-                                                                    const newOptions = [...(editedData?.applicationFields?.skillOptions || [])];
-                                                                    newOptions[catIdx] = { ...newOptions[catIdx], skills: newOptions[catIdx].skills.filter((_, i) => i !== skillIdx) };
-                                                                    updateEditedField('applicationFields', { ...editedData?.applicationFields, skillOptions: newOptions });
-                                                                }}
-                                                                className="text-indigo-400 hover:text-red-500 ml-0.5"
-                                                            >
-                                                                ✕
-                                                            </button>
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="스킬명 입력 후 추가"
-                                                        className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-[12px] focus:ring-2 focus:ring-indigo-500"
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
-                                                                const val = (e.target as HTMLInputElement).value.trim();
-                                                                const newOptions = [...(editedData?.applicationFields?.skillOptions || [])];
-                                                                if (!newOptions[catIdx].skills.includes(val)) {
-                                                                    newOptions[catIdx] = { ...newOptions[catIdx], skills: [...newOptions[catIdx].skills, val] };
-                                                                    updateEditedField('applicationFields', { ...editedData?.applicationFields, skillOptions: newOptions });
-                                                                }
-                                                                (e.target as HTMLInputElement).value = '';
-                                                            }
-                                                        }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        ))}
-                                        <button
-                                            onClick={() => {
-                                                const newOptions = [...(editedData?.applicationFields?.skillOptions || []), { category: '', skills: [] }];
-                                                updateEditedField('applicationFields', { ...editedData?.applicationFields, skillOptions: newOptions });
-                                            }}
-                                            className="px-4 py-2 bg-indigo-500 text-white rounded-lg text-[12px] font-bold hover:bg-indigo-600"
-                                        >
-                                            + 카테고리 추가
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 rounded-lg p-5 space-y-5">
-                                        <p className="text-[12px] text-indigo-500 font-medium">
-                                            {isOwner ? '지원자가 선택할 수 있는 스킬 목록입니다' : '보유하고 있는 스킬을 선택해주세요'}
-                                        </p>
-                                        {jdData!.applicationFields!.skillOptions!.map((cat, catIdx) => (
-                                            <div key={catIdx}>
-                                                <span className="text-[12px] font-bold text-gray-700 mb-2 block">{cat.category}</span>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {cat.skills.map((skill, skillIdx) => {
-                                                        const isSelected = (applicationForm.selectedSkills[cat.category] || []).includes(skill);
-                                                        return (
-                                                            <button
-                                                                key={skillIdx}
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    if (!isOwner) {
-                                                                        setApplicationForm(prev => {
-                                                                            const current = prev.selectedSkills[cat.category] || [];
-                                                                            const updated = isSelected
-                                                                                ? current.filter(s => s !== skill)
-                                                                                : [...current, skill];
-                                                                            return {
-                                                                                ...prev,
-                                                                                selectedSkills: {
-                                                                                    ...prev.selectedSkills,
-                                                                                    [cat.category]: updated
-                                                                                }
-                                                                            };
-                                                                        });
-                                                                    }
-                                                                }}
-                                                                disabled={!!isOwner}
-                                                                className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${
-                                                                    isOwner
-                                                                        ? 'bg-white text-gray-500 border-gray-200 cursor-default'
-                                                                        : isSelected
-                                                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                                                                            : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300 hover:text-indigo-600 cursor-pointer'
-                                                                }`}
-                                                            >
-                                                                {!isOwner && isSelected && <span className="mr-1">✓</span>}
-                                                                {skill}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                        {/* 드롭 존 */}
+                        {isEditing && (
+                            <div
+                                onDragOver={(e) => { e.preventDefault(); setDragOverIdx(activeSections.length); }}
+                                onDrop={() => handleSectionDrop(activeSections.length)}
+                                onDragLeave={() => setDragOverIdx(null)}
+                                className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${dragOverIdx === activeSections.length ? 'border-blue-400 bg-blue-50/50' : 'border-gray-200 hover:border-gray-300'}`}
+                            >
+                                <p className="text-sm text-gray-400">여기에 섹션을 드래그하여 추가</p>
                             </div>
                         )}
 
@@ -1283,11 +1413,8 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                         });
                                         setShowApplicationModal(true);
                                     }}
-                                    className="px-6 py-3 bg-blue-600 text-white rounded-lg text-[14px] font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2"
+                                    className="px-6 py-3 bg-blue-600 text-white rounded-lg text-[14px] font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all"
                                 >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                    </svg>
                                     지원하기
                                 </button>
                             )}
@@ -1297,77 +1424,6 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                         <div className="text-right pt-4">
                             <p className="text-[11px] font-bold text-gray-400">WINNOW Recruiting Team</p>
                         </div>
-
-                        {/* 지원 양식 설정 (수정 모드) */}
-                        {isEditing && (
-                            <div className="space-y-3 border-t border-gray-200 pt-6">
-                                <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">지원 양식 설정</h4>
-                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-5 space-y-4">
-                                    <p className="text-[12px] text-gray-500">지원자가 작성할 항목을 선택하세요</p>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {[
-                                            { key: 'phone', label: '연락처' },
-                                            { key: 'gender', label: '성별' },
-                                            { key: 'birthDate', label: '생년월일' },
-                                            { key: 'university', label: '학교' },
-                                            { key: 'major', label: '전공' },
-                                            { key: 'portfolio', label: '포트폴리오' },
-                                        ].map(({ key, label }) => (
-                                            <label key={key} className="flex items-center gap-2 p-2 rounded-lg hover:bg-white cursor-pointer transition-colors">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={!!(editedData?.applicationFields as any)?.[key]}
-                                                    onChange={(e) => {
-                                                        const fields = editedData?.applicationFields || { name: true, email: true, phone: false, gender: false, birthDate: false, university: false, major: false, portfolio: false, customQuestions: [], skillOptions: [] };
-                                                        updateEditedField('applicationFields', { ...fields, [key]: e.target.checked });
-                                                    }}
-                                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                                />
-                                                <span className="text-[13px] text-gray-700">{label}</span>
-                                            </label>
-                                        ))}
-                                    </div>
-
-                                    {/* 커스텀 질문 수정 */}
-                                    <div className="border-t border-gray-200 pt-4 mt-4">
-                                        <span className="text-[12px] font-bold text-gray-600 mb-2 block">커스텀 질문</span>
-                                        {(editedData?.applicationFields?.customQuestions || []).map((q, idx) => (
-                                            <div key={idx} className="flex gap-2 mb-2">
-                                                <input
-                                                    type="text"
-                                                    value={q}
-                                                    onChange={(e) => {
-                                                        const questions = [...(editedData?.applicationFields?.customQuestions || [])];
-                                                        questions[idx] = e.target.value;
-                                                        updateEditedField('applicationFields', { ...editedData?.applicationFields, customQuestions: questions });
-                                                    }}
-                                                    className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-[12px] focus:ring-2 focus:ring-blue-500"
-                                                    placeholder="질문 입력"
-                                                />
-                                                <button
-                                                    onClick={() => {
-                                                        const questions = (editedData?.applicationFields?.customQuestions || []).filter((_, i) => i !== idx);
-                                                        updateEditedField('applicationFields', { ...editedData?.applicationFields, customQuestions: questions });
-                                                    }}
-                                                    className="px-2 py-1.5 bg-red-500 text-white rounded-lg text-[11px] hover:bg-red-600"
-                                                >
-                                                    삭제
-                                                </button>
-                                            </div>
-                                        ))}
-                                        <button
-                                            onClick={() => {
-                                                const questions = [...(editedData?.applicationFields?.customQuestions || []), ''];
-                                                updateEditedField('applicationFields', { ...editedData?.applicationFields, customQuestions: questions });
-                                            }}
-                                            className="px-3 py-1.5 bg-purple-500 text-white rounded-lg text-[11px] font-bold hover:bg-purple-600"
-                                        >
-                                            + 질문 추가
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
