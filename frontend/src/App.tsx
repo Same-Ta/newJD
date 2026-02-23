@@ -43,17 +43,46 @@ const MyJDsPage = lazy(() => import('@/pages/Dashboard/MyJDsPage').then(m => ({ 
 const AccountSettings = lazy(() => import('@/pages/Dashboard/AccountSettings').then(m => ({ default: m.AccountSettings })));
 const TeamManagement = lazy(() => import('@/pages/Dashboard/TeamManagement').then(m => ({ default: m.TeamManagement })));
 
-// Suspense fallback component
+// Suspense fallback component - 코드 분할 청크 로딩 중 표시
 const PageLoader = () => (
-  <div className="flex items-center justify-center h-64">
+  <div className="flex items-center justify-center h-64 animate-fadeIn">
     <div className="text-center">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
-      <p className="text-gray-400 text-sm">불러오는 중...</p>
+      <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg animate-pulse">
+        <span className="text-white font-bold text-sm">W</span>
+      </div>
+      <div className="w-24 h-1 bg-gray-200 rounded-full mx-auto overflow-hidden">
+        <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full animate-[loader-slide_1.2s_ease-in-out_infinite]" style={{ width: '40%' }} />
+      </div>
     </div>
   </div>
 );
 
 const App = () => {
+  // 페이지 키 → URL 경로 매핑
+  const PAGE_PATHS: Record<string, string> = {
+    'landing': '/',
+    'login': '/login',
+    'signup': '/signup',
+    'dashboard': '/dashboard',
+    'my-jds': '/my-jds',
+    'jd-detail': '/jd-detail',
+    'applicants': '/applicants',
+    'applicant-detail': '/applicant-detail',
+    'chat': '/chat',
+    'team': '/team',
+    'settings': '/settings',
+  };
+
+  // URL 경로 → 페이지 키 역매핑
+  const pathToPage = (pathname: string): string => {
+    // 공개 공고 링크: /jd/:id 패턴
+    if (pathname.match(/^\/jd\/[^/]+/)) return 'jd-detail';
+    for (const [page, path] of Object.entries(PAGE_PATHS)) {
+      if (path === pathname) return page;
+    }
+    return 'landing';
+  };
+
   // URL에서 공고 ID 추출 함수
   const getJdIdFromUrl = () => {
     // 1. 해시 라우팅 확인
@@ -79,7 +108,14 @@ const App = () => {
     return null;
   };
 
-  const [currentPage, setCurrentPage] = useState('landing');
+  // 초기 페이지를 URL에서 결정
+  const getInitialPage = (): string => {
+    const jdId = getJdIdFromUrl();
+    if (jdId) return 'jd-detail';
+    return pathToPage(window.location.pathname);
+  };
+
+  const [currentPage, setCurrentPage] = useState(() => getInitialPage());
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedJdId, setSelectedJdId] = useState<string | undefined>(undefined);
   const [selectedApplicationId, setSelectedApplicationId] = useState<string | undefined>(undefined);
@@ -109,6 +145,30 @@ const App = () => {
     }
   }, []);
 
+  // ==================== 성능 최적화: 앱 로더 제거 + 백엔드 웜업 ====================
+  useEffect(() => {
+    // 1. HTML에 삽입된 초기 로딩 스켈레톤 제거
+    const loader = document.getElementById('app-loader');
+    if (loader) {
+      loader.classList.add('fade-out');
+      setTimeout(() => loader.remove(), 300);
+    }
+    
+    // 2. 백엔드 서버 웜업 (Render cold start 방지)
+    //    사용자가 UI를 보는 동안 백그라운드에서 백엔드 깨우기
+    const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8000';
+    fetch(`${API_BASE}/keepalive`, { 
+      method: 'GET',
+      // 연결 설정만 해도 서버 깨우기에 충분, 타임아웃 짧게
+      signal: AbortSignal.timeout?.(8000),
+    }).then(r => {
+      if (r.ok) console.log('🔥 Backend warmed up');
+    }).catch(() => {
+      // 무시 - 백엔드가 아직 시작 중일 수 있음
+      console.log('ℹ️  Backend warmup pending (cold start)');
+    });
+  }, []);
+
   // Firebase Auth 상태 감지
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -131,7 +191,7 @@ const App = () => {
         // 로그인되어 있고 landing 페이지에 있으며 공고 상세 페이지가 아닐 때만 dashboard로 이동
         if (currentPage === 'landing' && !getJdIdFromUrl()) {
           setCurrentPage('dashboard');
-          window.history.replaceState({ page: 'dashboard' }, '');
+          window.history.replaceState({ page: 'dashboard' }, '', '/dashboard');
         }
       } else {
         console.log('로그인 되지 않은 상태');
@@ -142,7 +202,7 @@ const App = () => {
         // 공고 상세 페이지가 아닌 경우에만 landing으로 이동
         if (currentPage !== 'jd-detail' && currentPage !== 'login' && currentPage !== 'signup') {
           setCurrentPage('landing');
-          window.history.replaceState({ page: 'landing' }, '');
+          window.history.replaceState({ page: 'landing' }, '', '/');
         }
       }
       setInit(true);
@@ -214,7 +274,8 @@ const App = () => {
   // 브라우저 뒤로가기/앞으로가기 처리
   useEffect(() => {
     // 현재 페이지를 히스토리 초기 상태로 설정
-    window.history.replaceState({ page: currentPage }, '');
+    const initialPath = PAGE_PATHS[currentPage] || '/';
+    window.history.replaceState({ page: currentPage }, '', initialPath);
 
     const handlePopState = (e: PopStateEvent) => {
       const state = e.state;
@@ -228,6 +289,10 @@ const App = () => {
         if (jdId) {
           setSelectedJdId(jdId);
           setCurrentPage('jd-detail');
+        } else {
+          // URL 경로에서 페이지 결정
+          const page = pathToPage(window.location.pathname);
+          setCurrentPage(page);
         }
       }
     };
@@ -236,9 +301,10 @@ const App = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // 페이지 내비게이션 (브라우저 히스토리에 기록)
+  // 페이지 내비게이션 (브라우저 히스토리에 기록 + URL 경로 변경)
   const navigateTo = (page: string) => {
-    window.history.pushState({ page }, '');
+    const path = PAGE_PATHS[page] || '/';
+    window.history.pushState({ page }, '', path);
     setCurrentPage(page);
   };
 
@@ -253,7 +319,7 @@ const App = () => {
   const handleWelcomeStart = () => {
     setShowWelcome(false);
     enableDemoMode();
-    navigateTo('chat');
+    navigateTo('dashboard');
     setTimeout(() => setShowTutorial(true), 400);
   };
 
@@ -303,7 +369,7 @@ const App = () => {
 
   const handleNavigateToJD = (jdId: string) => {
     setSelectedJdId(jdId);
-    window.history.pushState({ page: 'jd-detail', jdId }, '');
+    window.history.pushState({ page: 'jd-detail', jdId }, '', `/jd-detail?jdId=${jdId}`);
     setCurrentPage('jd-detail');
   };
 
@@ -335,7 +401,7 @@ const App = () => {
                 <h2 className="text-2xl font-bold mb-4">지원자 관리</h2>
                 <ApplicantList onNavigateToApplicant={(id) => {
                   setSelectedApplicationId(id);
-                  window.history.pushState({ page: 'applicant-detail', applicationId: id }, '');
+                  window.history.pushState({ page: 'applicant-detail', applicationId: id }, '', `/applicant-detail?id=${id}`);
                   setCurrentPage('applicant-detail');
                 }} />
               </div>

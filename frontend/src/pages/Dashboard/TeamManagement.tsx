@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, UserPlus, Trash2, Crown, Mail, X, Loader2, AlertCircle, CheckCircle, FileText, ChevronRight } from 'lucide-react';
+import { Users, UserPlus, Trash2, Crown, Mail, X, Loader2, AlertCircle, CheckCircle, FileText, ChevronRight, Clock, Check, XCircle, Bell } from 'lucide-react';
 import { FONTS } from '@/constants/fonts';
 import { teamAPI, jdAPI } from '@/services/api';
 import { useDemoMode } from '@/components/onboarding';
@@ -10,6 +10,18 @@ interface Collaborator {
   name: string;
   role: string;
   addedAt?: { seconds: number; nanoseconds: number };
+}
+
+interface PendingInvitation {
+  id: string;
+  jdId: string;
+  jdTitle: string;
+  inviterName: string;
+  inviterEmail: string;
+  inviteeEmail: string;
+  inviteeName: string;
+  status: string;
+  createdAt?: { seconds: number; nanoseconds: number };
 }
 
 interface JDItem {
@@ -36,6 +48,12 @@ export const TeamManagement = (_props: TeamManagementProps) => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // 초대 관련 상태
+  const [myInvitations, setMyInvitations] = useState<PendingInvitation[]>([]);
+  const [sentInvitations, setSentInvitations] = useState<PendingInvitation[]>([]);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [invitationsLoading, setInvitationsLoading] = useState(false);
+
   // 투토리얼 스텝 전환 시 초대 모달 강제 닫기 (Phase 3→4 전환 등)
   useEffect(() => {
     if (!isDemoMode) return;
@@ -52,6 +70,7 @@ export const TeamManagement = (_props: TeamManagementProps) => {
       return;
     }
     loadJDs();
+    loadMyInvitations();
   }, [isDemoMode]);
 
   useEffect(() => {
@@ -80,11 +99,53 @@ export const TeamManagement = (_props: TeamManagementProps) => {
       const data = await teamAPI.getCollaborators(jdId);
       setCollaborators(data.collaborators || []);
       setOwnerInfo({ name: data.ownerName || '', email: data.ownerEmail || '' });
+      // 보낸 초대도 함께 로드
+      await loadSentInvitations(jdId);
     } catch (error: any) {
       console.error('협업자 로드 실패:', error);
       setCollaborators([]);
     } finally {
       setCollabLoading(false);
+    }
+  };
+
+  const loadMyInvitations = async () => {
+    try {
+      setInvitationsLoading(true);
+      const data = await teamAPI.getMyInvitations();
+      setMyInvitations(data.invitations || []);
+    } catch (error: any) {
+      console.error('초대 목록 로드 실패:', error);
+    } finally {
+      setInvitationsLoading(false);
+    }
+  };
+
+  const loadSentInvitations = async (jdId: string) => {
+    try {
+      const data = await teamAPI.getSentInvitations(jdId);
+      setSentInvitations(data.invitations || []);
+    } catch (error: any) {
+      console.error('보낸 초대 로드 실패:', error);
+      setSentInvitations([]);
+    }
+  };
+
+  const handleRespondInvitation = async (invitationId: string, action: 'accept' | 'reject') => {
+    try {
+      setRespondingId(invitationId);
+      const result = await teamAPI.respondToInvitation(invitationId, action);
+      setToast({ type: 'success', message: result.message });
+      // 초대 목록 새로고침
+      await loadMyInvitations();
+      // 공고 목록도 새로고침 (수락 시 새 공고가 보일 수 있음)
+      if (action === 'accept') {
+        await loadJDs();
+      }
+    } catch (error: any) {
+      setToast({ type: 'error', message: error.message || '초대 응답에 실패했습니다.' });
+    } finally {
+      setRespondingId(null);
     }
   };
 
@@ -115,8 +176,17 @@ export const TeamManagement = (_props: TeamManagementProps) => {
 
     if (isDemoMode) {
       // 데모 모드: API 호출 없이 성공 처리
-      setToast({ type: 'success', message: `${inviteEmail.trim()} 님을 공고에 초대했습니다.` });
-      setCollaborators(prev => [...prev, { uid: null, email: inviteEmail.trim(), name: inviteEmail.split('@')[0], role: 'viewer' }]);
+      setToast({ type: 'success', message: `${inviteEmail.trim()} 님에게 초대를 보냈습니다.` });
+      setSentInvitations(prev => [...prev, {
+        id: 'demo-inv-' + Date.now(),
+        jdId: selectedJdId,
+        jdTitle: jds.find(j => j.id === selectedJdId)?.title || '',
+        inviterName: '나',
+        inviterEmail: 'demo@winnow.com',
+        inviteeEmail: inviteEmail.trim(),
+        inviteeName: inviteEmail.split('@')[0],
+        status: 'pending',
+      }]);
       setInviteEmail('');
       setShowInviteModal(false);
       onDemoAction?.('team-invited');
@@ -126,10 +196,10 @@ export const TeamManagement = (_props: TeamManagementProps) => {
     try {
       setInviting(true);
       await teamAPI.invite(selectedJdId, inviteEmail.trim());
-      setToast({ type: 'success', message: `${inviteEmail.trim()} 님을 공고에 초대했습니다.` });
+      setToast({ type: 'success', message: `${inviteEmail.trim()} 님에게 초대를 보냈습니다. 상대방이 수락하면 협업자로 추가됩니다.` });
       setInviteEmail('');
       setShowInviteModal(false);
-      await loadCollaborators(selectedJdId);
+      await loadSentInvitations(selectedJdId);
     } catch (error: any) {
       setToast({ type: 'error', message: error.message || '초대에 실패했습니다.' });
     } finally {
@@ -207,6 +277,74 @@ export const TeamManagement = (_props: TeamManagementProps) => {
         <h2 className="text-xl sm:text-2xl font-bold text-gray-900">팀 관리</h2>
         <p className="text-sm text-gray-500 mt-1">공고별로 팀원을 초대하여 함께 채용을 관리하세요</p>
       </div>
+
+      {/* 받은 초대 목록 (대기 중) */}
+      {!isDemoMode && myInvitations.length > 0 && (
+        <div className="mb-6 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl overflow-hidden shadow-sm">
+          <div className="px-5 py-3 border-b border-amber-100 flex items-center gap-2">
+            <Bell size={16} className="text-amber-600" />
+            <span className="font-semibold text-amber-900 text-sm">받은 초대</span>
+            <span className="ml-2 text-xs text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full font-bold">
+              {myInvitations.length}건
+            </span>
+          </div>
+          <div className="divide-y divide-amber-100">
+            {myInvitations.map((inv) => (
+              <div key={inv.id} className="px-5 py-4 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                  <Mail size={18} className="text-amber-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {inv.jdTitle}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    <span className="font-medium text-amber-700">{inv.inviterName}</span>님이 초대했습니다
+                  </p>
+                  {inv.createdAt && (
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {new Date(inv.createdAt.seconds * 1000).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => handleRespondInvitation(inv.id, 'reject')}
+                    disabled={respondingId === inv.id}
+                    className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 hover:border-gray-300 text-xs font-semibold transition-colors disabled:opacity-50"
+                  >
+                    {respondingId === inv.id ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <XCircle size={13} />
+                    )}
+                    거절
+                  </button>
+                  <button
+                    onClick={() => handleRespondInvitation(inv.id, 'accept')}
+                    disabled={respondingId === inv.id}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-xs font-semibold transition-colors shadow-md shadow-blue-500/20 disabled:opacity-50"
+                  >
+                    {respondingId === inv.id ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Check size={13} />
+                    )}
+                    수락
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {invitationsLoading && myInvitations.length === 0 && (
+        <div className="mb-6 bg-gray-50 border border-gray-100 rounded-2xl p-4 flex items-center gap-3">
+          <Loader2 size={16} className="animate-spin text-gray-400" />
+          <span className="text-sm text-gray-400">초대 목록 확인 중...</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* 좌측: 공고 목록 */}
@@ -355,6 +493,38 @@ export const TeamManagement = (_props: TeamManagementProps) => {
                 )}
               </div>
 
+              {/* 대기 중인 보낸 초대 */}
+              {sentInvitations.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="px-5 py-3 border-b border-gray-50 flex items-center gap-2">
+                    <Clock size={16} className="text-amber-500" />
+                    <span className="font-semibold text-gray-800 text-sm">대기 중인 초대</span>
+                    <span className="ml-auto text-xs text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full font-medium">
+                      {sentInvitations.length}건
+                    </span>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {sentInvitations.map((inv) => (
+                      <div key={inv.id} className="px-5 py-3 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center border border-amber-200">
+                          <Clock size={14} className="text-amber-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium text-gray-700">{inv.inviteeName || inv.inviteeEmail}</span>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <Mail size={10} className="text-gray-400" />
+                            <span className="text-[11px] text-gray-500">{inv.inviteeEmail}</span>
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-semibold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
+                          수락 대기
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* 안내 */}
               <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
                 <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -363,8 +533,9 @@ export const TeamManagement = (_props: TeamManagementProps) => {
                 <div>
                   <p className="text-xs font-semibold text-blue-900">공고별 초대 안내</p>
                   <p className="text-[11px] text-blue-700 mt-0.5 leading-relaxed">
-                    초대된 팀원은 이 공고와 해당 지원자, 코멘트만 확인할 수 있습니다.
-                    다른 공고에는 접근할 수 없으며, 공고마다 별도로 초대해야 합니다.
+                    초대를 보내면 상대방이 수락해야 협업자로 추가됩니다.
+                    협업자는 해당 공고와 지원자, 코멘트만 확인할 수 있으며,
+                    다른 공고에는 접근할 수 없습니다.
                   </p>
                 </div>
               </div>
@@ -405,7 +576,7 @@ export const TeamManagement = (_props: TeamManagementProps) => {
                 autoFocus
               />
               <p className="text-xs text-gray-400 mt-2">
-                Winnow에 가입된 이메일을 입력하세요. 가입되지 않은 이메일도 초대 가능합니다.
+                초대를 보내면 상대방이 수락/거절할 수 있습니다. 수락 시 협업자로 추가됩니다.
               </p>
             </div>
             <div className="px-6 py-4 bg-gray-50 flex items-center justify-end gap-3">

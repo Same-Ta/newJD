@@ -106,13 +106,28 @@ export default function TutorialOverlay({ onComplete, onNavigate }: TutorialOver
   useEffect(() => {
     setOnDemoAction((action: string) => {
       if (!step) return;
-      // ChatInterface에서 AI 시뮬레이션 시작 알림
-      if (action === 'ai-simulation-start' && step.id === 'p1-chat-input') {
-        // 다음 단계(ai-typing)로 진행
+      // 유형 선택 완료 (사용자가 동아리 카드 클릭)
+      if (action === 'demo-type-selected' && step.id === 'p1-type-select') {
+        goNextRef.current();
+      }
+      // 방식 선택 완료 (사용자가 새로운 공고 작성 클릭)
+      if (action === 'demo-method-selected' && step.id === 'p1-method-select') {
+        goNextRef.current();
+      }
+      // 기본 정보 제출 완료 (데모 자동 진행)
+      if (action === 'demo-basic-info-submitted' && step.id === 'p1-basic-info') {
         goNextRef.current();
       }
       // AI 시뮬레이션 완료 알림
       if (action === 'ai-simulation-complete' && step.id === 'p1-ai-typing') {
+        goNextRef.current();
+      }
+      // 섹션 클릭 → 채팅 영역으로 하이라이트 이동
+      if (action === 'demo-section-clicked' && step.id === 'p1-section-click') {
+        goNextRef.current();
+      }
+      // 섹션 집중 수정 AI 응답 완료 → 게시 단계로
+      if (action === 'demo-section-edit-complete' && step.id === 'p1-section-chat') {
         goNextRef.current();
       }
       // 공고 게시 완료 알림
@@ -228,7 +243,7 @@ export default function TutorialOverlay({ onComplete, onNavigate }: TutorialOver
       }
       
       // onDemoAction 콜백으로 goNext가 호출되는 스텝은 여기서 goNext 중복 호출 방지
-      const demoActionSteps = ['p4-ai-analysis-btn', 'p3-invite-complete', 'p2-edit-save'];
+      const demoActionSteps = ['p1-type-select', 'p1-method-select', 'p1-section-click', 'p4-ai-analysis-btn', 'p3-invite-complete', 'p2-edit-save'];
       if (!demoActionSteps.includes(step.id)) {
         setTimeout(() => goNextRef.current(), 200);
       }

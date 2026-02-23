@@ -23,9 +23,7 @@ import {
   ONBOARDING_STEPS,
   MOCK_JD,
   MOCK_APPLICANTS,
-  MOCK_AI_KEYWORDS,
   MOCK_AI_ANALYSIS,
-  TYPING_KEYWORDS,
 } from './mockData';
 
 interface OnboardingModalProps {
@@ -36,44 +34,18 @@ interface OnboardingModalProps {
 
 // ─── Step 1: AI 공고 생성 애니메이션 ───
 const Step1Animation = () => {
-  const [phase, setPhase] = useState(0); // 0: 입력, 1: AI 분석, 2: 공고 생성
-  const [typedText, setTypedText] = useState('');
-  const [currentKeyword, setCurrentKeyword] = useState(0);
-  const [showTags, setShowTags] = useState(false);
-  const [showResult, setShowResult] = useState(false);
+  const [phase, setPhase] = useState(0); // 0: 유형 선택, 1: 기본 정보, 2: AI 생성 중, 3: 완성
   const [showSections, setShowSections] = useState<number[]>([]);
 
   useEffect(() => {
-    // 타이핑 애니메이션
-    const keyword = TYPING_KEYWORDS[currentKeyword] || '';
-    let charIndex = 0;
-    setTypedText('');
-
-    const typeTimer = setInterval(() => {
-      if (charIndex < keyword.length) {
-        setTypedText(keyword.substring(0, charIndex + 1));
-        charIndex++;
-      } else {
-        clearInterval(typeTimer);
-        if (currentKeyword < TYPING_KEYWORDS.length - 1) {
-          setTimeout(() => setCurrentKeyword((prev) => prev + 1), 600);
-        } else {
-          setTimeout(() => setPhase(1), 800);
-        }
-      }
-    }, 80);
-
-    return () => clearInterval(typeTimer);
-  }, [currentKeyword]);
+    const t1 = setTimeout(() => setPhase(1), 1800);
+    const t2 = setTimeout(() => setPhase(2), 3600);
+    const t3 = setTimeout(() => setPhase(3), 5400);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, []);
 
   useEffect(() => {
-    if (phase === 1) {
-      setShowTags(true);
-      setTimeout(() => setPhase(2), 2200);
-    }
-    if (phase === 2) {
-      setShowResult(true);
-      // 순차적으로 섹션 표시
+    if (phase === 3) {
       [0, 1, 2, 3].forEach((i) => {
         setTimeout(() => {
           setShowSections((prev) => [...prev, i]);
@@ -82,7 +54,7 @@ const Step1Animation = () => {
     }
   }, [phase]);
 
-  const sectionLabels = ['직무 설명', '자격 요건', '우대 사항', '복리후생'];
+  const sectionLabels = ['동아리 소개', '필수 체크리스트', '우대 체크리스트', '활동 혜택'];
   const sectionIcons = [FileText, CheckCircle2, Sparkles, Zap];
   const sectionData = [
     MOCK_JD.description,
@@ -94,7 +66,6 @@ const Step1Animation = () => {
   return (
     <div className="relative w-full h-full flex items-center justify-center">
       <div className="w-full max-w-lg">
-        {/* 채팅 인터페이스 시뮬레이션 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -115,116 +86,129 @@ const Step1Animation = () => {
             </div>
           </div>
 
-          {/* 대화 영역 */}
+          {/* 내용 영역 */}
           <div className="p-5 space-y-4 min-h-[260px]">
-            {/* AI 메시지 */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-              className="flex gap-2"
-            >
-              <div className="w-7 h-7 flex-shrink-0 rounded-full bg-blue-100 flex items-center justify-center">
-                <Sparkles size={13} className="text-blue-600" />
-              </div>
-              <div className="bg-gray-50 rounded-2xl rounded-tl-md px-4 py-2.5 max-w-[85%]">
-                <p className="text-[13px] text-gray-700 leading-relaxed">
-                  어떤 포지션의 채용 공고를 만들까요?<br />
-                  <span className="text-gray-400 text-[11px]">키워드만 입력하면 AI가 분석합니다 ✨</span>
-                </p>
-              </div>
-            </motion.div>
-
-            {/* 사용자 입력 */}
+            {/* Step 0: 유형 선택 */}
             <AnimatePresence>
-              {TYPING_KEYWORDS.slice(0, currentKeyword + 1).map((keyword, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="flex justify-end"
-                >
-                  <div className="bg-blue-600 text-white rounded-2xl rounded-tr-md px-4 py-2.5">
-                    <p className="text-[13px]">
-                      {i === currentKeyword ? typedText : keyword}
-                      {i === currentKeyword && phase === 0 && (
-                        <span className="inline-block w-0.5 h-4 bg-white/70 ml-0.5 animate-pulse align-middle" />
-                      )}
-                    </p>
+              {phase === 0 && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+                  <p className="text-[13px] text-gray-600 font-medium text-center mb-2">어떤 유형의 공고를 만드시나요?</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <motion.div
+                      animate={{ scale: [1, 1.03, 1], borderColor: ['#e5e7eb', '#3b82f6', '#3b82f6'] }}
+                      transition={{ delay: 0.8, duration: 0.6 }}
+                      className="p-3 rounded-xl border-2 border-gray-200 text-center cursor-pointer"
+                    >
+                      <p className="font-bold text-[13px] text-gray-900">동아리 모집공고</p>
+                      <p className="text-[10px] text-gray-400 mt-1">신입 부원 모집</p>
+                    </motion.div>
+                    <div className="p-3 rounded-xl border-2 border-gray-200 text-center">
+                      <p className="font-bold text-[13px] text-gray-900">기업 채용공고</p>
+                      <p className="text-[10px] text-gray-400 mt-1">인재 채용</p>
+                    </div>
                   </div>
                 </motion.div>
-              ))}
+              )}
             </AnimatePresence>
 
-            {/* AI 분석 중 */}
+            {/* Step 1: 기본 정보 입력 */}
             <AnimatePresence>
-              {phase >= 1 && (
-                <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="flex gap-2"
-                >
-                  <div className="w-7 h-7 flex-shrink-0 rounded-full bg-blue-100 flex items-center justify-center">
-                    <Sparkles size={13} className="text-blue-600" />
+              {phase === 1 && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-full bg-gray-100 rounded-full h-1.5">
+                      <motion.div
+                        initial={{ width: '50%' }}
+                        animate={{ width: '100%' }}
+                        transition={{ delay: 1, duration: 0.5 }}
+                        className="h-full bg-blue-500 rounded-full"
+                      />
+                    </div>
                   </div>
-                  <div className="bg-gray-50 rounded-2xl rounded-tl-md px-4 py-3 max-w-[85%]">
-                    {phase === 1 && !showResult && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                            className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"
-                          />
-                          <span className="text-[12px] text-blue-600 font-medium">직무 분석 중...</span>
-                        </div>
-                        {showTags && (
-                          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-wrap gap-1.5 mt-2">
-                            {MOCK_AI_KEYWORDS.map((tag, i) => (
-                              <motion.span
-                                key={tag}
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: i * 0.15 }}
-                                className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full text-[10px] font-medium border border-blue-100"
-                              >
-                                {tag}
-                              </motion.span>
-                            ))}
-                          </motion.div>
-                        )}
-                      </div>
-                    )}
-                    {showResult && (
-                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2.5">
-                        <p className="text-[13px] text-gray-800 font-semibold flex items-center gap-1.5">
-                          <CheckCircle2 size={14} className="text-green-500" />
-                          공고가 생성되었습니다!
-                        </p>
-                        <div className="bg-white rounded-xl border border-gray-100 p-3 space-y-2">
-                          <p className="font-bold text-[13px] text-gray-900">{MOCK_JD.title}</p>
-                          <p className="text-[11px] text-gray-400">{MOCK_JD.company} · {MOCK_JD.location}</p>
-                          {sectionLabels.map((label, i) => {
-                            const Icon = sectionIcons[i];
-                            return showSections.includes(i) ? (
-                              <motion.div
-                                key={label}
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="flex items-start gap-2 bg-gray-50 rounded-lg p-2"
-                              >
-                                <Icon size={12} className="text-blue-500 mt-0.5 flex-shrink-0" />
-                                <div>
-                                  <p className="text-[11px] font-semibold text-gray-700">{label}</p>
-                                  <p className="text-[10px] text-gray-500 line-clamp-1">{sectionData[i]}</p>
-                                </div>
-                              </motion.div>
-                            ) : null;
-                          })}
-                        </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-gray-500 w-16 flex-shrink-0">이름</span>
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: '100%' }}
+                        transition={{ delay: 0.3, duration: 0.8 }}
+                        className="h-8 bg-blue-50 border border-blue-200 rounded-lg flex items-center px-3 overflow-hidden"
+                      >
+                        <span className="text-[12px] text-blue-700 whitespace-nowrap">코딩하는 사람들</span>
                       </motion.div>
-                    )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-gray-500 w-16 flex-shrink-0">분야</span>
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.8 }}
+                        className="px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg text-[11px] text-blue-700 font-medium"
+                      >
+                        프로그래밍/IT
+                      </motion.div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-gray-500 w-16 flex-shrink-0">분류</span>
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 1.2 }}
+                        className="px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg text-[11px] text-blue-700 font-medium"
+                      >
+                        중앙동아리
+                      </motion.div>
+                    </div>
                   </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Step 2: AI 생성 중 */}
+            <AnimatePresence>
+              {phase === 2 && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center py-6 gap-3">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full"
+                  />
+                  <p className="text-[13px] text-blue-600 font-semibold">AI가 공고 초안을 작성하고 있어요...</p>
+                  <p className="text-[11px] text-gray-400">기본 정보를 바탕으로 최적화된 공고를 생성합니다</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Step 3: 결과 */}
+            <AnimatePresence>
+              {phase === 3 && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2.5">
+                  <p className="text-[13px] text-gray-800 font-semibold flex items-center gap-1.5">
+                    <CheckCircle2 size={14} className="text-green-500" />
+                    공고 초안이 완성되었습니다!
+                  </p>
+                  <div className="bg-white rounded-xl border border-gray-100 p-3 space-y-2">
+                    <p className="font-bold text-[13px] text-gray-900">{MOCK_JD.title}</p>
+                    <p className="text-[11px] text-gray-400">{MOCK_JD.company} · {MOCK_JD.location}</p>
+                    {sectionLabels.map((label, i) => {
+                      const Icon = sectionIcons[i];
+                      return showSections.includes(i) ? (
+                        <motion.div
+                          key={label}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="flex items-start gap-2 bg-gray-50 rounded-lg p-2"
+                        >
+                          <Icon size={12} className="text-blue-500 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-[11px] font-semibold text-gray-700">{label}</p>
+                            <p className="text-[10px] text-gray-500 line-clamp-1">{sectionData[i]}</p>
+                          </div>
+                        </motion.div>
+                      ) : null;
+                    })}
+                  </div>
+                  <p className="text-[10px] text-gray-400 text-center">채팅 또는 편집 모드로 세부 수정 가능</p>
                 </motion.div>
               )}
             </AnimatePresence>

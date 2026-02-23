@@ -35,7 +35,7 @@ const getAuthToken = async (forceRefresh: boolean = false): Promise<string> => {
   return cachedToken;
 };
 
-// API 요청 헬퍼 (토큰 만료 시 자동 재시도)
+// API 요청 헬퍼 (토큰 만료 시 자동 재시도 + Cold Start 대응)
 const apiRequest = async (endpoint: string, options: RequestInit = {}, retryCount: number = 0): Promise<any> => {
   try {
     const token = await getAuthToken(retryCount > 0); // 재시도 시 토큰 강제 갱신
@@ -44,6 +44,7 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}, retryCoun
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
+        'Accept-Encoding': 'gzip',
         ...options.headers,
       },
     });
@@ -54,6 +55,14 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}, retryCoun
       clearAuthCache(); // 캐시 초기화
       return await apiRequest(endpoint, options, retryCount + 1);
     }
+    
+    // 503 (Render cold start / Service Unavailable) → 대기 후 재시도
+    if (response.status === 503 && retryCount < 2) {
+      const wait = (retryCount + 1) * 3000; // 3초, 6초 대기
+      console.log(`⏳ Server waking up (503), retrying in ${wait/1000}s...`);
+      await new Promise(resolve => setTimeout(resolve, wait));
+      return await apiRequest(endpoint, options, retryCount + 1);
+    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: response.statusText }));
@@ -62,10 +71,11 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}, retryCoun
 
     return await response.json();
   } catch (error) {
-    // 네트워크 에러나 타임아웃의 경우 재시도 (최대 1회)
-    if (retryCount === 0 && error instanceof TypeError) {
-      console.log('⚠️  Network error, retrying...');
-      await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
+    // 네트워크 에러나 타임아웃의 경우 재시도 (최대 2회)
+    if (retryCount < 2 && error instanceof TypeError) {
+      const wait = (retryCount + 1) * 2000; // 2초, 4초 대기
+      console.log(`⚠️  Network error, retrying in ${wait/1000}s...`);
+      await new Promise(resolve => setTimeout(resolve, wait));
       return await apiRequest(endpoint, options, retryCount + 1);
     }
     
@@ -449,6 +459,26 @@ export const teamAPI = {
   removeCollaborator: async (jdId: string, memberEmail: string) => {
     const result = await apiRequest(`/api/team/collaborators/${jdId}/${encodeURIComponent(memberEmail)}`, {
       method: 'DELETE',
+    });
+    cache.invalidate('jds-all');
+    return result;
+  },
+
+  // 내게 온 대기 중 초대 목록
+  getMyInvitations: async () => {
+    return await apiRequest('/api/team/invitations');
+  },
+
+  // 특정 JD에 보낸 대기 중 초대 목록
+  getSentInvitations: async (jdId: string) => {
+    return await apiRequest(`/api/team/invitations/sent/${jdId}`);
+  },
+
+  // 초대 수락/거절
+  respondToInvitation: async (invitationId: string, action: 'accept' | 'reject') => {
+    const result = await apiRequest(`/api/team/invitations/${invitationId}/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
     });
     cache.invalidate('jds-all');
     return result;

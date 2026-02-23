@@ -126,13 +126,13 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 1,
     title: '공고 생성 매니저',
-    subtitle: 'AI가 자동으로 채용 공고를 작성합니다',
-    description: '간단한 키워드만 입력하면 AI가 직무 분석을 통해 자격요건, 우대사항, 복리후생까지 최적화된 채용 공고를 자동 생성합니다.',
+    subtitle: 'AI가 자동으로 공고를 작성합니다',
+    description: '동아리/기업 유형을 선택하고 기본 정보만 입력하면, AI가 자격요건, 우대사항, 혜택까지 최적화된 공고 초안을 자동 생성합니다. 채팅으로 세부 수정도 가능합니다.',
     icon: 'sparkles',
     highlights: [
-      '키워드 기반 AI 공고 자동 생성',
-      '직무 분석 기반 최적화',
-      '복잡한 공고 작성의 완전 자동화',
+      '동아리 · 기업 유형별 맞춤 공고 생성',
+      '기본 정보 입력만으로 AI 초안 자동 생성',
+      '채팅 & 편집 모드로 실시간 수정',
     ],
   },
   {
@@ -178,7 +178,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     targetSelector: '[data-tour="sidebar-chat"]',
     targetPage: 'dashboard',
     title: '공고 생성 (AI)',
-    description: '이 버튼을 클릭하면 AI와 대화하면서 채용 공고를 자동으로 생성할 수 있어요.',
+    description: '이 버튼을 클릭하면 동아리/기업 유형을 선택하고, 기본 정보를 입력한 후 AI가 공고 초안을 자동 생성해줘요.',
     position: 'right',
     action: 'chat',
   },

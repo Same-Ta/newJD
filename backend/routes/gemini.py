@@ -29,11 +29,18 @@ async def gemini_chat(request: GeminiChatRequest, user_data: dict = Depends(veri
 CRITICAL: NO markdown code blocks! Never use ```json or ``` in your response.
 
 Response format (Korean text in aiResponse):
-{"aiResponse":"한국어로 대화","options":["선택1","선택2","선택3"],"jdData":{"title":"","companyName":"","teamName":"","jobRole":"","location":"","scale":"","description":"","vision":"","mission":"","responsibilities":[],"requirements":[],"preferred":[],"benefits":[],"techStacks":[]}}
+{"aiResponse":"한국어로 대화","options":["선택1","선택2","선택3"],"multiSelect":false,"jdData":{"title":"","companyName":"","teamName":"","jobRole":"","location":"","scale":"","description":"","vision":"","mission":"","responsibilities":[],"requirements":[],"preferred":[],"benefits":[],"techStacks":[]}}
 
 ═══ CONVERSATION FLOW (follow this order strictly) ═══
 
-Phase 1 - 기본 정보:
+CRITICAL CONTEXT RULE:
+- The frontend collects detailed info (name, field, location, scale, recruitment info, etc.) BEFORE starting AI chat and generates a draft.
+- If the user message starts with [이미 입력된 정보:...], those fields are ALREADY FILLED - ABSOLUTELY DO NOT ask about them again. Skip ALL phases that cover those fields.
+- If the user message starts with [초안 생성 요청], generate a COMPLETE draft with ALL sections filled in jdData immediately using the provided info.
+- When a draft already exists (indicated by filled fields in context), the user is in REFINEMENT mode. Start by asking what they'd like to improve, NOT re-asking basic info.
+- NEVER ask about: company/club name, field/role, location, scale, recruitment period, count, target - if they appear in the context prefix.
+
+Phase 1 - 기본 정보 (이미 입력된 경우 전체 건너뛰기):
   1. 회사 이름 → 2. 채용 직무 → 3. 근무 위치 → 4. 팀/부서 이름
 
 Phase 2 - 회사 소개:
@@ -48,6 +55,7 @@ Phase 4 - 자격 & 혜택:
 Phase 5 - 마무리:
   14. 공고 제목 확정 → 15. 전체 검토 & 보완
 
+- Skip any phase whose fields are already provided in the context.
 - Ask ONE question at a time. Move to next phase only after current is answered.
 - If user says "건너뛰겠습니다", skip the current question and move to the next.
 - If user's answer covers multiple fields, fill them all at once.
@@ -65,11 +73,19 @@ RULES:
 5. Options should be CONCISE (under 25 characters each when possible).
 6. Options must make sense as COMPLETE ANSWERS the user would actually say.
 
+═══ MULTI-SELECT RULES ═══
+Set "multiSelect": true when your question asks the user to pick MULTIPLE items (e.g. "3~5개를 선택해주세요", "해당되는 것을 모두 골라주세요").
+Set "multiSelect": false (default) when only ONE answer is expected.
+When multiSelect is true, provide 5-8 options so the user has enough to choose from.
+Examples of multiSelect questions: 기술 스택 선택, 복리후생 선택, 우대 조건 선택, 주요 활동 선택, 모집 절차 선택 등.
+
 GOOD examples:
-- Question: "어떤 회사이신가요?" → options: ["AI 스타트업", "핀테크 기업", "게임 개발사"]
-- Question: "채용하려는 직무가 뭔가요?" → options: ["프론트엔드 개발자", "데이터 분석가", "UX 디자이너"]
-- Question: "근무 위치가 어디인가요?" → options: ["서울 강남구", "판교 테크노밸리", "부산 해운대구"]
-- Question: "팀 규모는 어느 정도인가요?" → options: ["5~10명 소규모 팀", "20~30명 중규모", "50명 이상 대규모"]
+- Question: "어떤 회사이신가요?" → options: ["AI 스타트업", "핀테크 기업", "게임 개발사"], multiSelect: false
+- Question: "채용하려는 직무가 뭔가요?" → options: ["프론트엔드 개발자", "데이터 분석가", "UX 디자이너"], multiSelect: false
+- Question: "근무 위치가 어디인가요?" → options: ["서울 강남구", "판교 테크노밸리", "부산 해운대구"], multiSelect: false
+- Question: "팀 규모는 어느 정도인가요?" → options: ["5~10명 소규모 팀", "20~30명 중규모", "50명 이상 대규모"], multiSelect: false
+- Question: "어떤 기술 스택을 사용하나요? (복수 선택 가능)" → options: ["React", "TypeScript", "Python", "Node.js", "AWS", "Docker"], multiSelect: true
+- Question: "어떤 복리후생을 제공하나요? (해당하는 것 모두 선택)" → options: ["유연근무제", "재택근무", "스톡옵션", "식대 지원", "교육비 지원", "건강검진"], multiSelect: true
 
 BAD examples (NEVER do this):
 - options: ["네", "아니요", "기타"] ← 너무 모호하고 기타 포함
@@ -105,12 +121,19 @@ CRITICAL - jdData PRESERVATION:
 CRITICAL: NO markdown code blocks! Never use ```json or ``` in your response.
 
 Response format (Korean text in aiResponse):
-{"aiResponse":"한국어로 대화","options":["선택1","선택2","선택3"],"jdData":{"title":"","companyName":"","teamName":"","jobRole":"","location":"","scale":"","description":"","vision":"","mission":"","responsibilities":[],"requirements":[],"preferred":[],"benefits":[],"recruitmentPeriod":"","recruitmentTarget":"","recruitmentCount":"","recruitmentProcess":[],"activitySchedule":"","membershipFee":""}}
+{"aiResponse":"한국어로 대화","options":["선택1","선택2","선택3"],"multiSelect":false,"jdData":{"title":"","companyName":"","teamName":"","jobRole":"","location":"","scale":"","description":"","vision":"","mission":"","responsibilities":[],"requirements":[],"preferred":[],"benefits":[],"recruitmentPeriod":"","recruitmentTarget":"","recruitmentCount":"","recruitmentProcess":[],"activitySchedule":"","membershipFee":""}}
 
 ═══ CONVERSATION FLOW (follow this order strictly) ═══
 
-Phase 1 - 동아리 기본:
-  1. 동아리 이름 (첫 질문은 프론트엔드에서 이미 하므로, 사용자의 첫 답변을 동아리 이름으로 인식) → 2. 동아리 유형 (학술/봉사/체육/문화 등) → 3. 동아리 분류 (scale) - 예: 중앙동아리, 연합동아리, 자율동아리, 과동아리, 소모임 등 → 4. 소속 학교 또는 활동 지역 (location) - 학교명 또는 지역명만 입력
+CRITICAL CONTEXT RULE:
+- The frontend collects detailed info (club name, field, school/location, scale, recruitment period/count/target, etc.) BEFORE starting AI chat and generates a draft.
+- If the user message starts with [이미 입력된 정보:...], those fields are ALREADY FILLED - ABSOLUTELY DO NOT ask about them again. Skip ALL phases that cover those fields.
+- If the user message starts with [초안 생성 요청], generate a COMPLETE draft with ALL sections filled in jdData immediately. Fill description, vision, mission, requirements (5-7개), preferred (4-6개), benefits (3-5개), recruitmentProcess, etc.
+- When a draft already exists (indicated by filled fields in context), the user is in REFINEMENT mode. Start by asking what they'd like to improve, NOT re-asking basic info.
+- NEVER ask about: club name, field/type, school/location, scale, recruitment period, count, target - if they appear in the context prefix.
+
+Phase 1 - 동아리 기본 (이미 입력된 경우 전체 건너뛰기):
+  1. 동아리 이름 → 2. 동아리 유형 (학술/봉사/체육/문화 등) → 3. 동아리 분류 (scale) - 예: 중앙동아리, 연합동아리, 자율동아리, 과동아리, 소모임 등 → 4. 소속 학교 또는 활동 지역 (location) - 학교명 또는 지역명만 입력
 
 ═══ LOCATION vs SCALE 구분 규칙 (CRITICAL) ═══
 - location: 학교명/지역명만. 예: "서울대학교", "경기 수원", "연세대학교", "전국"
@@ -149,14 +172,20 @@ RULES:
 5. Options should be CONCISE (under 25 characters each when possible).
 6. Options must make sense as COMPLETE ANSWERS the user would actually say.
 
+═══ MULTI-SELECT RULES ═══
+Set "multiSelect": true when your question asks the user to pick MULTIPLE items (e.g. "3~5개를 선택해주세요", "해당되는 것을 모두 골라주세요").
+Set "multiSelect": false (default) when only ONE answer is expected.
+When multiSelect is true, provide 5-8 options so the user has enough to choose from.
+Examples of multiSelect questions: 주요 활동 선택, 모집 절차 선택, 우대 조건 선택, 활동 혜택 선택 등.
+
 GOOD examples:
-- Question: "어떤 동아리이신가요?" → options: ["프로그래밍 동아리", "밴드 동아리", "봉사 동아리"]
-- Question: "동아리 분류가 어떻게 되나요?" → options: ["중앙동아리", "연합동아리", "자율동아리"]
-- Question: "소속 학교나 활동 지역이 어디인가요?" → options: ["서울대학교", "경기 수원", "전국 (online)"]
-- Question: "모집 대상은 누구인가요?" → options: ["전 학년 재학생", "1~2학년 신입생", "전공 무관 전체"]
-- Question: "모집 인원은 몇 명인가요?" → options: ["10명 내외", "20~30명", "5명 이내 소수정예"]
-- Question: "활동은 주로 언제 하나요?" → options: ["매주 수요일 18시", "매주 토요일 오후", "격주 금요일 저녁"]
-- Question: "회비가 있나요?" → options: ["학기당 3만원", "월 1만원", "회비 없음"]
+- Question: "어떤 동아리이신가요?" → options: ["프로그래밍 동아리", "밴드 동아리", "봉사 동아리"], multiSelect: false
+- Question: "동아리 분류가 어떻게 되나요?" → options: ["중앙동아리", "연합동아리", "자율동아리"], multiSelect: false
+- Question: "소속 학교나 활동 지역이 어디인가요?" → options: ["서울대학교", "경기 수원", "전국 (online)"], multiSelect: false
+- Question: "모집 대상은 누구인가요?" → options: ["전 학년 재학생", "1~2학년 신입생", "전공 무관 전체"], multiSelect: false
+- Question: "모집 인원은 몇 명인가요?" → options: ["10명 내외", "20~30명", "5명 이내 소수정예"], multiSelect: false
+- Question: "어떤 활동 혜택이 있나요? (복수 선택 가능)" → options: ["수료증 발급", "네트워킹 기회", "포트폴리오 완성", "대회 참가", "MT/워크숍", "현직자 멘토링"], multiSelect: true
+- Question: "모집 절차를 선택해주세요 (복수 선택 가능)" → options: ["서류 심사", "면접", "실기 테스트", "합격 발표", "OT 참석"], multiSelect: true
 
 BAD examples (NEVER do this):
 - options: ["네", "아니요", "기타"] ← 너무 모호, 기타 포함
@@ -240,6 +269,7 @@ CRITICAL - jdData PRESERVATION:
             return {
                 "aiResponse": parsed_response.get("aiResponse", response_text),
                 "options": parsed_response.get("options", []),
+                "multiSelect": parsed_response.get("multiSelect", False),
                 "jdData": parsed_response.get("jdData", {})
             }
         except json.JSONDecodeError as je:

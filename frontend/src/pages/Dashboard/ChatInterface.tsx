@@ -1,4 +1,4 @@
-import { ChevronRight, MessageSquare, X, FileText, Upload, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
+import { ChevronRight, MessageSquare, X, FileText, ArrowRight, CheckCircle2, MousePointerClick } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { maskSensitiveData } from '../../utils/security';
 import { auth } from '../../config/firebase';
@@ -54,6 +54,7 @@ interface ChatMessage {
     text: string;
     timestamp: string;
     options?: string[];
+    multiSelect?: boolean;
     parts?: { text: string }[];
 }
 
@@ -77,7 +78,7 @@ const SECTION_META: Record<SectionType, { label: string }> = {
 const ALL_SECTION_TYPES: SectionType[] = ['description', 'recruitment', 'visionMission', 'requirements', 'preferred', 'benefits'];
 
 export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
-    const { isDemoMode, shouldSimulateAI, setShouldSimulateAI, setAiSimulationComplete, onDemoAction, setDemoCreatedJDId } = useDemoMode();
+    const { isDemoMode, shouldSimulateAI, setShouldSimulateAI, setAiSimulationComplete, onDemoAction, setDemoCreatedJDId, currentStepId } = useDemoMode();
 
     // 기본 JD 초기값
     const getDefaultJD = (type: 'company' | 'club' = 'club'): CurrentJD => ({
@@ -89,24 +90,46 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         recruitmentProcess: [], activitySchedule: '', membershipFee: ''
     });
 
-    const getTypeSelectionMessage = (): ChatMessage => ({
-        role: 'ai',
-        text: '안녕하세요! WINNOW 채용 마스터입니다 🎯\n어떤 유형의 공고를 만들어 볼까요?',
-        timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-        options: ['회사 채용공고', '동아리 모집공고']
-    });
 
-    const getDefaultMessage = (type: 'company' | 'club' = 'club'): ChatMessage => ({
+
+    // 기본 정보 입력 후 초안 생성 시 초기 메시지
+    const getDraftReadyMessage = (type: 'company' | 'club', name: string): ChatMessage => ({
         role: 'ai',
         text: type === 'club'
-            ? '동아리 모집공고를 만들어 볼게요! 🎯 동아리의 정체성을 브랜딩하고, 최고의 신입 부원을 찾는 공고를 함께 만들어볼게요!\n\n먼저, 동아리 이름이 무엇인가요?'
-            : '회사 채용공고를 만들어 볼게요! 🎯 기업의 핵심 인재를 찾는 채용 공고를 함께 만들어볼게요!\n\n먼저, 회사 이름이 무엇인가요?',
+            ? `"${name}" 동아리의 모집공고 초안이 완성되었습니다! 🎉\n\n오른쪽 미리보기에서 내용을 확인하시고, 수정하거나 보완하고 싶은 부분이 있으면 말씀해주세요.\n\n예를 들어 "소개 내용을 좀 더 자세히 써줘" 또는 "혜택 부분을 추가해줘" 등으로 요청하실 수 있어요!`
+            : `"${name}" 회사의 채용공고 초안이 완성되었습니다! 🎉\n\n오른쪽 미리보기에서 내용을 확인하시고, 수정하거나 보완하고 싶은 부분이 있으면 말씀해주세요.\n\n예를 들어 "자격 요건을 좀 더 구체적으로 써줘" 또는 "복리후생을 추가해줘" 등으로 요청하실 수 있어요!`,
         timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
     });
 
-    // 공고 생성 방식 선택 상태 (null = 선택 화면, 'new' = 새 작성, 'pdf' = PDF 업로드)
-    const [creationMode, setCreationMode] = useState<null | 'new' | 'pdf'>(null);
+    // 동아리 분야 옵션
+    const clubFieldOptions = ['프로그래밍/IT', '밴드/음악', '봉사', '학술/스터디', '체육/스포츠', '문화/예술', '창업/비즈니스', '언론/미디어'];
+    const companyFieldOptions = ['IT/소프트웨어', '금융/핀테크', '제조/생산', '마케팅/광고', '디자인/크리에이티브', '교육', '의료/헬스케어', '커머스/유통'];
+
+    // 공고 생성 방식 선택 상태
+    // null = 유형 선택(동아리/기업), 'type-selected' = 방식 선택, 'basic-info' = 기본정보 입력, 'new' = AI 채팅, 'pdf' = PDF 업로드
+    const [creationMode, setCreationMode] = useState<null | 'type-selected' | 'basic-info' | 'new' | 'pdf'>(null);
+    
+    // 데모 선택 효과 상태
+    const [demoSelectedCard, setDemoSelectedCard] = useState<string | null>(null); // 'club' | 'company' | 'new-write' | 'pdf-upload'
+    
+    // 기본 정보 입력 폼 상태
+    const [basicInfo, setBasicInfo] = useState({
+        name: '', field: '', customField: '',
+        // 공통
+        location: '',
+        // 동아리 전용
+        scale: '', // 중앙/연합/자율 등
+        recruitmentPeriod: '',
+        recruitmentCount: '',
+        recruitmentTarget: '',
+        // 기업 전용
+        teamName: '',
+        employmentType: '', // 정규직/인턴 등
+    });
+    const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
+    const [basicInfoStep, setBasicInfoStep] = useState(0); // 0: 필수 정보, 1: 선택 정보
     // PDF 업로드 상태
+    const [isDraggingPdf, setIsDraggingPdf] = useState(false);
     const [pdfFile, setPdfFile] = useState<File | null>(null);
     const [pdfUploading, setPdfUploading] = useState(false);
     const [pdfError, setPdfError] = useState<string | null>(null);
@@ -131,9 +154,8 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     const [selectedImage] = useState(officeImages[Math.floor(Math.random() * officeImages.length)]);
     
     const [input, setInput] = useState('');
-    const [messages, setMessages] = useState<ChatMessage[]>([getTypeSelectionMessage()]);
-    const [messageHistory, setMessageHistory] = useState<ChatMessage[][]>([[getTypeSelectionMessage()]]); // 되돌리기용 히스토리
-    const [waitingForCustomInput, setWaitingForCustomInput] = useState(false);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [messageHistory, setMessageHistory] = useState<ChatMessage[][]>([[]]); // 되돌리기용 히스토리
     const [currentJD, setCurrentJD] = useState<CurrentJD>(getDefaultJD('club'));
     const [isLoading, setIsLoading] = useState(false);
     const [typingText, setTypingText] = useState<{ [key: string]: string }>({});
@@ -141,6 +163,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     const chatEndRef = useRef<HTMLDivElement>(null);
     const [isEditMode, setIsEditMode] = useState(false);
     const [editedJD, setEditedJD] = useState<CurrentJD>(currentJD);
+    const [showAddMenu, setShowAddMenu] = useState(false); // 편집 모드 항목 추가 메뉴
 
     // Section drag & drop state
     const [sectionOrder, setSectionOrder] = useState<SectionType[]>(['description', 'recruitment', 'visionMission', 'requirements', 'preferred', 'benefits']);
@@ -149,7 +172,10 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     
     // Section-click-to-chat state
     const [focusedSection, setFocusedSection] = useState<SectionType | null>(null);
+    const [showSectionFocusTip, setShowSectionFocusTip] = useState(true);
 
+    // 복수 선택 상태
+    const [selectedMultiOptions, setSelectedMultiOptions] = useState<string[]>([]);
     
     // 채팅방 크기 조절 상태
     const [chatWidth, setChatWidth] = useState(35); // 퍼센트 단위
@@ -195,8 +221,63 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     const [newSkillItem, setNewSkillItem] = useState('');
     const [editingSkillCategoryIdx, setEditingSkillCategoryIdx] = useState<number | null>(null);
 
+    // 데모 모드: 새로운 생성 플로우 자동 진행
+    useEffect(() => {
+        if (!isDemoMode) return;
+        let timer: ReturnType<typeof setTimeout>;
+        let fillTimer: ReturnType<typeof setTimeout>;
+
+        if (creationMode === null && currentStepId === 'p1-type-select') {
+            // 동아리 카드 하이라이트 (사용자가 클릭해서 넘어감)
+            timer = setTimeout(() => {
+                setDemoSelectedCard('club');
+            }, 500);
+        } else if (creationMode === 'type-selected' && currentStepId === 'p1-method-select') {
+            // "새로운 공고 작성" 카드 하이라이트 (사용자가 클릭해서 넘어감)
+            timer = setTimeout(() => {
+                setDemoSelectedCard('new-write');
+            }, 500);
+        } else if (creationMode === 'basic-info' && currentStepId === 'p1-basic-info') {
+            // 1.5초 후 기본 정보 자동 입력
+            fillTimer = setTimeout(() => {
+                setBasicInfo({
+                    name: 'WINNOW',
+                    field: '프로그래밍/IT',
+                    customField: '',
+                    location: '서울',
+                    scale: '중앙동아리',
+                    recruitmentPeriod: '',
+                    recruitmentCount: '',
+                    recruitmentTarget: '',
+                    teamName: '',
+                    employmentType: '',
+                });
+            }, 1500);
+            // 3.5초 후 자동 제출 (API 호출 없이 데모 JD 직접 세팅)
+            timer = setTimeout(() => {
+                const demoJD = DEMO_AI_JD_RESPONSE;
+                setCurrentJD(prev => ({ ...prev, ...demoJD }));
+                const genMsg: ChatMessage = {
+                    role: 'ai',
+                    text: '기본 정보를 바탕으로 공고를 생성하고 있습니다... 🔄\n잠시만 기다려주세요!',
+                    timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+                };
+                setMessages([genMsg]);
+                setMessageHistory([[genMsg]]);
+                setCreationMode('new');
+                onDemoAction?.('demo-basic-info-submitted');
+            }, 3500);
+        }
+
+        return () => {
+            if (timer) clearTimeout(timer);
+            if (fillTimer) clearTimeout(fillTimer);
+        };
+    }, [isDemoMode, creationMode, currentStepId]);
+
     // 페이지 로드 시 localStorage에서 데이터 복원
     useEffect(() => {
+        if (isDemoMode) return; // 데모 모드에서는 localStorage 복원 안 함
         const savedJD = localStorage.getItem('currentJD');
         const savedMessages = localStorage.getItem('chatMessages');
         
@@ -216,8 +297,18 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         if (savedMessages) {
             try {
                 const parsedMessages = JSON.parse(savedMessages);
-                setMessages(parsedMessages);
-                console.log('✅ 저장된 채팅 내역 복원:', parsedMessages.length, '개 메시지');
+                // 옛 유형 선택 메시지 필터 (options에 '회사 채용공고'/'동아리 모집공고'가 있는 메시지 제거)
+                const filteredMessages = parsedMessages.filter((msg: ChatMessage) => {
+                    if (msg.options && Array.isArray(msg.options)) {
+                        const hasOldOption = msg.options.some((opt: string) => opt === '회사 채용공고' || opt === '동아리 모집공고');
+                        if (hasOldOption) return false;
+                    }
+                    return true;
+                });
+                if (filteredMessages.length > 0) {
+                    setMessages(filteredMessages);
+                    console.log('✅ 저장된 채팅 내역 복원:', filteredMessages.length, '개 메시지');
+                }
             } catch (e) {
                 console.error('채팅 내역 복원 실패:', e);
             }
@@ -234,7 +325,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
 
     // 메시지가 변경될 때마다 자동 저장 (데모 모드에서는 저장하지 않음)
     useEffect(() => {
-        if (messages.length > 1 && !isDemoMode) { // 초기 메시지 제외, 데모 모드 제외
+        if (messages.length > 0 && !isDemoMode) { // 빈 배열 제외, 데모 모드 제외
             localStorage.setItem('chatMessages', JSON.stringify(messages));
             console.log('💾 채팅 내역 자동 저장됨:', messages.length, '개 메시지');
         }
@@ -423,12 +514,14 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         setMessages(prev => [...prev, changeMessage]);
         
         setIsEditMode(false);
+        setShowAddMenu(false);
     };
 
     // 편집 취소
     const cancelEdit = () => {
         setEditedJD(currentJD);
         setIsEditMode(false);
+        setShowAddMenu(false);
     };
 
     // ===== Section Drag & Drop Handlers =====
@@ -480,10 +573,37 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             setFocusedSection(null); // toggle off
         } else {
             setFocusedSection(section);
+            
+            // 데모 모드에서 섹션 클릭 → 채팅 영역으로 하이라이트 이동
+            if (isDemoMode && currentStepId === 'p1-section-click') {
+                onDemoAction?.('demo-section-clicked');
+            }
         }
     };
 
-
+    // 데모 모드: 섹션 집중 수정 채팅 단계 - AI 메시지 표시 후 자동 진행
+    useEffect(() => {
+        if (!isDemoMode || currentStepId !== 'p1-section-chat') return;
+        
+        const sectionLabel = focusedSection ? (SECTION_META[focusedSection]?.label || focusedSection) : '소개';
+        const demoSectionMsg: ChatMessage = {
+            role: 'ai',
+            text: `"${sectionLabel}" 섹션이 선택되었습니다! 🎯\n\n이제 이 섹션에 대해 수정하고 싶은 내용을 채팅으로 말씀해주시면 해당 부분만 집중적으로 수정해드려요.\n\n예: "소개 내용을 좀 더 열정적으로 바꿔줘" 또는 "기술 스택 관련 내용을 추가해줘"`,
+            timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+        };
+        const msgTimer = setTimeout(() => {
+            typeAIMessage(demoSectionMsg);
+        }, 500);
+        // 4초 후 다음 단계로 진행
+        const nextTimer = setTimeout(() => {
+            onDemoAction?.('demo-section-edit-complete');
+        }, 4000);
+        
+        return () => {
+            clearTimeout(msgTimer);
+            clearTimeout(nextTimer);
+        };
+    }, [isDemoMode, currentStepId]);
 
     // 배열 항목 업데이트
     const updateArrayItem = (field: keyof CurrentJD, index: number, value: string) => {
@@ -513,8 +633,8 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         
         setCurrentJD(getDefaultJD('club'));
         setJdType('club');
-        setMessages([getTypeSelectionMessage()]);
-        setMessageHistory([[getTypeSelectionMessage()]]);
+        setMessages([]);
+        setMessageHistory([[]]);
         localStorage.removeItem('currentJD');
         localStorage.removeItem('chatMessages');
         setRequiredCheckCount(0);
@@ -703,7 +823,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             setBannerImagePreview(null);
             
             // 채팅 내역 초기화
-            setMessages([getTypeSelectionMessage()]);
+            setMessages([]);
             
             // localStorage 초기화
             localStorage.removeItem('currentJD');
@@ -738,62 +858,18 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         if (!selectedOption) setInput('');
         setIsLoading(true);
 
-        // 데모 모드: 유형 선택 버튼(회사/동아리/기타)은 정상 처리, 실제 키워드 입력만 시뮬레이션
-        if (isDemoMode && selectedOption !== '회사 채용공고' && selectedOption !== '동아리 모집공고' && selectedOption !== '기타') {
+        // 데모 모드: 채팅 입력 시 AI 시뮬레이션으로 처리
+        if (isDemoMode) {
             const demoReply: ChatMessage = {
                 role: 'ai',
-                text: '좋아요! 입력하신 키워드를 바탕으로 공고를 생성하고 있습니다... 🔄\n잠시만 기다려주세요!',
+                text: '좋아요! 입력하신 내용을 바탕으로 공고를 수정하고 있습니다... 🔄\n잠시만 기다려주세요!',
                 timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
             };
             typeAIMessage(demoReply);
             setIsLoading(false);
-            // 튜토리얼에서 다음 단계(AI 타이핑)로 진행
             setTimeout(() => onDemoAction?.('ai-simulation-start'), 800);
             return;
         }
-
-        // 회사/동아리 유형 선택 처리
-        if (selectedOption === '회사 채용공고' || selectedOption === '동아리 모집공고') {
-            const newType = selectedOption === '회사 채용공고' ? 'company' : 'club';
-            setJdType(newType);
-            setCurrentJD(getDefaultJD(newType));
-            const followUpMessage = getDefaultMessage(newType);
-            
-            // 스트리밍 효과로 메시지 표시
-            typeAIMessage(followUpMessage);
-            
-            // 메시지 히스토리에 추가
-            setTimeout(() => {
-                setMessageHistory(prev => [...prev, [...messages, userMessage, followUpMessage]]);
-            }, followUpMessage.text.length * 20 + 100);
-            
-            setIsLoading(false);
-            return;
-        }
-
-        // "기타" 선택 시 추가 입력 대기
-        if (selectedOption === '기타') {
-            const followUpMessage: ChatMessage = {
-                role: 'ai',
-                text: '구체적으로 어떻게 하시나요? 자유롭게 답변해주세요.',
-                timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-            };
-            
-            // 스트리밍 효과로 메시지 표시
-            typeAIMessage(followUpMessage);
-            
-            // 메시지 히스토리에 추가
-            setTimeout(() => {
-                setMessageHistory(prev => [...prev, [...messages, userMessage, followUpMessage]]);
-            }, followUpMessage.text.length * 20 + 100);
-            
-            setWaitingForCustomInput(true);
-            setIsLoading(false);
-            return;
-        }
-
-        // "기타" 선택 후 사용자 입력인 경우
-        if (waitingForCustomInput) setWaitingForCustomInput(false);
 
         try {
             // messages 상태를 Gemini API 형식으로 변환 (options 필드 제외)
@@ -805,8 +881,32 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             // 민감 정보 마스킹 후 API 호출
             const sanitizedMessage = maskSensitiveData(currentInput);
             
-            // 섹션 포커스가 있으면 AI에게 해당 섹션 수정 컨텍스트 전달
+            // 기본 정보 컨텍스트 + 섹션 포커스 컨텍스트 추가
             let finalMessage = sanitizedMessage;
+            
+            // 이미 입력된 기본 정보가 있으면 AI에게 알려서 중복 질문 방지
+            const existingInfo: string[] = [];
+            if (currentJD.companyName || currentJD.teamName) existingInfo.push(`${jdType === 'club' ? '동아리' : '회사'} 이름: ${currentJD.companyName || currentJD.teamName}`);
+            if (currentJD.jobRole) existingInfo.push(`분야/직무: ${currentJD.jobRole}`);
+            if (currentJD.location) existingInfo.push(`위치: ${currentJD.location}`);
+            if (currentJD.scale) existingInfo.push(`분류/규모: ${currentJD.scale}`);
+            if (currentJD.description) existingInfo.push('소개: 입력됨');
+            if (currentJD.vision) existingInfo.push('비전: 입력됨');
+            if (currentJD.mission) existingInfo.push('미션: 입력됨');
+            if (currentJD.recruitmentPeriod) existingInfo.push(`모집 기간: ${currentJD.recruitmentPeriod}`);
+            if (currentJD.recruitmentCount) existingInfo.push(`모집 인원: ${currentJD.recruitmentCount}`);
+            if (currentJD.recruitmentTarget) existingInfo.push(`모집 대상: ${currentJD.recruitmentTarget}`);
+            if (currentJD.responsibilities?.length) existingInfo.push(`주요 업무: ${currentJD.responsibilities.length}개 입력됨`);
+            if (currentJD.requirements?.length) existingInfo.push(`자격 요건: ${currentJD.requirements.length}개 입력됨`);
+            if (currentJD.preferred?.length) existingInfo.push(`우대 사항: ${currentJD.preferred.length}개 입력됨`);
+            if (currentJD.benefits?.length) existingInfo.push(`혜택: ${currentJD.benefits.length}개 입력됨`);
+            if (currentJD.techStacks?.length) existingInfo.push(`기술 스택: ${currentJD.techStacks.length}개 입력됨`);
+            
+            if (existingInfo.length > 0) {
+                finalMessage = `[이미 입력된 정보: ${existingInfo.join(', ')}. 이미 입력된 필드는 절대 다시 물어보지 마세요. 아직 비어있는 필드를 중심으로 질문하세요.] ${sanitizedMessage}`;
+            }
+            
+            // 섹션 포커스가 있으면 AI에게 해당 섹션 수정 컨텍스트 전달
             if (focusedSection) {
                 const sectionLabel = SECTION_META[focusedSection]?.label || focusedSection;
                 finalMessage = `[섹션 포커스: "${sectionLabel}"] 사용자가 "${sectionLabel}" 섹션을 선택한 상태입니다. 해당 섹션의 내용만 집중적으로 수정해주세요. 사용자 메시지: ${sanitizedMessage}`;
@@ -820,6 +920,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
             
             // AI로부터 받은 선택지 사용 (없으면 undefined)
             let aiOptions: string[] | undefined = undefined;
+            let aiMultiSelect = false;
             try {
                 if (response.options && Array.isArray(response.options) && response.options.length > 0) {
                     aiOptions = response.options.filter((opt: any) => typeof opt === 'string' && opt.trim().length > 0);
@@ -827,10 +928,16 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                         aiOptions = undefined;
                     }
                 }
+                if (response.multiSelect === true) {
+                    aiMultiSelect = true;
+                }
             } catch (optError) {
                 console.warn('Options processing error:', optError);
                 aiOptions = undefined;
             }
+            
+            // 복수 선택 모드 변경 시 선택 상태 초기화
+            setSelectedMultiOptions([]);
             
             // 1. 채팅 메시지 추가: aiResponse 필드 사용 (스트리밍 효과 적용)
             const chatMessageText = response.aiResponse || '응답을 받았습니다.';
@@ -839,7 +946,8 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 role: 'ai',
                 text: chatMessageText,
                 timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-                options: aiOptions
+                options: aiOptions,
+                multiSelect: aiMultiSelect
             };
             
             // 스트리밍 효과로 AI 메시지 표시
@@ -996,58 +1104,256 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         }
     };
 
-    // 모드 선택 화면 렌더링
-    if (creationMode === null && !isDemoMode) {
+    // 기본 정보 입력 후 AI 초안 생성 핸들러
+    const handleBasicInfoSubmit = async () => {
+        const name = basicInfo.name.trim();
+        const field = basicInfo.field === '기타 (직접 입력)' ? basicInfo.customField.trim() : basicInfo.field;
+        if (!name || !field) return;
+
+        setIsGeneratingDraft(true);
+
+        // 기본 정보를 currentJD에 세팅
+        const newJD = getDefaultJD(jdType);
+        if (jdType === 'club') {
+            newJD.companyName = name;
+            newJD.teamName = name;
+            newJD.jobRole = field;
+            if (basicInfo.location) newJD.location = basicInfo.location;
+            if (basicInfo.scale) newJD.scale = basicInfo.scale;
+            if (basicInfo.recruitmentPeriod) newJD.recruitmentPeriod = basicInfo.recruitmentPeriod;
+            if (basicInfo.recruitmentCount) newJD.recruitmentCount = basicInfo.recruitmentCount;
+            if (basicInfo.recruitmentTarget) newJD.recruitmentTarget = basicInfo.recruitmentTarget;
+        } else {
+            newJD.companyName = name;
+            newJD.company = name;
+            newJD.jobRole = field;
+            if (basicInfo.location) newJD.location = basicInfo.location;
+            if (basicInfo.teamName) newJD.teamName = basicInfo.teamName;
+        }
+        setCurrentJD(newJD);
+
+        // 수집된 모든 기본 정보를 문자열로 조합
+        const infoLines: string[] = [];
+        if (jdType === 'club') {
+            infoLines.push(`동아리 이름: "${name}"`);
+            infoLines.push(`분야: "${field}"`);
+            if (basicInfo.location) infoLines.push(`소속 학교/지역: "${basicInfo.location}"`);
+            if (basicInfo.scale) infoLines.push(`동아리 분류: "${basicInfo.scale}"`);
+            if (basicInfo.recruitmentPeriod) infoLines.push(`모집 기간: "${basicInfo.recruitmentPeriod}"`);
+            if (basicInfo.recruitmentCount) infoLines.push(`모집 인원: "${basicInfo.recruitmentCount}"`);
+            if (basicInfo.recruitmentTarget) infoLines.push(`모집 대상: "${basicInfo.recruitmentTarget}"`);
+        } else {
+            infoLines.push(`회사 이름: "${name}"`);
+            infoLines.push(`채용 분야/직무: "${field}"`);
+            if (basicInfo.location) infoLines.push(`근무 위치: "${basicInfo.location}"`);
+            if (basicInfo.teamName) infoLines.push(`팀/부서: "${basicInfo.teamName}"`);
+            if (basicInfo.employmentType) infoLines.push(`고용 형태: "${basicInfo.employmentType}"`);
+        }
+        const infoStr = infoLines.join(', ');
+
+        // AI에게 초안 생성 요청
+        try {
+            const draftPrompt = jdType === 'club'
+                ? `[초안 생성 요청] ${infoStr}. 이 정보를 바탕으로 동아리 모집공고 초안을 바로 작성해주세요. 위에 입력된 기본 정보는 이미 확정되었으니 절대 다시 물어보지 말고, 바로 모든 섹션(소개, 비전/미션, 모집정보, 자격요건, 우대사항, 혜택 등)을 채운 완성된 초안을 jdData에 넣어주세요. aiResponse에는 초안이 완성되었다는 안내와 함께 어떤 부분을 수정하고 싶은지 물어봐주세요.`
+                : `[초안 생성 요청] ${infoStr}. 이 정보를 바탕으로 채용공고 초안을 바로 작성해주세요. 위에 입력된 기본 정보는 이미 확정되었으니 절대 다시 물어보지 말고, 바로 모든 섹션(회사소개, 비전/미션, 주요업무, 자격요건, 우대사항, 복리후생 등)을 채운 완성된 초안을 jdData에 넣어주세요. aiResponse에는 초안이 완성되었다는 안내와 함께 어떤 부분을 수정하고 싶은지 물어봐주세요.`;
+
+            const response = await geminiAPI.chat(draftPrompt, [], jdType);
+
+            if (response?.jdData && typeof response.jdData === 'object') {
+                const rd = response.jdData;
+                const mergeStr = (newVal: string | undefined, oldVal: string) =>
+                    (newVal && newVal.trim().length > 0) ? newVal : oldVal;
+                const mergeArr = (newVal: any[] | undefined, oldVal: any[]) =>
+                    (newVal && Array.isArray(newVal) && newVal.length > 0) ? newVal : oldVal;
+
+                const filledJD: CurrentJD = {
+                    ...newJD,
+                    title: mergeStr(rd.title, ''),
+                    description: mergeStr(rd.description, ''),
+                    vision: mergeStr(rd.vision, ''),
+                    mission: mergeStr(rd.mission, ''),
+                    location: mergeStr(rd.location, ''),
+                    scale: mergeStr(rd.scale, ''),
+                    responsibilities: mergeArr(rd.responsibilities, []),
+                    requirements: mergeArr(rd.requirements, []),
+                    preferred: mergeArr(rd.preferred, []),
+                    benefits: mergeArr(rd.benefits, []),
+                    techStacks: mergeArr(rd.techStacks, []),
+                    recruitmentPeriod: mergeStr(rd.recruitmentPeriod, ''),
+                    recruitmentTarget: mergeStr(rd.recruitmentTarget, ''),
+                    recruitmentCount: mergeStr(rd.recruitmentCount, ''),
+                    recruitmentProcess: mergeArr(rd.recruitmentProcess, []),
+                    activitySchedule: mergeStr(rd.activitySchedule, ''),
+                    membershipFee: mergeStr(rd.membershipFee, ''),
+                };
+                setCurrentJD(filledJD);
+
+                // 타이핑 애니메이션
+                if (filledJD.title) typeText('title', filledJD.title);
+                if (filledJD.description) typeText('description', filledJD.description, 15);
+                if (filledJD.vision) typeText('vision', filledJD.vision, 15);
+                if (filledJD.mission) typeText('mission', filledJD.mission, 15);
+            }
+
+            // 초기 메시지 설정
+            const draftMsg = getDraftReadyMessage(jdType, name);
+            setMessages([draftMsg]);
+            setMessageHistory([[draftMsg]]);
+        } catch (error) {
+            console.error('초안 생성 오류:', error);
+            // 실패 시에도 채팅으로 진입
+            const fallbackMsg: ChatMessage = {
+                role: 'ai',
+                text: `"${name}" ${jdType === 'club' ? '동아리' : '회사'}의 공고를 작성해볼게요! 🎯\n\n기본 정보가 입력되었습니다. 추가로 어떤 내용을 넣고 싶으신가요?`,
+                timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+            };
+            setMessages([fallbackMsg]);
+            setMessageHistory([[fallbackMsg]]);
+        } finally {
+            setIsGeneratingDraft(false);
+            setCreationMode('new');
+        }
+    };
+
+    // ===== Step 1: 유형 선택 (동아리/기업) =====
+    if (creationMode === null) {
         return (
-            <div className="flex items-center justify-center min-h-[calc(100vh-160px)]">
+            <div className="flex items-center justify-center min-h-[calc(100vh-160px)]" data-tour="type-select-area">
                 <div className="w-full max-w-2xl px-4">
-                    {/* 헤더 */}
                     <div className="text-center mb-10">
-                        <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-500/30 mx-auto mb-4">
-                            <Sparkles size={26} />
-                        </div>
                         <h2 className="text-2xl font-extrabold text-gray-900 mb-2">AI 공고 생성</h2>
+                        <p className="text-gray-500 text-sm">어떤 유형의 공고를 만드시나요?</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <button
+                            data-tour="type-select-club"
+                            onClick={() => {
+                                setJdType('club'); setCurrentJD(getDefaultJD('club')); setDemoSelectedCard(null); setCreationMode('type-selected');
+                                if (isDemoMode) onDemoAction?.('demo-type-selected');
+                            }}
+                            className={`group relative bg-white border-2 rounded-2xl p-7 text-left transition-all duration-500 cursor-pointer ${
+                                demoSelectedCard === 'club'
+                                    ? 'border-blue-500 shadow-xl shadow-blue-500/20 scale-[1.03] bg-blue-50/50 ring-2 ring-blue-400'
+                                    : 'border-gray-200 hover:border-blue-400 hover:shadow-lg hover:shadow-blue-500/10'
+                            }`}
+                        >
+                            {demoSelectedCard === 'club' && (
+                                <div className="absolute top-3 right-3 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center animate-bounce">
+                                    <CheckCircle2 className="w-4 h-4 text-white" />
+                                </div>
+                            )}
+                            <h3 className="font-bold text-[18px] text-gray-900 mb-2">동아리 모집공고</h3>
+                            <p className="text-[13px] text-gray-500 leading-relaxed">대학교 동아리, 소모임, 연합 동아리 등의 신입 부원 모집 공고를 만듭니다.</p>
+                            <div className="mt-4 flex items-center gap-1.5 text-blue-600 text-[13px] font-semibold">
+                                <span>선택</span>
+                                <ArrowRight size={14} />
+                            </div>
+                        </button>
+
+                        <button
+                            onClick={() => { setJdType('company'); setCurrentJD(getDefaultJD('company')); setCreationMode('type-selected'); }}
+                            className={`group relative bg-white border-2 rounded-2xl p-7 text-left transition-all duration-500 cursor-pointer ${
+                                demoSelectedCard === 'company'
+                                    ? 'border-purple-500 shadow-xl shadow-purple-500/20 scale-[1.03] bg-purple-50/50 ring-2 ring-purple-400'
+                                    : 'border-gray-200 hover:border-purple-400 hover:shadow-lg hover:shadow-purple-500/10'
+                            }`}
+                        >
+                            <h3 className="font-bold text-[18px] text-gray-900 mb-2">기업 채용공고</h3>
+                            <p className="text-[13px] text-gray-500 leading-relaxed">스타트업, 중소기업, 대기업 등의 인재 채용 공고를 만듭니다.</p>
+                            <div className="mt-4 flex items-center gap-1.5 text-purple-600 text-[13px] font-semibold">
+                                <span>선택</span>
+                                <ArrowRight size={14} />
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ===== Step 2: 방식 선택 (PDF 업로드 / 새 작성) =====
+    if (creationMode === 'type-selected') {
+        return (
+            <div className="flex items-center justify-center min-h-[calc(100vh-160px)]" data-tour="method-select-area">
+                <div className="w-full max-w-2xl px-4">
+                    <div className="text-center mb-10">
+                        <h2 className="text-2xl font-extrabold text-gray-900 mb-2">
+                            {jdType === 'club' ? '동아리 모집공고' : '기업 채용공고'}
+                        </h2>
                         <p className="text-gray-500 text-sm">공고를 어떤 방식으로 시작할까요?</p>
                     </div>
 
-                    {/* 선택 카드 */}
                     {!pdfFile && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                            {/* 기존 공고 업로드 */}
                             <button
                                 onClick={() => pdfInputRef.current?.click()}
-                                className="group relative bg-white border-2 border-gray-200 hover:border-blue-400 rounded-2xl p-7 text-left transition-all hover:shadow-lg hover:shadow-blue-500/10 cursor-pointer"
+                                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingPdf(true); }}
+                                onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingPdf(true); }}
+                                onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingPdf(false); }}
+                                onDrop={(e) => {
+                                    e.preventDefault(); e.stopPropagation(); setIsDraggingPdf(false);
+                                    const file = e.dataTransfer.files?.[0];
+                                    if (!file) return;
+                                    if (!file.name.toLowerCase().endsWith('.pdf')) { setPdfError('PDF 파일만 업로드 가능합니다.'); return; }
+                                    if (file.size > 10 * 1024 * 1024) { setPdfError('파일 크기는 10MB 이하여야 합니다.'); return; }
+                                    setPdfFile(file); setPdfError(null); setPdfSuccess(false);
+                                }}
+                                className={`group relative bg-white border-2 rounded-2xl p-7 text-left transition-all cursor-pointer ${
+                                    isDraggingPdf
+                                        ? 'border-blue-500 bg-blue-50 shadow-lg shadow-blue-500/20 scale-[1.02]'
+                                        : 'border-gray-200 hover:border-blue-400 hover:shadow-lg hover:shadow-blue-500/10'
+                                }`}
                             >
-                                <div className="w-12 h-12 bg-blue-50 group-hover:bg-blue-100 rounded-xl flex items-center justify-center mb-4 transition-colors">
-                                    <Upload className="w-6 h-6 text-blue-600" />
-                                </div>
+                                {isDraggingPdf && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-blue-50/80 rounded-2xl z-10">
+                                        <div className="text-center">
+                                            <div className="w-12 h-12 mx-auto mb-2 bg-blue-100 rounded-full flex items-center justify-center">
+                                                <FileText className="w-6 h-6 text-blue-600" />
+                                            </div>
+                                            <p className="text-[14px] font-bold text-blue-700">여기에 놓으세요</p>
+                                        </div>
+                                    </div>
+                                )}
                                 <h3 className="font-bold text-[16px] text-gray-900 mb-1.5">기존 공고 업로드</h3>
                                 <p className="text-[13px] text-gray-500 leading-relaxed">기존에 작성된 PDF 공고를 업로드하면 AI가 자동으로 내용을 분석해 채워드립니다.</p>
-                                <div className="mt-4 flex items-center gap-1.5 text-blue-600 text-[13px] font-semibold">
+                                <div className="mt-3 p-2 border-2 border-dashed border-gray-200 rounded-xl text-center">
+                                    <p className="text-[12px] text-gray-400">클릭하거나 PDF 파일을 드래그하세요</p>
+                                </div>
+                                <div className="mt-3 flex items-center gap-1.5 text-blue-600 text-[13px] font-semibold">
                                     <span>PDF 선택하기</span>
                                     <ArrowRight size={14} />
                                 </div>
                             </button>
 
-                            {/* 새로운 공고 작성 */}
                             <button
-                                onClick={() => setCreationMode('new')}
-                                className="group relative bg-white border-2 border-gray-200 hover:border-purple-400 rounded-2xl p-7 text-left transition-all hover:shadow-lg hover:shadow-purple-500/10 cursor-pointer"
+                                data-tour="method-select-new"
+                                onClick={() => {
+                                    setBasicInfo({ name: '', field: '', customField: '', location: '', scale: '', recruitmentPeriod: '', recruitmentCount: '', recruitmentTarget: '', teamName: '', employmentType: '' }); setBasicInfoStep(0); setDemoSelectedCard(null); setCreationMode('basic-info');
+                                    if (isDemoMode) onDemoAction?.('demo-method-selected');
+                                }}
+                                className={`group relative bg-white border-2 rounded-2xl p-7 text-left transition-all duration-500 cursor-pointer ${
+                                    demoSelectedCard === 'new-write'
+                                        ? 'border-purple-500 shadow-xl shadow-purple-500/20 scale-[1.03] bg-purple-50/50 ring-2 ring-purple-400'
+                                        : 'border-gray-200 hover:border-purple-400 hover:shadow-lg hover:shadow-purple-500/10'
+                                }`}
                             >
-                                <div className="w-12 h-12 bg-purple-50 group-hover:bg-purple-100 rounded-xl flex items-center justify-center mb-4 transition-colors">
-                                    <MessageSquare className="w-6 h-6 text-purple-600" />
-                                </div>
+                                {demoSelectedCard === 'new-write' && (
+                                    <div className="absolute top-3 right-3 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center animate-bounce">
+                                        <CheckCircle2 className="w-4 h-4 text-white" />
+                                    </div>
+                                )}
                                 <h3 className="font-bold text-[16px] text-gray-900 mb-1.5">새로운 공고 작성</h3>
-                                <p className="text-[13px] text-gray-500 leading-relaxed">AI 채팅과 함께 처음부터 공고를 작성합니다. 질문에 답하는 것만으로 완성됩니다.</p>
+                                <p className="text-[13px] text-gray-500 leading-relaxed">기본 정보만 입력하면 AI가 바로 공고 초안을 작성해드립니다.</p>
                                 <div className="mt-4 flex items-center gap-1.5 text-purple-600 text-[13px] font-semibold">
-                                    <span>AI와 시작하기</span>
+                                    <span>시작하기</span>
                                     <ArrowRight size={14} />
                                 </div>
                             </button>
                         </div>
                     )}
 
-                    {/* PDF 파일 선택 후 업로드 영역 */}
+                    {/* PDF 업로드 영역 */}
                     {pdfFile && !pdfSuccess && (
                         <div className="bg-white border-2 border-blue-200 rounded-2xl p-7 mb-4">
                             <div className="flex items-start gap-4 mb-5">
@@ -1066,9 +1372,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                 </button>
                             </div>
                             {pdfError && (
-                                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-[13px] text-red-700 font-medium">
-                                    {pdfError}
-                                </div>
+                                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-[13px] text-red-700 font-medium">{pdfError}</div>
                             )}
                             <div className="flex gap-3">
                                 <button
@@ -1088,18 +1392,12 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                             <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                                             AI 분석 중...
                                         </>
-                                    ) : (
-                                        <>
-                                            <Sparkles size={16} />
-                                            AI로 분석하기
-                                        </>
-                                    )}
+                                    ) : 'AI로 분석하기'}
                                 </button>
                             </div>
                         </div>
                     )}
 
-                    {/* 성공 메시지 */}
                     {pdfSuccess && (
                         <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-7 text-center mb-4">
                             <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
@@ -1108,14 +1406,288 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                         </div>
                     )}
 
-                    {/* 숨긴 파일 인풋 */}
-                    <input
-                        ref={pdfInputRef}
-                        type="file"
-                        accept=".pdf"
-                        onChange={handlePdfFileChange}
-                        className="hidden"
-                    />
+                    <input ref={pdfInputRef} type="file" accept=".pdf" onChange={handlePdfFileChange} className="hidden" />
+
+                    <div className="text-center mt-4">
+                        <button onClick={() => setCreationMode(null)} className="text-[13px] text-gray-400 hover:text-gray-600 font-medium transition-colors">
+                            ← 유형 다시 선택
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ===== Step 3: 기본 정보 입력 폼 =====
+    if (creationMode === 'basic-info') {
+        const fieldOptions = jdType === 'club' ? clubFieldOptions : companyFieldOptions;
+        const isFormValid = basicInfo.name.trim() && (basicInfo.field && (basicInfo.field !== '기타 (직접 입력)' || basicInfo.customField.trim()));
+        
+        const clubScaleOptions = ['중앙동아리', '연합동아리', '자율동아리', '과동아리', '소모임'];
+        const employmentTypeOptions = ['정규직', '계약직', '인턴', '파견직', '프리랜서'];
+
+        const totalSteps = 2;
+        const canGoNext = basicInfoStep === 0 ? isFormValid : true;
+        
+        return (
+            <div className="flex items-center justify-center min-h-[calc(100vh-160px)] py-8" data-tour="basic-info-form">
+                <div className="w-full max-w-lg px-4">
+                    <div className="text-center mb-8">
+                        <h2 className="text-2xl font-extrabold text-gray-900 mb-2">
+                            {jdType === 'club' ? '동아리 기본 정보' : '기업 기본 정보'}
+                        </h2>
+                        <p className="text-gray-500 text-sm">기본 정보를 입력하면 AI가 공고 초안을 바로 작성해드려요</p>
+                    </div>
+
+                    <div className="bg-white border-2 border-gray-200 rounded-2xl p-7 space-y-5">
+                        {/* 상단 진행바 */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between text-[12px] font-bold">
+                                <span className={basicInfoStep === 0 ? 'text-blue-600' : 'text-gray-400'}>1. 필수 정보</span>
+                                <span className={basicInfoStep === 1 ? 'text-blue-600' : 'text-gray-400'}>2. 선택 정보</span>
+                            </div>
+                            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                                <div 
+                                    className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500 ease-out"
+                                    style={{ width: `${((basicInfoStep + 1) / totalSteps) * 100}%` }}
+                                />
+                            </div>
+                            <p className="text-[11px] text-gray-400 text-right">{basicInfoStep + 1} / {totalSteps}</p>
+                        </div>
+
+                        {/* Step 0: 필수 정보 (이름 + 분야) */}
+                        {basicInfoStep === 0 && (
+                            <div className="space-y-5 animate-fadeIn">
+                                {/* 이름 입력 */}
+                                <div>
+                                    <label className="block text-[13px] font-bold text-gray-700 mb-2">
+                                        {jdType === 'club' ? '동아리 이름' : '회사 이름'} <span className="text-red-400">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={basicInfo.name}
+                                        onChange={(e) => setBasicInfo(prev => ({ ...prev, name: e.target.value }))}
+                                        placeholder={jdType === 'club' ? '예: 코딩하는 사람들' : '예: 테크노바 주식회사'}
+                                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-[14px] outline-none focus:border-blue-400 transition-colors"
+                                        autoFocus
+                                    />
+                                </div>
+
+                                {/* 분야 선택 */}
+                                <div>
+                                    <label className="block text-[13px] font-bold text-gray-700 mb-2">
+                                        {jdType === 'club' ? '동아리 분야' : '채용 분야/직무'} <span className="text-red-400">*</span>
+                                    </label>
+                                    <div className="flex flex-wrap gap-2 mb-2">
+                                        {fieldOptions.map(opt => (
+                                            <button
+                                                key={opt}
+                                                onClick={() => setBasicInfo(prev => ({ ...prev, field: opt }))}
+                                                className={`px-3 py-2 rounded-xl text-[13px] font-medium border-2 transition-all ${
+                                                    basicInfo.field === opt
+                                                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                {opt}
+                                            </button>
+                                        ))}
+                                        <button
+                                            onClick={() => setBasicInfo(prev => ({ ...prev, field: '기타 (직접 입력)' }))}
+                                            className={`px-3 py-2 rounded-xl text-[13px] font-medium border-2 transition-all ${
+                                                basicInfo.field === '기타 (직접 입력)'
+                                                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            기타
+                                        </button>
+                                    </div>
+                                    {basicInfo.field === '기타 (직접 입력)' && (
+                                        <input
+                                            type="text"
+                                            value={basicInfo.customField}
+                                            onChange={(e) => setBasicInfo(prev => ({ ...prev, customField: e.target.value }))}
+                                            placeholder="분야를 직접 입력하세요"
+                                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-[14px] outline-none focus:border-blue-400 transition-colors mt-2"
+                                            autoFocus
+                                        />
+                                    )}
+                                </div>
+
+                                {/* 다음 단계 버튼 */}
+                                <div className="flex gap-3 pt-2">
+                                    <button
+                                        onClick={handleBasicInfoSubmit}
+                                        disabled={!isFormValid || isGeneratingDraft}
+                                        className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-[14px] font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isGeneratingDraft ? (
+                                            <span className="flex items-center justify-center gap-2">
+                                                <div className="w-4 h-4 border-2 border-gray-400/40 border-t-gray-600 rounded-full animate-spin" />
+                                                AI가 초안을 작성하고 있어요...
+                                            </span>
+                                        ) : '바로 초안 생성하기'}
+                                    </button>
+                                    <button
+                                        onClick={() => setBasicInfoStep(1)}
+                                        disabled={!canGoNext}
+                                        className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[14px] font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                                    >
+                                        선택 정보 입력
+                                        <ArrowRight size={16} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 1: 선택 정보 */}
+                        {basicInfoStep === 1 && (
+                            <div className="space-y-5 animate-fadeIn">
+                                <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5">
+                                    <p className="text-[12px] text-blue-600 font-medium">선택 사항이에요 — 입력하면 더 정확한 초안이 나와요</p>
+                                </div>
+
+                                {/* 동아리 전용 필드 */}
+                                {jdType === 'club' && (
+                                    <>
+                                        <div>
+                                            <label className="block text-[13px] font-bold text-gray-700 mb-2">소속 학교 / 활동 지역</label>
+                                            <input
+                                                type="text"
+                                                value={basicInfo.location}
+                                                onChange={(e) => setBasicInfo(prev => ({ ...prev, location: e.target.value }))}
+                                                placeholder="예: 서울대학교, 경기 수원"
+                                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-[14px] outline-none focus:border-blue-400 transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[13px] font-bold text-gray-700 mb-2">동아리 분류</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {clubScaleOptions.map(opt => (
+                                                    <button
+                                                        key={opt}
+                                                        onClick={() => setBasicInfo(prev => ({ ...prev, scale: prev.scale === opt ? '' : opt }))}
+                                                        className={`px-3 py-2 rounded-xl text-[13px] font-medium border-2 transition-all ${
+                                                            basicInfo.scale === opt
+                                                                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                                        }`}
+                                                    >
+                                                        {opt}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[13px] font-bold text-gray-700 mb-2">모집 기간</label>
+                                            <input
+                                                type="text"
+                                                value={basicInfo.recruitmentPeriod}
+                                                onChange={(e) => setBasicInfo(prev => ({ ...prev, recruitmentPeriod: e.target.value }))}
+                                                placeholder="예: 2026.03.01 ~ 2026.03.15"
+                                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-[14px] outline-none focus:border-blue-400 transition-colors"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-[13px] font-bold text-gray-700 mb-2">모집 인원</label>
+                                                <input
+                                                    type="text"
+                                                    value={basicInfo.recruitmentCount}
+                                                    onChange={(e) => setBasicInfo(prev => ({ ...prev, recruitmentCount: e.target.value }))}
+                                                    placeholder="예: 10명 내외"
+                                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-[14px] outline-none focus:border-blue-400 transition-colors"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[13px] font-bold text-gray-700 mb-2">모집 대상</label>
+                                                <input
+                                                    type="text"
+                                                    value={basicInfo.recruitmentTarget}
+                                                    onChange={(e) => setBasicInfo(prev => ({ ...prev, recruitmentTarget: e.target.value }))}
+                                                    placeholder="예: 전 학년 재학생"
+                                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-[14px] outline-none focus:border-blue-400 transition-colors"
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* 기업 전용 필드 */}
+                                {jdType === 'company' && (
+                                    <>
+                                        <div>
+                                            <label className="block text-[13px] font-bold text-gray-700 mb-2">근무 위치</label>
+                                            <input
+                                                type="text"
+                                                value={basicInfo.location}
+                                                onChange={(e) => setBasicInfo(prev => ({ ...prev, location: e.target.value }))}
+                                                placeholder="예: 서울 강남구, 판교 테크노밸리"
+                                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-[14px] outline-none focus:border-blue-400 transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[13px] font-bold text-gray-700 mb-2">팀 / 부서명</label>
+                                            <input
+                                                type="text"
+                                                value={basicInfo.teamName}
+                                                onChange={(e) => setBasicInfo(prev => ({ ...prev, teamName: e.target.value }))}
+                                                placeholder="예: 프로덕트 개발팀"
+                                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-[14px] outline-none focus:border-blue-400 transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[13px] font-bold text-gray-700 mb-2">고용 형태</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {employmentTypeOptions.map(opt => (
+                                                    <button
+                                                        key={opt}
+                                                        onClick={() => setBasicInfo(prev => ({ ...prev, employmentType: prev.employmentType === opt ? '' : opt }))}
+                                                        className={`px-3 py-2 rounded-xl text-[13px] font-medium border-2 transition-all ${
+                                                            basicInfo.employmentType === opt
+                                                                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                                        }`}
+                                                    >
+                                                        {opt}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* 제출 버튼 */}
+                                <button
+                                    onClick={handleBasicInfoSubmit}
+                                    disabled={!isFormValid || isGeneratingDraft}
+                                    className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[15px] font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {isGeneratingDraft ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                            AI가 초안을 작성하고 있어요...
+                                        </>
+                                    ) : (
+                                        'AI 초안 생성하기'
+                                    )}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="text-center mt-4">
+                        <button 
+                            onClick={() => { 
+                                if (basicInfoStep > 0) { setBasicInfoStep(basicInfoStep - 1); } 
+                                else { setCreationMode('type-selected'); } 
+                            }} 
+                            className="text-[13px] text-gray-400 hover:text-gray-600 font-medium transition-colors"
+                        >
+                            ← 이전 단계로
+                        </button>
+                    </div>
                 </div>
             </div>
         );
@@ -1467,9 +2039,10 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                 // 새로운 채팅 시작 (localStorage는 유지)
                                 setCurrentJD(getDefaultJD('club'));
                                 setJdType('club');
-                                const initialMessage = [getTypeSelectionMessage()];
-                                setMessages(initialMessage);
-                                setMessageHistory([initialMessage]);
+                                setCreationMode(null);
+                                setBasicInfoStep(0);
+                                setMessages([]);
+                                setMessageHistory([[]]);
                                 localStorage.removeItem('currentJD');
                                 localStorage.removeItem('chatMessages');
                             }}
@@ -1524,17 +2097,85 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                             {/* 선택지 버튼 */}
                             {msg.role === 'ai' && msg.options && Array.isArray(msg.options) && msg.options.length > 0 && (
                                 <div className="flex flex-col gap-2" style={{ marginLeft: chatWidth >= 30 ? '44px' : '0' }}>
-                                    {msg.options.map((option, optIdx) => (
+                                    {/* 복수 선택 안내 */}
+                                    {msg.multiSelect && idx === messages.length - 1 && (
+                                        <div className="text-[11px] text-blue-500 font-medium mb-1 flex items-center gap-1">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                                            복수 선택이 가능합니다. 원하는 항목을 모두 선택한 후 "선택 완료"를 눌러주세요.
+                                        </div>
+                                    )}
+                                    <div className={msg.multiSelect ? 'flex flex-wrap gap-2' : 'flex flex-col gap-2'}>
+                                        {msg.options.map((option, optIdx) => {
+                                            const isMulti = msg.multiSelect && idx === messages.length - 1;
+                                            const isSelected = isMulti && selectedMultiOptions.includes(option);
+                                            
+                                            if (isMulti) {
+                                                // 복수 선택 모드: 토글 버튼
+                                                return (
+                                                    <button
+                                                        key={optIdx}
+                                                        onClick={() => {
+                                                            setSelectedMultiOptions(prev =>
+                                                                prev.includes(option)
+                                                                    ? prev.filter(o => o !== option)
+                                                                    : [...prev, option]
+                                                            );
+                                                        }}
+                                                        disabled={isLoading || isTypingAI}
+                                                        className={`px-3.5 py-2 rounded-lg font-medium transition-all text-left disabled:opacity-50 border ${
+                                                            isSelected
+                                                                ? 'bg-blue-50 border-blue-400 text-blue-700 ring-1 ring-blue-300'
+                                                                : 'bg-white border-gray-200 text-gray-700 hover:bg-blue-50 hover:border-blue-300'
+                                                        }`}
+                                                        style={{ fontSize: chatWidth < 30 ? '12px' : '13px' }}
+                                                    >
+                                                        <span className="flex items-center gap-2">
+                                                            <span className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                                                                isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
+                                                            }`}>
+                                                                {isSelected && (
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                                                )}
+                                                            </span>
+                                                            {option}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            }
+                                            
+                                            // 단일 선택 모드: 기존 동작
+                                            return (
+                                                <button
+                                                    key={optIdx}
+                                                    onClick={() => handleSend(option)}
+                                                    disabled={isLoading || isTypingAI}
+                                                    className="px-4 py-2.5 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-400 rounded-lg font-medium text-gray-700 hover:text-blue-600 transition-all text-left disabled:opacity-50"
+                                                    style={{ fontSize: chatWidth < 30 ? '12px' : '13px' }}
+                                                >
+                                                    {option}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {/* 복수 선택 완료 버튼 */}
+                                    {msg.multiSelect && idx === messages.length - 1 && (
                                         <button
-                                            key={optIdx}
-                                            onClick={() => handleSend(option)}
-                                            disabled={isLoading || isTypingAI}
-                                            className="px-4 py-2.5 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-400 rounded-lg font-medium text-gray-700 hover:text-blue-600 transition-all text-left disabled:opacity-50"
-                                            style={{ fontSize: chatWidth < 30 ? '12px' : '13px' }}
+                                            onClick={() => {
+                                                if (selectedMultiOptions.length > 0) {
+                                                    handleSend(selectedMultiOptions.join(', '));
+                                                    setSelectedMultiOptions([]);
+                                                }
+                                            }}
+                                            disabled={isLoading || isTypingAI || selectedMultiOptions.length === 0}
+                                            className={`px-4 py-2.5 rounded-lg text-[13px] font-bold transition-all text-center ${
+                                                selectedMultiOptions.length > 0
+                                                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20'
+                                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                            }`}
                                         >
-                                            {option}
+                                            선택 완료 ({selectedMultiOptions.length}개 선택됨)
                                         </button>
-                                    ))}
+                                    )}
                                     {/* 직접 입력 필드 */}
                                     {idx === messages.length - 1 && (
                                         <form
@@ -1543,8 +2184,14 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                                 const formData = new FormData(e.currentTarget);
                                                 const customValue = (formData.get('customOption') as string)?.trim();
                                                 if (customValue) {
-                                                    handleSend(customValue);
-                                                    e.currentTarget.reset();
+                                                    if (msg.multiSelect) {
+                                                        // 복수 선택 모드: 직접 입력한 것을 선택 목록에 추가
+                                                        setSelectedMultiOptions(prev => prev.includes(customValue) ? prev : [...prev, customValue]);
+                                                        e.currentTarget.reset();
+                                                    } else {
+                                                        handleSend(customValue);
+                                                        e.currentTarget.reset();
+                                                    }
                                                 }
                                             }}
                                             className="flex gap-2"
@@ -1552,7 +2199,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                             <input
                                                 name="customOption"
                                                 type="text"
-                                                placeholder="직접 입력..."
+                                                placeholder={msg.multiSelect ? "직접 입력 후 추가..." : "직접 입력..."}
                                                 disabled={isLoading || isTypingAI}
                                                 className="flex-1 px-4 py-2.5 bg-white border border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-lg text-gray-700 transition-all disabled:opacity-50 outline-none"
                                                 style={{ fontSize: chatWidth < 30 ? '12px' : '13px' }}
@@ -1563,7 +2210,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                                 className="px-3 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-all disabled:opacity-50 flex-shrink-0"
                                                 style={{ fontSize: chatWidth < 30 ? '12px' : '13px' }}
                                             >
-                                                전송
+                                                {msg.multiSelect ? '추가' : '전송'}
                                             </button>
                                         </form>
                                     )}
@@ -1611,9 +2258,17 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 </div>
 
                 <div className="p-4 bg-white border-t border-gray-100" data-tour="chat-input">
+                    {/* 섹션 포커스 표시 */}
+                    {focusedSection && (
+                        <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-indigo-50 border border-indigo-200/60 rounded-lg">
+                            <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
+                            <span className="text-[12px] font-bold text-indigo-700">'{SECTION_META[focusedSection]?.label}' 섹션 집중 수정 중</span>
+                            <button onClick={() => setFocusedSection(null)} className="ml-auto text-[11px] text-indigo-400 hover:text-indigo-600 font-medium transition-colors">해제</button>
+                        </div>
+                    )}
                     <div className="relative">
                         <textarea 
-                            placeholder="답변을 입력하세요..." 
+                            placeholder={focusedSection ? `'${SECTION_META[focusedSection]?.label}' 섹션에 대해 수정할 내용을 입력하세요...` : '답변을 입력하세요...'} 
                             value={input}
                             onChange={(e) => {
                                 setInput(e.target.value);
@@ -1838,8 +2493,100 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                     )}
                                 </div>
 
-                                {/* 섹션 팔레트 */}
-                                {isEditMode && paletteSections.length > 0 && (
+                                {/* 편집 모드 추가 메뉴 */}
+                                {isEditMode && (
+                                    <div className="space-y-2">
+                                        {/* 메뉴 토글 버튼 */}
+                                        <button
+                                            onClick={() => setShowAddMenu(!showAddMenu)}
+                                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all text-[13px] font-bold ${
+                                                showAddMenu
+                                                    ? 'border-blue-400 bg-blue-50 text-blue-700'
+                                                    : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300 hover:bg-blue-50/50'
+                                            }`}
+                                        >
+                                            <span>{showAddMenu ? '추가 메뉴 닫기' : '+ 항목 추가하기'}</span>
+                                            <span className={`transition-transform ${showAddMenu ? 'rotate-180' : ''}`}>▾</span>
+                                        </button>
+
+                                        {showAddMenu && (
+                                            <div className="bg-white border-2 border-gray-200 rounded-xl p-4 space-y-4 animate-fadeIn">
+                                                {/* 섹션 추가 영역 */}
+                                                {paletteSections.length > 0 && (
+                                                    <div>
+                                                        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">새 섹션 추가</p>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {paletteSections.map(s => (
+                                                                <button
+                                                                    key={s}
+                                                                    onClick={() => { setSectionOrder(prev => [...prev, s]); }}
+                                                                    className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-[12px] font-medium text-gray-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-all"
+                                                                >
+                                                                    + {SECTION_META[s].label}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* 항목 추가 영역 */}
+                                                <div>
+                                                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">기존 섹션에 항목 추가</p>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {sectionOrder.includes('requirements') && (
+                                                            <button
+                                                                onClick={() => { addArrayItem('requirements'); setShowAddMenu(false); }}
+                                                                className="px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-[12px] font-semibold text-blue-700 hover:bg-blue-100 transition-all text-left"
+                                                            >
+                                                                + {jdType === 'company' ? '자격 요건' : '필수 체크리스트'}
+                                                            </button>
+                                                        )}
+                                                        {sectionOrder.includes('preferred') && (
+                                                            <button
+                                                                onClick={() => { addArrayItem('preferred'); setShowAddMenu(false); }}
+                                                                className="px-3 py-2 bg-purple-50 border border-purple-100 rounded-lg text-[12px] font-semibold text-purple-700 hover:bg-purple-100 transition-all text-left"
+                                                            >
+                                                                + {jdType === 'company' ? '우대 사항' : '우대 체크리스트'}
+                                                            </button>
+                                                        )}
+                                                        {sectionOrder.includes('benefits') && (
+                                                            <button
+                                                                onClick={() => { addArrayItem('benefits'); setShowAddMenu(false); }}
+                                                                className="px-3 py-2 bg-orange-50 border border-orange-100 rounded-lg text-[12px] font-semibold text-orange-700 hover:bg-orange-100 transition-all text-left"
+                                                            >
+                                                                + {jdType === 'company' ? '복리후생' : '활동 혜택'}
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            onClick={() => { addArrayItem('responsibilities'); setShowAddMenu(false); }}
+                                                            className="px-3 py-2 bg-green-50 border border-green-100 rounded-lg text-[12px] font-semibold text-green-700 hover:bg-green-100 transition-all text-left"
+                                                        >
+                                                            + {jdType === 'company' ? '주요 업무' : '주요 활동'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* 기술 스택 추가 */}
+                                                <div>
+                                                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">기타</p>
+                                                    <button
+                                                        onClick={() => {
+                                                            const techs = editedJD.techStacks || [];
+                                                            setEditedJD({ ...editedJD, techStacks: [...techs, { name: '', level: 50 }] });
+                                                            setShowAddMenu(false);
+                                                        }}
+                                                        className="px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-lg text-[12px] font-semibold text-indigo-700 hover:bg-indigo-100 transition-all"
+                                                    >
+                                                        + 기술 스택 / 스킬
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* 섹션 팔레트 (드래그용) */}
+                                {isEditMode && paletteSections.length > 0 && !showAddMenu && (
                                     <div className="flex flex-wrap items-center gap-2 p-3 bg-gradient-to-r from-gray-50 to-blue-50/50 border border-blue-100 rounded-xl">
                                         <span className="text-[11px] font-bold text-gray-400 mr-1">섹션 추가</span>
                                         {paletteSections.map(s => (
@@ -1855,10 +2602,25 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                     </div>
                                 )}
 
+                                {/* 섹션 포커스 안내 팁 */}
+                                {!isEditMode && activeSections.length > 0 && showSectionFocusTip && !focusedSection && (
+                                    <div className="flex items-start gap-2.5 p-3 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200/60 rounded-xl animate-fadeIn">
+                                        <MousePointerClick size={16} className="text-indigo-500 flex-shrink-0 mt-0.5" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[12px] font-bold text-indigo-700 leading-tight">섹션을 클릭해서 AI와 집중 수정하세요</p>
+                                            <p className="text-[11px] text-indigo-500/80 mt-0.5 leading-snug">아래 섹션을 클릭하면 해당 부분만 집중적으로 AI와 대화하며 수정할 수 있어요.</p>
+                                        </div>
+                                        <button onClick={() => setShowSectionFocusTip(false)} className="text-indigo-300 hover:text-indigo-500 transition-colors flex-shrink-0 mt-0.5">
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                )}
+
                                 {/* 동적 섹션 렌더링 */}
                                 {activeSections.map((section, idx) => (
                                     <div
                                         key={section}
+                                        data-tour={`preview-section-${section}`}
                                         draggable={isEditMode}
                                         onDragStart={(e) => isEditMode && handleSectionDragStart(e, section)}
                                         onDragOver={(e) => isEditMode && handleSectionDragOver(e, idx)}

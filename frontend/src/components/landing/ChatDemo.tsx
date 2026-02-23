@@ -1,133 +1,86 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronRight, MessageSquare, X } from 'lucide-react';
+import { ChevronRight, MessageSquare, Users, Building2, Sparkles, Upload, FileText, CheckCircle2 } from 'lucide-react';
 
 /* ─────────── Types ─────────── */
-interface DemoMessage {
-  role: 'ai' | 'user';
-  text: string;
-  options?: string[];
-  selectedOption?: number;
-  delay: number;
-  jdUpdate?: Partial<DemoJD>;
+interface DemoSection {
+  label: string;
+  icon: string;
+  items: string[];
 }
 
 interface DemoJD {
   title: string;
   teamName: string;
-  jobRole: string;
-  image: string;
-  location: string;
-  scale: string;
   description: string;
-  requirements: string[];
-  preferred: string[];
+  sections: DemoSection[];
+}
+
+interface ChatMsg {
+  role: 'ai' | 'user';
+  text: string;
 }
 
 const INITIAL_JD: DemoJD = {
   title: '',
   teamName: '',
-  jobRole: '',
-  image: '',
-  location: '',
-  scale: '',
   description: '',
-  requirements: [],
-  preferred: [],
+  sections: [],
 };
 
-/* ─────────── Scenario ─────────── */
-const DEMO_SCENARIO: DemoMessage[] = [
-  {
-    role: 'ai',
-    text: '안녕하세요! WINNOW 채용 마스터입니다 🎯\n어떤 유형의 공고를 만들어 볼까요?',
-    options: ['회사 채용공고', '동아리 모집공고'],
-    selectedOption: 1,
-    delay: 800,
-  },
-  {
-    role: 'user',
-    text: '동아리 모집공고',
-    delay: 1400,
-  },
-  {
-    role: 'ai',
-    text: '동아리 모집공고를 만들어 볼게요! 🎯\n동아리의 정체성을 브랜딩하고, 최고의 신입 부원을 찾는 공고를 함께 만들어볼게요!\n\n먼저, 어떤 동아리이신가요?',
-    delay: 1500,
-  },
-  {
-    role: 'user',
-    text: 'winnow라는 이름의 동아리로 개발동아리야',
-    delay: 2200,
-    jdUpdate: {
-      teamName: 'Winnow',
-      jobRole: '개발 동아리',
-      image: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=400&h=400&fit=crop',
+const COMPLETED_JD: DemoJD = {
+  title: 'Winnow 개발 동아리 신입 부원 모집',
+  teamName: 'Winnow',
+  description: 'Winnow는 다양한 개발 프로젝트를 통해 함께 성장하는 개발 동아리입니다. 혁신적인 아이디어를 현실로 만들고, 기술 역량을 키워나갑니다.',
+  sections: [
+    {
+      label: '동아리 소개',
+      icon: '📝',
+      items: ['웹/앱/AI 등 다양한 프로젝트 진행', '매주 정기 모임 및 코드리뷰', '현업 개발자 멘토링 프로그램'],
     },
-  },
-  {
-    role: 'ai',
-    text: '네, \'Winnow\'는 개발 동아리군요! 정말 멋진 활동 분야네요. Winnow 동아리가 어떤 종류의 개발 활동을 하는지 (예: 웹, 앱, AI, 게임 등), 그리고 동아리 분위기는 어떤지 궁금해요! 동아리의 특별한 강점이나 자랑거리도 알려주세요.',
-    options: [
-      '주로 하는 개발 분야를 알려줄게요.',
-      '동아리 분위기와 특징을 설명할게요.',
-      'Winnow의 비전과 미션을 알려주고 싶어요.',
-      '기타',
-    ],
-    selectedOption: 0,
-    delay: 2000,
-  },
-  {
-    role: 'user',
-    text: '주로 하는 개발 분야를 알려줄게요.',
-    delay: 1800,
-    jdUpdate: {
-      location: '캠퍼스 내',
-      scale: '대학 동아리',
-      description: 'Winnow는 다양한 개발 프로젝트를 통해 함께 성장하는 개발 동아리입니다. 우리는 기술을 배우고, 아이디어를 현실로 만들며, 개발 역량을 키워나가는 것에 중점을 둡니다.',
+    {
+      label: '지원자격 (필수)',
+      icon: '✅',
+      items: ['프로그래밍 기초 지식 보유', '주 1회 오프라인 모임 참석 가능', '팀 프로젝트 참여 의지'],
     },
-  },
-  {
-    role: 'ai',
-    text: '좋아요! 개발 분야에 대한 정보를 다 받았어요. 이제 지원자 체크리스트를 만들어 볼까요? 🚀',
-    delay: 1500,
-    jdUpdate: {
-      title: 'Winnow 개발 동아리 신입 부원 모집',
-      requirements: [
-        '프로그래밍 기초 지식 보유',
-        '주 1회 오프라인 모임 참석 가능',
-        '팀 프로젝트 참여 의지',
-      ],
-      preferred: [
-        'Git/GitHub 사용 경험',
-        '웹/앱 프로젝트 경험',
-        '개발 스터디 참여 경험',
-      ],
+    {
+      label: '지원자격 (우대)',
+      icon: '⭐',
+      items: ['Git/GitHub 사용 경험', '웹/앱 프로젝트 경험', '개발 스터디 참여 경험'],
     },
-  },
-];
+    {
+      label: '활동 혜택',
+      icon: '🎁',
+      items: ['포트폴리오 완성 지원', '우수 부원 장학금', '수료증 발급'],
+    },
+  ],
+};
+
+/*
+ * Phases:
+ *  0 – 유형 선택 (동아리/기업)
+ *  1 – 방식 선택 (PDF/새로운 공고)
+ *  2 – 기본 정보 입력 (progress bar)
+ *  3 – AI 초안 생성 중 (spinner)
+ *  4 – 초안 완성 + 섹션 목록
+ *  5 – 섹션 선택 → AI 대화
+ *  6 – 공고 게시
+ */
 
 /* ─────────── Component ─────────── */
 export const ChatDemo = () => {
-  const [messages, setMessages] = useState<DemoMessage[]>([]);
-  const [isTyping, setIsTyping] = useState(false);
+  const [phase, setPhase] = useState(-1);
+  const [subPhase, setSubPhase] = useState(0);
   const [jd, setJd] = useState<DemoJD>({ ...INITIAL_JD });
-  const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [visibleSections, setVisibleSections] = useState<number[]>([]);
+  const [selectedSection, setSelectedSection] = useState(-1);
+  const [isTyping, setIsTyping] = useState(false);
+  const [showPublish, setShowPublish] = useState(false);
   const [height] = useState(typeof window !== 'undefined' && window.innerWidth < 768 ? 480 : 750);
+  const containerRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const containerRef = useRef<HTMLDivElement>(null);
   const hasStarted = useRef(false);
-
-  /* 채팅 컨테이너 내부만 스크롤 */
-  const scrollChat = useCallback(() => {
-    requestAnimationFrame(() => {
-      if (chatScrollRef.current) {
-        chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-      }
-    });
-  }, []);
-
-  useEffect(() => { scrollChat(); }, [messages, isTyping, scrollChat]);
 
   const addTimeout = useCallback((fn: () => void, ms: number) => {
     const t = setTimeout(fn, ms);
@@ -142,43 +95,76 @@ export const ChatDemo = () => {
 
   const reset = useCallback(() => {
     clearAll();
-    setMessages([]);
-    setIsTyping(false);
-    setSelectedOptions({});
+    setPhase(-1);
+    setSubPhase(0);
     setJd({ ...INITIAL_JD });
+    setChatMessages([]);
+    setVisibleSections([]);
+    setSelectedSection(-1);
+    setIsTyping(false);
+    setShowPublish(false);
   }, [clearAll]);
 
-  const play = useCallback((step: number) => {
-    if (step >= DEMO_SCENARIO.length) {
-      addTimeout(() => { reset(); addTimeout(() => play(0), 1500); }, 6000);
-      return;
-    }
-    const msg = DEMO_SCENARIO[step];
+  const scrollChat = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (chatScrollRef.current) {
+        chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+      }
+    });
+  }, []);
 
-    if (msg.role === 'ai') {
-      setIsTyping(true);
-      addTimeout(() => {
-        setIsTyping(false);
-        setMessages(prev => [...prev, msg]);
-        if (msg.jdUpdate) setJd(prev => ({ ...prev, ...msg.jdUpdate }));
+  useEffect(() => { scrollChat(); }, [chatMessages, isTyping, scrollChat]);
 
-        if (msg.options && msg.selectedOption !== undefined) {
-          addTimeout(() => {
-            setMessages(prev => {
-              setSelectedOptions(old => ({ ...old, [prev.length - 1]: msg.selectedOption! }));
-              return prev;
-            });
-            addTimeout(() => play(step + 1), 900);
-          }, 1500);
-        } else {
-          addTimeout(() => play(step + 1), msg.delay);
-        }
-      }, 1400);
-    } else {
-      setMessages(prev => [...prev, msg]);
-      if (msg.jdUpdate) addTimeout(() => setJd(prev => ({ ...prev, ...msg.jdUpdate })), 500);
-      addTimeout(() => play(step + 1), msg.delay);
-    }
+  /* ─── Timeline ─── */
+  const play = useCallback(() => {
+    // Phase 0: Type selection
+    setPhase(0); setSubPhase(0);
+    addTimeout(() => setSubPhase(1), 1200);          // select 동아리
+
+    // Phase 1: Method selection
+    addTimeout(() => { setPhase(1); setSubPhase(0); }, 2500);
+    addTimeout(() => setSubPhase(1), 3700);           // select 새로운 공고
+
+    // Phase 2: Basic info form
+    addTimeout(() => { setPhase(2); setSubPhase(0); }, 5000);
+    addTimeout(() => setSubPhase(1), 5600);           // name fills
+    addTimeout(() => setSubPhase(2), 6300);           // field selects
+    addTimeout(() => setSubPhase(3), 7000);           // location fills, submit ready
+
+    // Phase 3: AI generating
+    addTimeout(() => { setPhase(3); setSubPhase(0); }, 7800);
+
+    // Phase 4: Draft complete
+    addTimeout(() => {
+      setPhase(4); setSubPhase(0);
+      setJd({ ...COMPLETED_JD });
+    }, 10300);
+    addTimeout(() => setVisibleSections([0]), 10800);
+    addTimeout(() => setVisibleSections([0, 1]), 11100);
+    addTimeout(() => setVisibleSections([0, 1, 2]), 11400);
+    addTimeout(() => setVisibleSections([0, 1, 2, 3]), 11700);
+
+    // Phase 5: Section chat
+    addTimeout(() => { setPhase(5); setSelectedSection(0); }, 12800);
+    addTimeout(() => setIsTyping(true), 13300);
+    addTimeout(() => {
+      setIsTyping(false);
+      setChatMessages([{ role: 'ai', text: '동아리 소개 섹션을 선택하셨네요!\n어떤 부분을 수정하면 좋을까요?' }]);
+    }, 14500);
+    addTimeout(() => {
+      setChatMessages(prev => [...prev, { role: 'user', text: '좀 더 열정적인 톤으로 바꿔줘' }]);
+    }, 16000);
+    addTimeout(() => setIsTyping(true), 16500);
+    addTimeout(() => {
+      setIsTyping(false);
+      setChatMessages(prev => [...prev, { role: 'ai', text: '열정적인 톤으로 수정 완료! 🔥\n"함께 코드로 세상을 바꿀 동료를 찾습니다!"' }]);
+    }, 18000);
+
+    // Phase 6: Publish
+    addTimeout(() => { setPhase(6); setShowPublish(true); }, 20000);
+
+    // Reset & restart
+    addTimeout(() => { reset(); addTimeout(() => play(), 1500); }, 23000);
   }, [addTimeout, reset]);
 
   /* 화면에 보이면 자동 시작 */
@@ -188,325 +174,482 @@ export const ChatDemo = () => {
     const obs = new IntersectionObserver(([e]) => {
       if (e.isIntersecting && !hasStarted.current) {
         hasStarted.current = true;
-        addTimeout(() => play(0), 200);
+        addTimeout(() => play(), 200);
       }
     }, { threshold: 0.05, rootMargin: '0px 0px 100px 0px' });
     obs.observe(el);
     return () => { obs.disconnect(); clearAll(); };
   }, [addTimeout, clearAll, play]);
 
-  const ts = (i: number) => {
-    const d = new Date(); d.setMinutes(d.getMinutes() + i * 2);
-    return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  /* step dots active state */
+  const stepActive = [phase >= 0, phase >= 1, phase >= 2, phase >= 3, phase >= 5];
+
+  /* ─────────── Left Panel Content ─────────── */
+  const renderLeftContent = () => {
+    /* Phase 0: 유형 선택 */
+    if (phase === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full px-6 demo-phase-enter">
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-50 rounded-2xl flex items-center justify-center mb-4 shadow-sm border border-blue-200/60">
+            <Sparkles size={22} className="text-blue-600" />
+          </div>
+          <h3 className="text-[16px] font-bold text-gray-900 mb-1.5">어떤 유형의 공고를 만드시나요?</h3>
+          <p className="text-[12px] text-gray-400 mb-6">공고 유형을 선택해주세요</p>
+          <div className="grid grid-cols-2 gap-3 w-full max-w-[260px]">
+            <div className={`p-4 rounded-xl border-2 text-center transition-all duration-500 ${
+              subPhase >= 1
+                ? 'border-blue-500 bg-blue-50 shadow-lg shadow-blue-500/10 scale-[1.02]'
+                : 'border-gray-200 bg-white'
+            }`}>
+              <div className="w-10 h-10 bg-blue-100 rounded-xl mx-auto mb-2 flex items-center justify-center">
+                <Users size={20} className="text-blue-600" />
+              </div>
+              <p className="font-bold text-[13px] text-gray-900">동아리</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">모집공고</p>
+              {subPhase >= 1 && (
+                <div className="mt-2 demo-fade-in">
+                  <CheckCircle2 size={16} className="text-blue-500 mx-auto" />
+                </div>
+              )}
+            </div>
+            <div className="p-4 rounded-xl border-2 border-gray-200 bg-white text-center">
+              <div className="w-10 h-10 bg-gray-100 rounded-xl mx-auto mb-2 flex items-center justify-center">
+                <Building2 size={20} className="text-gray-500" />
+              </div>
+              <p className="font-bold text-[13px] text-gray-900">기업</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">채용공고</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* Phase 1: 방식 선택 */
+    if (phase === 1) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full px-6 demo-phase-enter">
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-50 rounded-2xl flex items-center justify-center mb-4 shadow-sm border border-blue-200/60">
+            <FileText size={22} className="text-blue-600" />
+          </div>
+          <h3 className="text-[16px] font-bold text-gray-900 mb-1.5">어떤 방식으로 만드시겠어요?</h3>
+          <p className="text-[12px] text-gray-400 mb-6">작성 방식을 선택해주세요</p>
+          <div className="w-full max-w-[280px] space-y-3">
+            <div className="p-4 rounded-xl border-2 border-gray-200 bg-white flex items-center gap-3">
+              <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Upload size={18} className="text-gray-500" />
+              </div>
+              <div>
+                <p className="font-bold text-[13px] text-gray-900">PDF 업로드</p>
+                <p className="text-[10px] text-gray-400">기존 공고 PDF를 분석합니다</p>
+              </div>
+            </div>
+            <div className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all duration-500 ${
+              subPhase >= 1
+                ? 'border-blue-500 bg-blue-50 shadow-lg shadow-blue-500/10'
+                : 'border-gray-200 bg-white'
+            }`}>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors duration-500 ${
+                subPhase >= 1 ? 'bg-blue-100' : 'bg-gray-100'
+              }`}>
+                <Sparkles size={18} className={subPhase >= 1 ? 'text-blue-600' : 'text-gray-500'} />
+              </div>
+              <div className="flex-1">
+                <p className="font-bold text-[13px] text-gray-900">새로운 공고</p>
+                <p className="text-[10px] text-gray-400">AI와 함께 새로 작성합니다</p>
+              </div>
+              {subPhase >= 1 && (
+                <CheckCircle2 size={16} className="text-blue-500 demo-fade-in flex-shrink-0" />
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* Phase 2: 기본 정보 입력 */
+    if (phase === 2) {
+      return (
+        <div className="flex flex-col h-full px-6 py-5 demo-phase-enter">
+          <h3 className="text-[15px] font-bold text-gray-900 mb-1">기본 정보 입력</h3>
+          <p className="text-[11px] text-gray-400 mb-3">공고에 필요한 기본 정보를 입력해주세요</p>
+
+          {/* Progress bar */}
+          <div className="mb-4">
+            <div className="flex justify-between text-[10px] font-semibold mb-1.5">
+              <span className="text-blue-600">1. 필수 정보</span>
+              <span className={subPhase >= 3 ? 'text-blue-600' : 'text-gray-400'}>2. 선택 정보</span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-1.5">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all duration-700 ease-out"
+                style={{ width: subPhase >= 3 ? '100%' : subPhase >= 1 ? '50%' : '10%' }}
+              />
+            </div>
+            <p className="text-[10px] text-gray-400 text-right mt-1">{subPhase >= 3 ? '2' : '1'} / 2</p>
+          </div>
+
+          <div className="space-y-3 flex-1">
+            <div>
+              <label className="text-[11px] font-bold text-gray-500 mb-1 block">동아리 이름 *</label>
+              <div className={`h-9 rounded-xl border flex items-center px-3 transition-all duration-500 ${
+                subPhase >= 1 ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50'
+              }`}>
+                {subPhase >= 1 && <span className="text-[13px] text-blue-700 font-medium demo-type-in">Winnow</span>}
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-gray-500 mb-1 block">활동 분야 *</label>
+              <div className="flex gap-2 flex-wrap">
+                {['디자인', '프로그래밍/IT', '마케팅', '기획'].map((tag, i) => (
+                  <div key={tag} className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all duration-500 ${
+                    subPhase >= 2 && i === 1
+                      ? 'border-blue-400 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 bg-white text-gray-500'
+                  }`}>
+                    {tag}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-gray-500 mb-1 block">활동 위치</label>
+              <div className={`h-9 rounded-xl border flex items-center px-3 transition-all duration-500 ${
+                subPhase >= 3 ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50'
+              }`}>
+                {subPhase >= 3 && <span className="text-[13px] text-blue-700 font-medium demo-type-in">서울 캠퍼스</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* Submit button */}
+          <div className="mt-4">
+            <div className={`w-full py-3 rounded-xl text-center text-[13px] font-bold transition-all duration-500 ${
+              subPhase >= 3
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                : 'bg-gray-100 text-gray-400'
+            }`}>
+              AI 초안 생성하기
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* Phase 3: AI 생성 중 */
+    if (phase === 3) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full px-6 demo-phase-enter">
+          <div className="w-14 h-14 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-5" />
+          <h3 className="text-[16px] font-bold text-gray-900 mb-2">AI가 초안을 작성하고 있어요</h3>
+          <p className="text-[12px] text-gray-400 text-center leading-relaxed">
+            입력하신 정보를 바탕으로<br />최적화된 공고를 생성하고 있습니다...
+          </p>
+          <div className="mt-5 flex gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <div className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '200ms' }} />
+            <div className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '400ms' }} />
+          </div>
+        </div>
+      );
+    }
+
+    /* Phase 4: 초안 완성 + 섹션 목록 */
+    if (phase === 4) {
+      return (
+        <div className="flex flex-col h-full px-5 py-5 demo-phase-enter">
+          <div className="flex items-center gap-2 mb-3">
+            <CheckCircle2 size={20} className="text-green-500" />
+            <h3 className="text-[15px] font-bold text-gray-900">초안이 완성되었습니다!</h3>
+          </div>
+          <p className="text-[12px] text-gray-400 mb-4">수정하고 싶은 섹션을 클릭하여 AI와 대화해보세요</p>
+
+          <div className="space-y-2.5 flex-1 overflow-y-auto scrollbar-hide">
+            {COMPLETED_JD.sections.map((section, i) => (
+              <div
+                key={i}
+                className={`p-3.5 rounded-xl border transition-all duration-500 ${
+                  visibleSections.includes(i)
+                    ? 'opacity-100 translate-y-0 border-gray-200 bg-white'
+                    : 'opacity-0 translate-y-3 border-transparent'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[16px]">{section.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-bold text-gray-800">{section.label}</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5 truncate">{section.items[0]}</p>
+                  </div>
+                  <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    /* Phase 5~6: 섹션 선택 + AI 대화 */
+    if (phase >= 5) {
+      return (
+        <div className="flex flex-col h-full demo-phase-enter">
+          {/* Section indicator */}
+          <div className="px-5 py-3 bg-blue-50 border-b border-blue-100 flex items-center gap-2 flex-shrink-0">
+            <span className="text-[14px]">{COMPLETED_JD.sections[selectedSection]?.icon}</span>
+            <span className="text-[12px] font-bold text-blue-700">{COMPLETED_JD.sections[selectedSection]?.label}</span>
+            <span className="text-[10px] text-blue-400 ml-auto">섹션 수정 중</span>
+          </div>
+
+          {/* Chat */}
+          <div ref={chatScrollRef} className="flex-1 px-5 py-4 space-y-4 overflow-y-auto bg-gradient-to-b from-[#F8FAFC] to-[#F1F5F9] scrollbar-hide">
+            {chatMessages.map((msg, idx) => (
+              <div key={idx} className="flex gap-2.5 flex-col demo-chat-enter">
+                <div className="flex gap-2.5">
+                  {msg.role === 'ai' && (
+                    <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-50 rounded-xl flex-shrink-0 flex items-center justify-center text-[10px] font-extrabold text-blue-600 border border-blue-200/80 shadow-sm">
+                      AI
+                    </div>
+                  )}
+                  <div className={`max-w-[85%] ${msg.role === 'user' ? 'ml-auto' : ''}`}>
+                    <div
+                      className={`px-3.5 py-2.5 rounded-2xl text-[13px] shadow-md border leading-relaxed ${
+                        msg.role === 'ai'
+                          ? 'bg-white rounded-tl-sm text-gray-700 border-gray-200/60'
+                          : 'bg-gradient-to-br from-blue-600 to-blue-700 rounded-tr-sm text-white border-blue-600 shadow-blue-500/20'
+                      }`}
+                      style={{ whiteSpace: 'pre-wrap' }}
+                    >
+                      {msg.text}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {isTyping && (
+              <div className="flex gap-2.5 demo-chat-enter">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-50 rounded-xl flex-shrink-0 flex items-center justify-center text-[10px] font-extrabold text-blue-600 border border-blue-200/80">
+                  AI
+                </div>
+                <div className="bg-white px-3.5 py-2.5 rounded-2xl rounded-tl-sm text-[13px] text-gray-400 shadow-md border border-gray-200/60">
+                  응답 생성 중...
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input / Publish */}
+          <div className="p-4 bg-white border-t border-gray-100 flex-shrink-0">
+            {showPublish ? (
+              <div className="py-3 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl text-center text-white text-[14px] font-bold shadow-lg shadow-blue-500/30 demo-pulse-glow">
+                🎉 공고 게시하기
+              </div>
+            ) : (
+              <div className="relative">
+                <input type="text" placeholder="수정 사항을 입력하세요..." disabled
+                  className="w-full pl-4 pr-12 py-3 rounded-xl bg-gray-50 border border-gray-200 text-[13px] placeholder:text-gray-400 outline-none cursor-default" />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center text-white shadow-md shadow-blue-500/30">
+                  <ChevronRight size={16} />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return null;
   };
 
+  /* ─────────── Right Panel Content ─────────── */
+  const renderRightContent = () => {
+    /* Phase 0~2: 빈 상태 */
+    if (phase < 3) {
+      return (
+        <div className="h-full flex flex-col items-center justify-center text-center px-6">
+          <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+            <FileText size={28} className="text-gray-300" />
+          </div>
+          <h4 className="font-bold text-gray-400 mb-2 text-[14px]">공고 미리보기</h4>
+          <p className="text-[12px] text-gray-400 max-w-[200px] leading-relaxed">
+            기본 정보를 입력하면 AI가 공고를 자동으로 작성합니다
+          </p>
+        </div>
+      );
+    }
 
+    /* Phase 3: 로딩 shimmer */
+    if (phase === 3) {
+      return (
+        <div className="p-6 space-y-4">
+          <div className="h-6 bg-gray-100 rounded-lg demo-shimmer w-3/4" />
+          <div className="h-4 bg-gray-100 rounded demo-shimmer w-1/2" style={{ animationDelay: '0.2s' }} />
+          <div className="mt-6 space-y-3">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="p-4 rounded-xl border border-gray-100">
+                <div className="h-4 bg-gray-100 rounded demo-shimmer w-2/3 mb-2" style={{ animationDelay: `${i * 0.15}s` }} />
+                <div className="h-3 bg-gray-50 rounded demo-shimmer w-full" style={{ animationDelay: `${i * 0.15 + 0.1}s` }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    /* Phase 4+: 전체 JD 미리보기 */
+    return (
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 scrollbar-hide demo-phase-enter">
+        {/* Title */}
+        <div>
+          <h1 className="text-[20px] font-bold text-gray-900 mb-1">{jd.title}</h1>
+          <p className="text-[12px] text-gray-400">{jd.teamName} · 개발 동아리 · 서울 캠퍼스</p>
+        </div>
+
+        {/* Description */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4">
+          <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            📝 동아리 소개
+          </h4>
+          <p className="text-[13px] text-gray-700 leading-relaxed">{jd.description}</p>
+        </div>
+
+        {/* Sections */}
+        {jd.sections.slice(1).map((section, i) => (
+          <div
+            key={i}
+            className={`space-y-2 transition-all duration-500 ${
+              visibleSections.includes(i + 1) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+            } ${selectedSection === i + 1 || (selectedSection === 0 && i === -1) ? '' : ''}`}
+          >
+            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+              <span>{section.icon}</span> {section.label}
+            </h4>
+            <div className="space-y-1.5">
+              {section.items.map((item, j) => (
+                <label
+                  key={j}
+                  className="flex items-start gap-2.5 p-2 rounded-lg transition-colors"
+                >
+                  {section.label.includes('필수') || section.label.includes('우대') ? (
+                    <input type="checkbox" className="mt-0.5 w-3.5 h-3.5 text-blue-600 border-gray-300 rounded pointer-events-none" readOnly />
+                  ) : (
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
+                  )}
+                  <span className="text-[12px] text-gray-700 leading-relaxed">{item}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {/* Selected section highlight */}
+        {selectedSection === 0 && phase >= 5 && (
+          <div className="ring-2 ring-blue-400 rounded-xl p-3 bg-blue-50/30 -mt-3 transition-all duration-500 demo-phase-enter">
+            <p className="text-[11px] font-bold text-blue-600 mb-1">✏️ 수정 중: 동아리 소개</p>
+            <p className="text-[12px] text-gray-600 leading-relaxed italic">
+              "함께 코드로 세상을 바꿀 동료를 찾습니다! Winnow는 열정 넘치는 개발자들이 모여..."
+            </p>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="pt-4 border-t border-gray-100 flex justify-end items-center gap-2">
+          <span className="px-3.5 py-2 border border-red-300 text-red-600 rounded-lg text-[12px] font-bold cursor-default">초기화</span>
+          <span className="px-3.5 py-2 border border-blue-500 text-blue-600 rounded-lg text-[12px] font-bold cursor-default">편집</span>
+          <span className={`px-3.5 py-2 bg-blue-600 text-white rounded-lg text-[12px] font-bold shadow-lg cursor-default transition-all duration-500 ${
+            showPublish ? 'shadow-blue-500/40 scale-105' : 'shadow-blue-500/20'
+          }`}>공고 게시</span>
+        </div>
+      </div>
+    );
+  };
 
   /* ─────────── Render ─────────── */
   return (
     <div className="relative w-full select-none pointer-events-none">
       <div
         ref={containerRef}
-        className="flex bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-3xl border border-gray-200/80 shadow-2xl overflow-hidden w-full gap-0 md:gap-4"
+        className="flex bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-3xl border border-gray-200/80 shadow-2xl overflow-hidden w-full gap-0"
         style={{ height: `${height}px` }}
       >
-      {/* ========== Chat Area – Left (full on mobile, 40% on desktop) ========== */}
-      <div className="w-full md:w-[40%] flex flex-col bg-white rounded-3xl md:rounded-l-3xl md:rounded-r-none shadow-sm">
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50/50 flex justify-between items-center h-[72px] flex-shrink-0">
-          <div className="flex items-center gap-3 font-bold text-[15.5px] text-gray-900">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/30">
-              <MessageSquare size={15} fill="white" />
-            </div>
-            공고 생성 매니저
-          </div>
-          <span className="text-gray-400 cursor-default hover:text-gray-600 transition-colors"><X size={18} /></span>
-        </div>
-
-        {/* Messages */}
-        <div
-          ref={chatScrollRef}
-          className="flex-1 px-5 py-6 space-y-6 overflow-y-auto bg-gradient-to-b from-[#F8FAFC] to-[#F1F5F9] scrollbar-hide"
-        >
-          {messages.map((msg, idx) => (
-            <div key={idx} className="flex gap-3 flex-col chat-enter">
-              <div className="flex gap-3">
-                {msg.role === 'ai' && (
-                  <div className="w-9 h-9 bg-gradient-to-br from-blue-100 to-blue-50 rounded-xl flex-shrink-0 flex items-center justify-center text-[10.5px] font-extrabold text-blue-600 border border-blue-200/80 shadow-sm">
-                    AI
-                  </div>
-                )}
-                <div className={`space-y-1 max-w-[85%] md:max-w-[270px] ${msg.role === 'user' ? 'ml-auto' : ''}`}>
-                  <div
-                    className={`px-4 py-3 rounded-2xl text-[13.5px] shadow-md border leading-relaxed ${
-                      msg.role === 'ai'
-                        ? 'bg-white rounded-tl-sm text-gray-700 border-gray-200/60'
-                        : 'bg-gradient-to-br from-blue-600 to-blue-700 rounded-tr-sm text-white border-blue-600 shadow-blue-500/20'
-                    }`}
-                    style={{ whiteSpace: 'pre-wrap' }}
-                  >
-                    {msg.text}
-                  </div>
-                  <div className={`text-[10px] text-gray-400 ${msg.role === 'user' ? 'text-right pr-1' : 'pl-1'}`}>
-                    {ts(idx)}
-                  </div>
-                </div>
+        {/* ========== Left Panel ========== */}
+        <div className="w-full md:w-[40%] flex flex-col bg-white rounded-3xl md:rounded-l-3xl md:rounded-r-none shadow-sm overflow-hidden">
+          {/* Header */}
+          <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50/50 flex justify-between items-center h-[72px] flex-shrink-0">
+            <div className="flex items-center gap-3 font-bold text-[15.5px] text-gray-900">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/30">
+                <MessageSquare size={15} fill="white" />
               </div>
-
-              {/* 옵션 버튼 */}
-              {msg.role === 'ai' && msg.options && (
-                <div className="flex flex-col gap-2.5 ml-12">
-                  {msg.options.map((opt, oi) => {
-                    const isSelected = selectedOptions[idx] === oi;
-                    return (
-                      <div
-                        key={oi}
-                        className={`px-4 py-3 border rounded-xl text-[13px] font-semibold text-left transition-all duration-300 cursor-default shadow-sm ${
-                          isSelected
-                            ? 'bg-gradient-to-r from-blue-50 to-blue-100/50 border-blue-400 text-blue-700 shadow-blue-200/50'
-                            : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
-                        }`}
-                      >
-                        {opt}
-                      </div>
-                    );
-                  })}
-                  <div className="px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-[13px] font-semibold text-gray-500 text-center cursor-default shadow-sm">
-                    건너뛰기
-                  </div>
-                </div>
-              )}
+              공고 생성 매니저
             </div>
-          ))}
-
-          {/* 로딩 */}
-          {isTyping && (
-            <div className="flex gap-3 chat-enter">
-              <div className="w-9 h-9 bg-gradient-to-br from-blue-100 to-blue-50 rounded-xl flex-shrink-0 flex items-center justify-center text-[10.5px] font-extrabold text-blue-600 border border-blue-200/80 shadow-sm">
-                AI
-              </div>
-              <div className="bg-white px-4 py-3 rounded-2xl rounded-tl-sm text-[13.5px] text-gray-400 shadow-md border border-gray-200/60">
-                응답 생성 중...
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Input */}
-        <div className="p-5 bg-white border-t border-gray-100 flex-shrink-0">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="답변을 입력하세요..."
-              disabled
-              className="w-full pl-5 pr-14 py-4 rounded-xl bg-gray-50 border border-gray-200 text-[14px] font-medium placeholder:text-gray-400 shadow-inner outline-none cursor-default"
-            />
-            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
-              <ChevronRight size={18} />
+            {/* Step dots */}
+            <div className="flex items-center gap-1.5">
+              {stepActive.map((active, i) => (
+                <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${
+                  active ? 'bg-blue-500 scale-110' : 'bg-gray-200'
+                }`} />
+              ))}
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* ========== Preview Area – Right 60% (hidden on mobile) ========== */}
-      <div className="hidden md:flex flex-1 bg-white relative overflow-hidden rounded-r-3xl shadow-sm">
-
-        {/* ── Left Profile Sidebar ── */}
-        <div className="w-[210px] border-r border-gray-100 flex flex-col bg-gradient-to-b from-[#FAFBFC] to-[#F8FAFC] overflow-y-auto flex-shrink-0 scrollbar-hide">
-          <div className="px-5 flex flex-col items-center pt-7">
-            {/* Profile Image */}
-            <div className={`w-20 h-20 rounded-2xl mb-3.5 shadow-lg overflow-hidden transition-all duration-700 ${
-              jd.image ? 'bg-gradient-to-br from-blue-400 to-purple-500' : 'bg-gray-100 border-2 border-gray-200'
-            }`}>
-              {jd.image ? (
-                <img src={jd.image} alt="" className="w-full h-full object-cover jd-img-in" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="3" width="20" height="14" rx="2" />
-                    <line x1="8" y1="21" x2="16" y2="21" />
-                    <line x1="12" y1="17" x2="12" y2="21" />
-                  </svg>
-                </div>
-              )}
-            </div>
-            {/* Name */}
-            <h3 className={`font-bold text-[16px] mb-1 transition-all duration-500 ${jd.teamName ? 'text-gray-900' : 'text-gray-400'}`}>
-              {jd.teamName || '그룹 이름'}
-            </h3>
-            <p className={`text-[11.5px] font-semibold mb-5 transition-all duration-500 ${jd.jobRole ? 'text-gray-500' : 'text-gray-400'}`}>
-              {jd.jobRole || '모집 분야'}
-            </p>
-          </div>
-
-          {/* Location & Scale */}
-          <div className="px-5 space-y-4 mb-6">
-            <div>
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">LOCATION</div>
-              <div className="flex items-center gap-2 text-[13px]">
-                <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span className={`transition-all duration-500 ${jd.location ? 'text-gray-700' : 'text-gray-400'}`}>
-                  {jd.location || '아직 설정되지 않았습니다'}
-                </span>
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">SCALE</div>
-              <div className="flex items-center gap-2 text-[13px]">
-                <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                <span className={`transition-all duration-500 ${jd.scale ? 'text-gray-700' : 'text-gray-400'}`}>
-                  {jd.scale || '아직 설정되지 않았습니다'}
-                </span>
-              </div>
-            </div>
+          {/* Content */}
+          <div className="flex-1 overflow-hidden">
+            {renderLeftContent()}
           </div>
         </div>
 
-        {/* ── Right Content ── */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto px-7 py-6 space-y-7 scrollbar-hide">
-            {!jd.title && jd.requirements.length === 0 && !jd.description ? (
-              /* 빈 상태 */
-              <div className="h-full flex flex-col items-center justify-center text-center">
-                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                    <polyline points="14,2 14,8 20,8" />
-                    <line x1="16" y1="13" x2="8" y2="13" />
-                    <line x1="16" y1="17" x2="8" y2="17" />
-                    <polyline points="10,9 9,9 8,9" />
-                  </svg>
-                </div>
-                <h4 className="font-bold text-gray-400 mb-2">아직 작성된 내용이 없습니다.</h4>
-                <p className="text-[13px] text-gray-400 max-w-xs leading-relaxed">
-                  왼쪽 채팅창에서 AI 매니저와 대화를 나누면, 이곳에 채용 공고가 실시간으로 완성됩니다.
-                </p>
-              </div>
-            ) : (
-              <>
-                {/* 공고 제목 */}
-                <div>
-                  <h1 className={`text-2xl font-bold mb-4 transition-all duration-500 ${jd.title ? 'text-gray-900' : 'text-gray-300'}`}>
-                    {jd.title || (jd.teamName ? `${jd.teamName}` : '공고 제목이 여기에 표시됩니다')}
-                  </h1>
-                </div>
-
-                {/* 동아리 소개 */}
-                {jd.description && (
-                  <div className="space-y-3 jd-section-in">
-                    <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-100 rounded-lg p-5">
-                      <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-3 flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M10 2a8 8 0 100 16 8 8 0 000-16zM9 9a1 1 0 112 0v4a1 1 0 11-2 0V9zm1-5a1 1 0 100 2 1 1 0 000-2z" />
-                        </svg>
-                        그룹 소개
-                      </h4>
-                      <p className="text-[14px] text-gray-700 leading-relaxed">{jd.description}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* 지원자 체크리스트 (필수) */}
-                <div className="space-y-3 jd-section-in" style={{ animationDelay: '0.15s' }}>
-                  <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                    지원자 체크리스트 (필수)
-                  </h4>
-                  <div className="space-y-2">
-                    {jd.requirements.length > 0 ? (
-                      jd.requirements.map((item, i) => (
-                        <label
-                          key={i}
-                          className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-default transition-colors group jd-item-in"
-                          style={{ animationDelay: `${0.2 + i * 0.08}s` }}
-                        >
-                          <input type="checkbox" className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded pointer-events-none" readOnly />
-                          <span className="text-[13px] text-gray-700 leading-relaxed">{item}</span>
-                        </label>
-                      ))
-                    ) : (
-                      <p className="text-[13px] text-gray-400 p-3">아직 설정되지 않았습니다.</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* 지원자 체크리스트 (우대) */}
-                <div className="space-y-3 jd-section-in" style={{ animationDelay: '0.3s' }}>
-                  <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                    지원자 체크리스트 (우대)
-                  </h4>
-                  <div className="space-y-2">
-                    {jd.preferred.length > 0 ? (
-                      jd.preferred.map((item, i) => (
-                        <label
-                          key={i}
-                          className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-default transition-colors group jd-item-in"
-                          style={{ animationDelay: `${0.35 + i * 0.08}s` }}
-                        >
-                          <input type="checkbox" className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded pointer-events-none" readOnly />
-                          <span className="text-[13px] text-gray-700 leading-relaxed">{item}</span>
-                        </label>
-                      ))
-                    ) : (
-                      <p className="text-[13px] text-gray-400 p-3">아직 설정되지 않았습니다.</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="pt-6 border-t border-gray-100 flex justify-end items-center gap-2">
-                  <span className="px-4 py-2.5 border border-red-300 text-red-600 rounded-lg text-[13px] font-bold cursor-default">초기화</span>
-                  <span className="px-4 py-2.5 border border-blue-500 text-blue-600 rounded-lg text-[13px] font-bold cursor-default">편집</span>
-                  <span className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-[13px] font-bold shadow-lg shadow-blue-500/20 cursor-default">공고 게시</span>
-                </div>
-
-                <div className="text-right pt-4">
-                  <p className="text-[11px] font-bold text-gray-400">WINNOW Recruiting Team</p>
-                </div>
-              </>
-            )}
-          </div>
+        {/* ========== Right Panel (hidden on mobile) ========== */}
+        <div className="hidden md:flex flex-1 flex-col bg-white relative overflow-hidden rounded-r-3xl shadow-sm">
+          {renderRightContent()}
         </div>
       </div>
 
       {/* Animations */}
       <style>{`
-        .chat-enter {
-          animation: chatIn 0.35s ease-out both;
+        .demo-phase-enter {
+          animation: demoPhaseIn 0.4s ease-out both;
         }
-        .jd-img-in {
-          animation: imgIn 0.5s ease-out both;
+        .demo-chat-enter {
+          animation: demoChatIn 0.35s ease-out both;
         }
-        .jd-section-in {
-          animation: sectionIn 0.5s ease-out both;
+        .demo-fade-in {
+          animation: demoFadeIn 0.3s ease-out both;
         }
-        .jd-item-in {
-          animation: itemIn 0.4s ease-out both;
+        .demo-type-in {
+          animation: demoTypeIn 0.5s ease-out both;
         }
-        @keyframes chatIn {
+        .demo-pulse-glow {
+          animation: demoPulseGlow 1.5s ease-in-out infinite;
+        }
+        .demo-shimmer {
+          animation: demoShimmerAnim 1.5s ease-in-out infinite;
+        }
+        @keyframes demoPhaseIn {
+          from { opacity: 0; transform: translateY(15px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes demoChatIn {
           from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        @keyframes imgIn {
-          from { opacity: 0; transform: scale(0.8); }
-          to { opacity: 1; transform: scale(1); }
+        @keyframes demoFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
-        @keyframes sectionIn {
-          from { opacity: 0; transform: translateY(14px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes itemIn {
-          from { opacity: 0; transform: translateX(-8px); }
+        @keyframes demoTypeIn {
+          from { opacity: 0; transform: translateX(-5px); }
           to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes demoPulseGlow {
+          0%, 100% { box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); }
+          50% { box-shadow: 0 4px 25px rgba(59, 130, 246, 0.5); transform: scale(1.02); }
+        }
+        @keyframes demoShimmerAnim {
+          0% { opacity: 0.5; }
+          50% { opacity: 1; }
+          100% { opacity: 0.5; }
         }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
-      </div>
     </div>
   );
 };
