@@ -249,7 +249,7 @@ export const ChatDemo = () => {
     /* Phase 0: 유형 선택 */
     if (phase === 0) {
       return (
-        <div className="flex flex-col items-center justify-center h-full px-6 demo-phase-enter">
+        <div className="flex flex-col items-center justify-center h-full px-6 demo-phase-enter pointer-events-none">
           <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-50 rounded-2xl flex items-center justify-center mb-4 shadow-sm border border-blue-200/60">
             <Sparkles size={22} className="text-blue-600" />
           </div>
@@ -287,7 +287,7 @@ export const ChatDemo = () => {
     /* Phase 1: 방식 선택 */
     if (phase === 1) {
       return (
-        <div className="flex flex-col items-center justify-center h-full px-6 demo-phase-enter">
+        <div className="flex flex-col items-center justify-center h-full px-6 demo-phase-enter pointer-events-none">
           <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-50 rounded-2xl flex items-center justify-center mb-4 shadow-sm border border-blue-200/60">
             <FileText size={22} className="text-blue-600" />
           </div>
@@ -329,7 +329,7 @@ export const ChatDemo = () => {
     /* Phase 2: 기본 정보 입력 */
     if (phase === 2) {
       return (
-        <div className="flex flex-col h-full px-6 py-5 demo-phase-enter">
+        <div className="flex flex-col h-full px-6 py-5 demo-phase-enter pointer-events-none">
           <h3 className="text-[15px] font-bold text-gray-900 mb-1">기본 정보 입력</h3>
           <p className="text-[11px] text-gray-400 mb-3">공고에 필요한 기본 정보를 입력해주세요</p>
 
@@ -398,7 +398,7 @@ export const ChatDemo = () => {
     /* Phase 3: AI 생성 중 */
     if (phase === 3) {
       return (
-        <div className="flex flex-col items-center justify-center h-full px-6 demo-phase-enter">
+        <div className="flex flex-col items-center justify-center h-full px-6 demo-phase-enter pointer-events-none">
           <div className="w-14 h-14 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-5" />
           <h3 className="text-[16px] font-bold text-gray-900 mb-2">AI가 초안을 작성하고 있어요</h3>
           <p className="text-[12px] text-gray-400 text-center leading-relaxed">
@@ -423,7 +423,7 @@ export const ChatDemo = () => {
           </div>
           <p className="text-[12px] text-gray-400 mb-4">섹션을 드래그하여 순서를 변경해보세요</p>
 
-          <div className="space-y-2.5 flex-1 overflow-y-auto scrollbar-hide pointer-events-auto" onDragOver={(e) => e.preventDefault()}>
+          <div className="space-y-2.5 flex-1 overflow-y-auto scrollbar-hide" onDragOver={(e) => e.preventDefault()}>
             {jd.sections.map((section, i) => (
               <div
                 key={section.label}
@@ -460,7 +460,7 @@ export const ChatDemo = () => {
     /* Phase 5~6: 섹션 선택 + AI 대화 */
     if (phase >= 5) {
       return (
-        <div className="flex flex-col h-full demo-phase-enter">
+        <div className="flex flex-col h-full demo-phase-enter pointer-events-none">
           {/* Section indicator */}
           <div className="px-5 py-3 bg-blue-50 border-b border-blue-100 flex items-center gap-2 flex-shrink-0">
             <span className="text-[14px]">{COMPLETED_JD.sections[selectedSection]?.icon}</span>
@@ -533,7 +533,7 @@ export const ChatDemo = () => {
     /* Phase 0~2: 빈 상태 */
     if (phase < 3) {
       return (
-        <div className="h-full flex flex-col items-center justify-center text-center px-6">
+        <div className="h-full flex flex-col items-center justify-center text-center px-6 pointer-events-none">
           <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
             <FileText size={28} className="text-gray-300" />
           </div>
@@ -548,7 +548,7 @@ export const ChatDemo = () => {
     /* Phase 3: 로딩 shimmer */
     if (phase === 3) {
       return (
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 pointer-events-none">
           <div className="h-6 bg-gray-100 rounded-lg demo-shimmer w-3/4" />
           <div className="h-4 bg-gray-100 rounded demo-shimmer w-1/2" style={{ animationDelay: '0.2s' }} />
           <div className="mt-6 space-y-3">
@@ -574,7 +574,7 @@ export const ChatDemo = () => {
         </div>
 
         {/* Sections - Draggable */}
-        <div className="space-y-4 pointer-events-auto" onDragOver={(e) => e.preventDefault()}>
+        <div className="space-y-4" onDragOver={(e) => e.preventDefault()}>
           {jd.sections.map((section, i) => (
             <div
               key={section.label}
@@ -627,7 +627,7 @@ export const ChatDemo = () => {
         )}
 
         {/* Footer */}
-        <div className="pt-4 border-t border-gray-100 flex justify-end items-center gap-2">
+        <div className="pt-4 border-t border-gray-100 flex justify-end items-center gap-2 pointer-events-none">
           <span className="px-3.5 py-2 border border-red-300 text-red-600 rounded-lg text-[12px] font-bold cursor-default">초기화</span>
           <span className="px-3.5 py-2 border border-blue-500 text-blue-600 rounded-lg text-[12px] font-bold cursor-default">편집</span>
           <span className={`px-3.5 py-2 bg-blue-600 text-white rounded-lg text-[12px] font-bold shadow-lg cursor-default transition-all duration-500 ${
@@ -640,16 +640,16 @@ export const ChatDemo = () => {
 
   /* ─────────── Render ─────────── */
   return (
-    <div className="relative w-full select-none pointer-events-none">
+    <div className="relative w-full select-none">
       <div
         ref={containerRef}
         className="flex bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-3xl border border-gray-200/80 shadow-2xl overflow-hidden w-full gap-0"
         style={{ height: `${height}px` }}
       >
         {/* ========== Left Panel ========== */}
-        <div className="w-full md:w-[40%] flex flex-col bg-white rounded-3xl md:rounded-l-3xl md:rounded-r-none shadow-sm overflow-hidden">
+        <div className="w-full md:w-[40%] flex flex-col bg-white rounded-3xl md:rounded-l-3xl md:rounded-r-none shadow-sm overflow-hidden pointer-events-auto">
           {/* Header */}
-          <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50/50 flex justify-between items-center h-[72px] flex-shrink-0">
+          <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50/50 flex justify-between items-center h-[72px] flex-shrink-0 pointer-events-none">
             <div className="flex items-center gap-3 font-bold text-[15.5px] text-gray-900">
               <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/30">
                 <MessageSquare size={15} fill="white" />
@@ -673,7 +673,7 @@ export const ChatDemo = () => {
         </div>
 
         {/* ========== Right Panel (hidden on mobile) ========== */}
-        <div className="hidden md:flex flex-1 flex-col bg-white relative overflow-hidden rounded-r-3xl shadow-sm">
+        <div className="hidden md:flex flex-1 flex-col bg-white relative overflow-hidden rounded-r-3xl shadow-sm pointer-events-auto">
           {renderRightContent()}
         </div>
       </div>
