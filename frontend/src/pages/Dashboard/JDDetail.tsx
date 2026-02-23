@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { auth } from '@/config/firebase';
 import { jdAPI, applicationAPI } from '@/services/api';
 import { useDemoMode, DEMO_AI_JD_RESPONSE } from '@/components/onboarding';
@@ -135,9 +135,44 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     
     const displayProfileImage = jdData?.profileImage || profileImage;
     
-    const { isDemoMode, onDemoAction } = useDemoMode();
+    const { isDemoMode, onDemoAction, currentStepId } = useDemoMode();
     const currentUserId = auth.currentUser?.uid;
     const isOwner = isDemoMode || (currentUserId && jdData?.userId === currentUserId);
+
+    // 데모 모드: 드래그 &  드롭 시연 (섹션 순서 변경 애니메이션)
+    const [demoDragAnimating, setDemoDragAnimating] = useState(false);
+    useEffect(() => {
+        if (!isDemoMode || currentStepId !== 'p2-drag-demo' || !isEditing) return;
+        if (sectionOrder.length < 2) return;
+
+        // 1초 후 첫 번째/두 번째 섹션 swap 시연
+        const swapTimer = setTimeout(() => {
+            setDemoDragAnimating(true);
+            // 시각적 피드백: 잠깐 drag 상태 표시
+            setDraggedSection(sectionOrder[0]);
+            setDragOverIdx(1);
+        }, 800);
+
+        // 1.8초 후 실제 swap 적용
+        const applyTimer = setTimeout(() => {
+            setSectionOrder(prev => {
+                const newOrder = [...prev];
+                [newOrder[0], newOrder[1]] = [newOrder[1], newOrder[0]];
+                return newOrder;
+            });
+            setDraggedSection(null);
+            setDragOverIdx(null);
+            setDemoDragAnimating(false);
+        }, 1800);
+
+        return () => {
+            clearTimeout(swapTimer);
+            clearTimeout(applyTimer);
+            setDraggedSection(null);
+            setDragOverIdx(null);
+            setDemoDragAnimating(false);
+        };
+    }, [isDemoMode, currentStepId, isEditing]);
 
     // 수정 관련 함수
     const handleEdit = () => {
@@ -200,6 +235,9 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     };
 
     // Section drag & drop handlers
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const autoScrollRAF = useRef<number | null>(null);
+
     const handleSectionDragStart = (e: React.DragEvent, section: string) => {
         e.dataTransfer.effectAllowed = 'move';
         setDraggedSection(section);
@@ -209,7 +247,29 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
         e.dataTransfer.dropEffect = 'move';
         setDragOverIdx(idx);
     };
+    // 드래그 중 자동 스크롤 (상하 가장자리 80px 영역)
+    const handleDragAutoScroll = useCallback((e: React.DragEvent) => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+        const rect = container.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        const EDGE = 80;
+        const SPEED = 18;
+        if (autoScrollRAF.current) cancelAnimationFrame(autoScrollRAF.current);
+        if (y < EDGE) {
+            const factor = 1 - y / EDGE;
+            const scroll = () => { container.scrollTop -= SPEED * factor; autoScrollRAF.current = requestAnimationFrame(scroll); };
+            autoScrollRAF.current = requestAnimationFrame(scroll);
+        } else if (y > rect.height - EDGE) {
+            const factor = 1 - (rect.height - y) / EDGE;
+            const scroll = () => { container.scrollTop += SPEED * factor; autoScrollRAF.current = requestAnimationFrame(scroll); };
+            autoScrollRAF.current = requestAnimationFrame(scroll);
+        }
+    }, []);
+    const stopAutoScroll = useCallback(() => { if (autoScrollRAF.current) { cancelAnimationFrame(autoScrollRAF.current); autoScrollRAF.current = null; } }, []);
+
     const handleSectionDrop = (dropIdx: number) => {
+        stopAutoScroll();
         if (!draggedSection) return;
         const t = draggedSection as SectionType;
         if (!sectionOrder.includes(t)) {
@@ -222,7 +282,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
         }
         setDraggedSection(null); setDragOverIdx(null);
     };
-    const handleSectionDragEnd = () => { setDraggedSection(null); setDragOverIdx(null); };
+    const handleSectionDragEnd = () => { stopAutoScroll(); setDraggedSection(null); setDragOverIdx(null); };
     const removeSection = (s: SectionType) => setSectionOrder(prev => prev.filter(x => x !== s));
 
     const getDisplaySections = (): SectionType[] => {
@@ -1328,7 +1388,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                     </div>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto scrollbar-hide">
+                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-hide" onDragOver={isEditing ? handleDragAutoScroll : undefined} onDragLeave={isEditing ? stopAutoScroll : undefined} onDrop={isEditing ? stopAutoScroll : undefined}>
                     <div className="p-8 space-y-8">
                         {/* 공고 제목 */}
                         <div>
@@ -1349,22 +1409,25 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
 
                         {/* 섹션 팔레트 */}
                         {isEditing && paletteSections.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-2 p-3 bg-gradient-to-r from-gray-50 to-blue-50/50 border border-blue-100 rounded-xl">
+                            <div data-tour="section-palette" className="flex flex-wrap items-center gap-2 p-3 bg-gradient-to-r from-gray-50 to-blue-50/50 border border-blue-100 rounded-xl">
                                 <span className="text-[11px] font-bold text-gray-400 mr-1">섹션 추가</span>
                                 {paletteSections.map(s => (
                                     <div
                                         key={s}
                                         draggable
                                         onDragStart={(e) => handleSectionDragStart(e, s)}
-                                        className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] font-medium text-gray-600 cursor-grab hover:border-blue-300 hover:shadow-sm active:cursor-grabbing transition-all select-none"
+                                        onClick={() => setSectionOrder(prev => [...prev, s])}
+                                        className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] font-medium text-gray-600 cursor-grab hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm active:cursor-grabbing transition-all select-none"
+                                        title="클릭 또는 드래그하여 추가"
                                     >
-                                        {SECTION_META[s].label}
+                                        + {SECTION_META[s].label}
                                     </div>
                                 ))}
                             </div>
                         )}
 
                         {/* 동적 섹션 렌더링 */}
+                        <div data-tour="section-drag-area">
                         {activeSections.map((section, idx) => (
                             <div
                                 key={section}
@@ -1373,12 +1436,13 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                 onDragOver={(e) => isEditing && handleSectionDragOver(e, idx)}
                                 onDrop={() => isEditing && handleSectionDrop(idx)}
                                 onDragEnd={handleSectionDragEnd}
-                                className={`relative group/section transition-all ${isEditing ? 'cursor-grab active:cursor-grabbing' : ''} ${dragOverIdx === idx ? 'ring-2 ring-blue-400 ring-offset-2 rounded-lg' : ''}`}
+                                data-tour={idx === 0 ? 'section-drag-first' : undefined}
+                                className={`relative group/section transition-all duration-300 ${isEditing ? 'cursor-grab active:cursor-grabbing' : ''} ${dragOverIdx === idx ? 'ring-2 ring-blue-400 ring-offset-2 rounded-lg' : ''} ${demoDragAnimating && draggedSection === sectionOrder[0] && idx === 0 ? 'opacity-60 scale-[0.98] ring-2 ring-blue-400 rounded-lg' : ''} ${demoDragAnimating && idx === 1 ? 'ring-2 ring-green-400 ring-offset-2 rounded-lg bg-green-50/30' : ''}`}
                             >
                                 {isEditing && (
-                                    <div className="flex items-center justify-between mb-1 py-1 opacity-0 group-hover/section:opacity-100 transition-opacity">
+                                    <div className={`flex items-center justify-between mb-1 py-1 transition-opacity ${isDemoMode && (currentStepId === 'p2-drag-sections' || currentStepId === 'p2-drag-demo') ? 'opacity-100' : 'opacity-0 group-hover/section:opacity-100'}`}>
                                         <span className="text-[10px] text-gray-400 flex items-center gap-1 select-none">
-                                            <span className="cursor-grab text-gray-300 hover:text-gray-500">⠇</span>
+                                            <span className={`cursor-grab text-gray-300 hover:text-gray-500 ${isDemoMode && currentStepId === 'p2-drag-sections' ? 'text-blue-500 animate-pulse text-sm' : ''}`}>⠇</span>
                                             {SECTION_META[section as SectionType]?.label}
                                         </span>
                                         <button onClick={() => removeSection(section as SectionType)} className="text-[10px] text-red-300 hover:text-red-500 font-medium transition-colors">제거</button>
@@ -1388,17 +1452,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                             </div>
                         ))}
 
-                        {/* 드롭 존 */}
-                        {isEditing && (
-                            <div
-                                onDragOver={(e) => { e.preventDefault(); setDragOverIdx(activeSections.length); }}
-                                onDrop={() => handleSectionDrop(activeSections.length)}
-                                onDragLeave={() => setDragOverIdx(null)}
-                                className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${dragOverIdx === activeSections.length ? 'border-blue-400 bg-blue-50/50' : 'border-gray-200 hover:border-gray-300'}`}
-                            >
-                                <p className="text-sm text-gray-400">여기에 섹션을 드래그하여 추가</p>
-                            </div>
-                        )}
+                        </div>
 
                         {/* Footer */}
                         <div className="pt-6 border-t border-gray-100 flex justify-end items-center">

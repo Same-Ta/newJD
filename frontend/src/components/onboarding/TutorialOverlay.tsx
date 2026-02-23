@@ -138,6 +138,10 @@ export default function TutorialOverlay({ onComplete, onNavigate }: TutorialOver
       if (action === 'jd-card-clicked' && step.id === 'p2-jd-card') {
         goNextRef.current();
       }
+      // 드래그 데모 완료 (섹션 순서 변경 시연)
+      if (action === 'drag-demo-complete' && step.id === 'p2-drag-demo') {
+        goNextRef.current();
+      }
       // 공고 저장 완료 (데모 모드)
       if (action === 'jd-save-complete' && step.id === 'p2-edit-save') {
         goNextRef.current();

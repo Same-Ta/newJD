@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronRight, MessageSquare, Users, Building2, Sparkles, Upload, FileText, CheckCircle2 } from 'lucide-react';
+import { ChevronRight, MessageSquare, Users, Building2, Sparkles, Upload, FileText, CheckCircle2, GripVertical } from 'lucide-react';
 
 /* ─────────── Types ─────────── */
 interface DemoSection {
@@ -77,8 +77,12 @@ export const ChatDemo = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
   const [height] = useState(typeof window !== 'undefined' && window.innerWidth < 768 ? 480 : 750);
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const rightPanelRef = useRef<HTMLDivElement>(null);
+  const autoScrollRAF = useRef<number | null>(null);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const hasStarted = useRef(false);
 
@@ -103,6 +107,9 @@ export const ChatDemo = () => {
     setSelectedSection(-1);
     setIsTyping(false);
     setShowPublish(false);
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+    if (autoScrollRAF.current) { cancelAnimationFrame(autoScrollRAF.current); autoScrollRAF.current = null; }
   }, [clearAll]);
 
   const scrollChat = useCallback(() => {
@@ -114,6 +121,59 @@ export const ChatDemo = () => {
   }, []);
 
   useEffect(() => { scrollChat(); }, [chatMessages, isTyping, scrollChat]);
+
+  /* ─── Drag & Drop ─── */
+  const handleDragStart = (idx: number) => (e: React.DragEvent) => {
+    setDraggedIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (idx: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIdx !== idx) setDragOverIdx(idx);
+    // auto-scroll right panel
+    const container = rightPanelRef.current;
+    if (container && container.contains(e.target as Node)) {
+      const rect = container.getBoundingClientRect();
+      const EDGE = 80, SPEED = 18;
+      if (autoScrollRAF.current) cancelAnimationFrame(autoScrollRAF.current);
+      const topDist = e.clientY - rect.top;
+      const bottomDist = rect.bottom - e.clientY;
+      if (topDist < EDGE) {
+        const factor = 1 - topDist / EDGE;
+        const scroll = () => { container.scrollTop -= SPEED * factor; autoScrollRAF.current = requestAnimationFrame(scroll); };
+        autoScrollRAF.current = requestAnimationFrame(scroll);
+      } else if (bottomDist < EDGE) {
+        const factor = 1 - bottomDist / EDGE;
+        const scroll = () => { container.scrollTop += SPEED * factor; autoScrollRAF.current = requestAnimationFrame(scroll); };
+        autoScrollRAF.current = requestAnimationFrame(scroll);
+      } else {
+        if (autoScrollRAF.current) { cancelAnimationFrame(autoScrollRAF.current); autoScrollRAF.current = null; }
+      }
+    }
+  };
+
+  const handleDrop = (idx: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggedIdx !== null && draggedIdx !== idx) {
+      setJd(prev => {
+        const arr = [...prev.sections];
+        const [moved] = arr.splice(draggedIdx, 1);
+        arr.splice(idx, 0, moved);
+        return { ...prev, sections: arr };
+      });
+    }
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+    if (autoScrollRAF.current) { cancelAnimationFrame(autoScrollRAF.current); autoScrollRAF.current = null; }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+    if (autoScrollRAF.current) { cancelAnimationFrame(autoScrollRAF.current); autoScrollRAF.current = null; }
+  };
 
   /* ─── Timeline ─── */
   const play = useCallback(() => {
@@ -361,19 +421,28 @@ export const ChatDemo = () => {
             <CheckCircle2 size={20} className="text-green-500" />
             <h3 className="text-[15px] font-bold text-gray-900">초안이 완성되었습니다!</h3>
           </div>
-          <p className="text-[12px] text-gray-400 mb-4">수정하고 싶은 섹션을 클릭하여 AI와 대화해보세요</p>
+          <p className="text-[12px] text-gray-400 mb-4">섹션을 드래그하여 순서를 변경해보세요</p>
 
-          <div className="space-y-2.5 flex-1 overflow-y-auto scrollbar-hide">
-            {COMPLETED_JD.sections.map((section, i) => (
+          <div className="space-y-2.5 flex-1 overflow-y-auto scrollbar-hide pointer-events-auto" onDragOver={(e) => e.preventDefault()}>
+            {jd.sections.map((section, i) => (
               <div
-                key={i}
-                className={`p-3.5 rounded-xl border transition-all duration-500 ${
+                key={section.label}
+                draggable
+                onDragStart={handleDragStart(i)}
+                onDragOver={handleDragOver(i)}
+                onDrop={handleDrop(i)}
+                onDragEnd={handleDragEnd}
+                className={`p-3.5 rounded-xl border transition-all duration-300 cursor-grab active:cursor-grabbing select-none ${
                   visibleSections.includes(i)
                     ? 'opacity-100 translate-y-0 border-gray-200 bg-white'
                     : 'opacity-0 translate-y-3 border-transparent'
+                } ${draggedIdx === i ? '!opacity-50 scale-[0.97] shadow-lg' : ''} ${
+                  dragOverIdx === i && draggedIdx !== null && draggedIdx !== i
+                    ? 'ring-2 ring-blue-400 bg-blue-50/30 !border-blue-200' : ''
                 }`}
               >
                 <div className="flex items-center gap-2.5">
+                  <GripVertical size={14} className="text-gray-300 flex-shrink-0" />
                   <span className="text-[16px]">{section.icon}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-bold text-gray-800">{section.label}</p>
@@ -496,54 +565,61 @@ export const ChatDemo = () => {
 
     /* Phase 4+: 전체 JD 미리보기 */
     return (
-      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 scrollbar-hide demo-phase-enter">
+      <div ref={rightPanelRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-5 scrollbar-hide demo-phase-enter">
         {/* Title */}
         <div>
           <h1 className="text-[20px] font-bold text-gray-900 mb-1">{jd.title}</h1>
-          <p className="text-[12px] text-gray-400">{jd.teamName} · 개발 동아리 · 서울 캠퍼스</p>
+          <p className="text-[12px] text-gray-400 mb-2">{jd.teamName} · 개발 동아리 · 서울 캠퍼스</p>
+          <p className="text-[12px] text-gray-600 leading-relaxed">{jd.description}</p>
         </div>
 
-        {/* Description */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4">
-          <h4 className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-            📝 동아리 소개
-          </h4>
-          <p className="text-[13px] text-gray-700 leading-relaxed">{jd.description}</p>
-        </div>
-
-        {/* Sections */}
-        {jd.sections.slice(1).map((section, i) => (
-          <div
-            key={i}
-            className={`space-y-2 transition-all duration-500 ${
-              visibleSections.includes(i + 1) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-            } ${selectedSection === i + 1 || (selectedSection === 0 && i === -1) ? '' : ''}`}
-          >
-            <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-              <span>{section.icon}</span> {section.label}
-            </h4>
-            <div className="space-y-1.5">
-              {section.items.map((item, j) => (
-                <label
-                  key={j}
-                  className="flex items-start gap-2.5 p-2 rounded-lg transition-colors"
-                >
-                  {section.label.includes('필수') || section.label.includes('우대') ? (
-                    <input type="checkbox" className="mt-0.5 w-3.5 h-3.5 text-blue-600 border-gray-300 rounded pointer-events-none" readOnly />
-                  ) : (
-                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
-                  )}
-                  <span className="text-[12px] text-gray-700 leading-relaxed">{item}</span>
-                </label>
-              ))}
+        {/* Sections - Draggable */}
+        <div className="space-y-4 pointer-events-auto" onDragOver={(e) => e.preventDefault()}>
+          {jd.sections.map((section, i) => (
+            <div
+              key={section.label}
+              draggable
+              onDragStart={handleDragStart(i)}
+              onDragOver={handleDragOver(i)}
+              onDrop={handleDrop(i)}
+              onDragEnd={handleDragEnd}
+              className={`space-y-2 rounded-xl p-3.5 border transition-all duration-300 cursor-grab active:cursor-grabbing select-none
+                ${visibleSections.includes(i) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+                ${draggedIdx === i ? '!opacity-50 scale-[0.97] shadow-lg' : ''}
+                ${dragOverIdx === i && draggedIdx !== null && draggedIdx !== i
+                  ? 'ring-2 ring-blue-400 bg-blue-50/50 border-blue-200'
+                  : 'border-gray-100 bg-white hover:border-gray-200'}
+                ${selectedSection === i && phase >= 5 ? 'ring-2 ring-blue-400 bg-blue-50/30' : ''}
+              `}
+            >
+              <div className="flex items-center gap-2">
+                <GripVertical size={14} className="text-gray-300 flex-shrink-0" />
+                <span className="text-[14px]">{section.icon}</span>
+                <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{section.label}</h4>
+              </div>
+              <div className="space-y-1.5 pl-6">
+                {section.items.map((item, j) => (
+                  <div
+                    key={j}
+                    className="flex items-start gap-2.5 p-1.5 rounded-lg"
+                  >
+                    {section.label.includes('필수') || section.label.includes('우대') ? (
+                      <input type="checkbox" className="mt-0.5 w-3.5 h-3.5 text-blue-600 border-gray-300 rounded pointer-events-none" readOnly />
+                    ) : (
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
+                    )}
+                    <span className="text-[12px] text-gray-700 leading-relaxed">{item}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
 
         {/* Selected section highlight */}
         {selectedSection === 0 && phase >= 5 && (
           <div className="ring-2 ring-blue-400 rounded-xl p-3 bg-blue-50/30 -mt-3 transition-all duration-500 demo-phase-enter">
-            <p className="text-[11px] font-bold text-blue-600 mb-1">✏️ 수정 중: 동아리 소개</p>
+            <p className="text-[11px] font-bold text-blue-600 mb-1">✏️ 수정 중: {jd.sections[0]?.label || '동아리 소개'}</p>
             <p className="text-[12px] text-gray-600 leading-relaxed italic">
               "함께 코드로 세상을 바꿀 동료를 찾습니다! Winnow는 열정 넘치는 개발자들이 모여..."
             </p>

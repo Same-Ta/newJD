@@ -163,9 +163,10 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
     const chatEndRef = useRef<HTMLDivElement>(null);
     const [isEditMode, setIsEditMode] = useState(false);
     const [editedJD, setEditedJD] = useState<CurrentJD>(currentJD);
-    const [showAddMenu, setShowAddMenu] = useState(false); // 편집 모드 항목 추가 메뉴
 
     // Section drag & drop state
+    const previewScrollRef = useRef<HTMLDivElement>(null);
+    const autoScrollRAF = useRef<number | null>(null);
     const [sectionOrder, setSectionOrder] = useState<SectionType[]>(['description', 'recruitment', 'visionMission', 'requirements', 'preferred', 'benefits']);
     const [draggedSection, setDraggedSection] = useState<string | null>(null);
     const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
@@ -514,14 +515,12 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         setMessages(prev => [...prev, changeMessage]);
         
         setIsEditMode(false);
-        setShowAddMenu(false);
     };
 
     // 편집 취소
     const cancelEdit = () => {
         setEditedJD(currentJD);
         setIsEditMode(false);
-        setShowAddMenu(false);
     };
 
     // ===== Section Drag & Drop Handlers =====
@@ -534,7 +533,29 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         e.dataTransfer.dropEffect = 'move';
         setDragOverIdx(idx);
     };
+    // 드래그 중 자동 스크롤 (상하 가장자리 80px 영역)
+    const handleDragAutoScroll = (e: React.DragEvent) => {
+        const container = previewScrollRef.current;
+        if (!container) return;
+        const rect = container.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        const EDGE = 80;
+        const SPEED = 18;
+        if (autoScrollRAF.current) cancelAnimationFrame(autoScrollRAF.current);
+        if (y < EDGE) {
+            const factor = 1 - y / EDGE;
+            const scroll = () => { container.scrollTop -= SPEED * factor; autoScrollRAF.current = requestAnimationFrame(scroll); };
+            autoScrollRAF.current = requestAnimationFrame(scroll);
+        } else if (y > rect.height - EDGE) {
+            const factor = 1 - (rect.height - y) / EDGE;
+            const scroll = () => { container.scrollTop += SPEED * factor; autoScrollRAF.current = requestAnimationFrame(scroll); };
+            autoScrollRAF.current = requestAnimationFrame(scroll);
+        }
+    };
+    const stopAutoScroll = () => { if (autoScrollRAF.current) { cancelAnimationFrame(autoScrollRAF.current); autoScrollRAF.current = null; } };
+
     const handleSectionDrop = (dropIdx: number) => {
+        stopAutoScroll();
         if (!draggedSection) return;
         const t = draggedSection as SectionType;
         if (!sectionOrder.includes(t)) {
@@ -547,7 +568,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
         }
         setDraggedSection(null); setDragOverIdx(null);
     };
-    const handleSectionDragEnd = () => { setDraggedSection(null); setDragOverIdx(null); };
+    const handleSectionDragEnd = () => { stopAutoScroll(); setDraggedSection(null); setDragOverIdx(null); };
     const removeSection = (s: SectionType) => setSectionOrder(prev => prev.filter(x => x !== s));
 
     // Active/palette sections
@@ -2414,7 +2435,7 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                 {/* Right Content Section */}
                 <div className="flex-1 flex flex-col overflow-hidden">
                     
-                    <div className="flex-1 overflow-y-auto space-y-8" style={{ padding: isMobile ? '16px' : (chatWidth > 40 ? '32px' : '16px'), paddingTop: isMobile ? '16px' : (chatWidth > 40 ? '32px' : '16px') }}>
+                    <div ref={previewScrollRef} className="flex-1 overflow-y-auto space-y-8" onDragOver={isEditMode ? handleDragAutoScroll : undefined} onDragLeave={isEditMode ? stopAutoScroll : undefined} onDrop={isEditMode ? stopAutoScroll : undefined} style={{ padding: isMobile ? '16px' : (chatWidth > 40 ? '32px' : '16px'), paddingTop: isMobile ? '16px' : (chatWidth > 40 ? '32px' : '16px') }}>
                         {!currentJD.title && currentJD.responsibilities.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-center">
                                 <div className="bg-gray-50 rounded-full flex items-center justify-center mb-4" style={{ width: chatWidth > 40 ? '64px' : '48px', height: chatWidth > 40 ? '64px' : '48px' }}>
@@ -2493,112 +2514,70 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                     )}
                                 </div>
 
-                                {/* 편집 모드 추가 메뉴 */}
+                                {/* 편집 모드 툴바 */}
                                 {isEditMode && (
                                     <div className="space-y-2">
-                                        {/* 메뉴 토글 버튼 */}
-                                        <button
-                                            onClick={() => setShowAddMenu(!showAddMenu)}
-                                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all text-[13px] font-bold ${
-                                                showAddMenu
-                                                    ? 'border-blue-400 bg-blue-50 text-blue-700'
-                                                    : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300 hover:bg-blue-50/50'
-                                            }`}
-                                        >
-                                            <span>{showAddMenu ? '추가 메뉴 닫기' : '+ 항목 추가하기'}</span>
-                                            <span className={`transition-transform ${showAddMenu ? 'rotate-180' : ''}`}>▾</span>
-                                        </button>
-
-                                        {showAddMenu && (
-                                            <div className="bg-white border-2 border-gray-200 rounded-xl p-4 space-y-4 animate-fadeIn">
-                                                {/* 섹션 추가 영역 */}
-                                                {paletteSections.length > 0 && (
-                                                    <div>
-                                                        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">새 섹션 추가</p>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {paletteSections.map(s => (
-                                                                <button
-                                                                    key={s}
-                                                                    onClick={() => { setSectionOrder(prev => [...prev, s]); }}
-                                                                    className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-[12px] font-medium text-gray-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-all"
-                                                                >
-                                                                    + {SECTION_META[s].label}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* 항목 추가 영역 */}
-                                                <div>
-                                                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">기존 섹션에 항목 추가</p>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {sectionOrder.includes('requirements') && (
-                                                            <button
-                                                                onClick={() => { addArrayItem('requirements'); setShowAddMenu(false); }}
-                                                                className="px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-[12px] font-semibold text-blue-700 hover:bg-blue-100 transition-all text-left"
-                                                            >
-                                                                + {jdType === 'company' ? '자격 요건' : '필수 체크리스트'}
-                                                            </button>
-                                                        )}
-                                                        {sectionOrder.includes('preferred') && (
-                                                            <button
-                                                                onClick={() => { addArrayItem('preferred'); setShowAddMenu(false); }}
-                                                                className="px-3 py-2 bg-purple-50 border border-purple-100 rounded-lg text-[12px] font-semibold text-purple-700 hover:bg-purple-100 transition-all text-left"
-                                                            >
-                                                                + {jdType === 'company' ? '우대 사항' : '우대 체크리스트'}
-                                                            </button>
-                                                        )}
-                                                        {sectionOrder.includes('benefits') && (
-                                                            <button
-                                                                onClick={() => { addArrayItem('benefits'); setShowAddMenu(false); }}
-                                                                className="px-3 py-2 bg-orange-50 border border-orange-100 rounded-lg text-[12px] font-semibold text-orange-700 hover:bg-orange-100 transition-all text-left"
-                                                            >
-                                                                + {jdType === 'company' ? '복리후생' : '활동 혜택'}
-                                                            </button>
-                                                        )}
-                                                        <button
-                                                            onClick={() => { addArrayItem('responsibilities'); setShowAddMenu(false); }}
-                                                            className="px-3 py-2 bg-green-50 border border-green-100 rounded-lg text-[12px] font-semibold text-green-700 hover:bg-green-100 transition-all text-left"
-                                                        >
-                                                            + {jdType === 'company' ? '주요 업무' : '주요 활동'}
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* 기술 스택 추가 */}
-                                                <div>
-                                                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">기타</p>
-                                                    <button
-                                                        onClick={() => {
-                                                            const techs = editedJD.techStacks || [];
-                                                            setEditedJD({ ...editedJD, techStacks: [...techs, { name: '', level: 50 }] });
-                                                            setShowAddMenu(false);
-                                                        }}
-                                                        className="px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-lg text-[12px] font-semibold text-indigo-700 hover:bg-indigo-100 transition-all"
+                                        {/* 섹션 팔레트 (드래그/클릭으로 추가) */}
+                                        {paletteSections.length > 0 && (
+                                            <div className="flex flex-wrap items-center gap-2 p-3 bg-gradient-to-r from-gray-50 to-blue-50/50 border border-blue-100 rounded-xl">
+                                                <span className="text-[11px] font-bold text-gray-400 mr-1">섹션 추가</span>
+                                                {paletteSections.map(s => (
+                                                    <div
+                                                        key={s}
+                                                        draggable
+                                                        onDragStart={(e) => handleSectionDragStart(e, s)}
+                                                        onClick={() => setSectionOrder(prev => [...prev, s])}
+                                                        className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] font-medium text-gray-600 cursor-grab hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm active:cursor-grabbing transition-all select-none"
+                                                        title="클릭 또는 드래그하여 추가"
                                                     >
-                                                        + 기술 스택 / 스킬
-                                                    </button>
-                                                </div>
+                                                        + {SECTION_META[s].label}
+                                                    </div>
+                                                ))}
                                             </div>
                                         )}
-                                    </div>
-                                )}
-
-                                {/* 섹션 팔레트 (드래그용) */}
-                                {isEditMode && paletteSections.length > 0 && !showAddMenu && (
-                                    <div className="flex flex-wrap items-center gap-2 p-3 bg-gradient-to-r from-gray-50 to-blue-50/50 border border-blue-100 rounded-xl">
-                                        <span className="text-[11px] font-bold text-gray-400 mr-1">섹션 추가</span>
-                                        {paletteSections.map(s => (
-                                            <div
-                                                key={s}
-                                                draggable
-                                                onDragStart={(e) => handleSectionDragStart(e, s)}
-                                                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] font-medium text-gray-600 cursor-grab hover:border-blue-300 hover:shadow-sm active:cursor-grabbing transition-all select-none"
+                                        {/* 기존 섹션 항목 추가 */}
+                                        <div className="flex flex-wrap items-center gap-2 p-3 bg-gradient-to-r from-gray-50 to-green-50/50 border border-green-100 rounded-xl">
+                                            <span className="text-[11px] font-bold text-gray-400 mr-1">항목 추가</span>
+                                            {sectionOrder.includes('requirements') && (
+                                                <button
+                                                    onClick={() => addArrayItem('requirements')}
+                                                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] font-medium text-blue-600 hover:border-blue-300 hover:bg-blue-50 hover:shadow-sm transition-all"
+                                                >
+                                                    + {jdType === 'company' ? '자격 요건' : '필수 체크리스트'}
+                                                </button>
+                                            )}
+                                            {sectionOrder.includes('preferred') && (
+                                                <button
+                                                    onClick={() => addArrayItem('preferred')}
+                                                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] font-medium text-purple-600 hover:border-purple-300 hover:bg-purple-50 hover:shadow-sm transition-all"
+                                                >
+                                                    + {jdType === 'company' ? '우대 사항' : '우대 체크리스트'}
+                                                </button>
+                                            )}
+                                            {sectionOrder.includes('benefits') && (
+                                                <button
+                                                    onClick={() => addArrayItem('benefits')}
+                                                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] font-medium text-orange-600 hover:border-orange-300 hover:bg-orange-50 hover:shadow-sm transition-all"
+                                                >
+                                                    + {jdType === 'company' ? '복리후생' : '활동 혜택'}
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => addArrayItem('responsibilities')}
+                                                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] font-medium text-green-600 hover:border-green-300 hover:bg-green-50 hover:shadow-sm transition-all"
                                             >
-                                                {SECTION_META[s].label}
-                                            </div>
-                                        ))}
+                                                + {jdType === 'company' ? '주요 업무' : '주요 활동'}
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const techs = editedJD.techStacks || [];
+                                                    setEditedJD({ ...editedJD, techStacks: [...techs, { name: '', level: 50 }] });
+                                                }}
+                                                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] font-medium text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 hover:shadow-sm transition-all"
+                                            >
+                                                + 기술 스택 / 스킬
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
 
@@ -2649,18 +2628,6 @@ export const ChatInterface = ({ onNavigate }: ChatInterfaceProps) => {
                                         {renderSectionContent(section)}
                                     </div>
                                 ))}
-
-                                {/* 드롭 존 */}
-                                {isEditMode && (
-                                    <div
-                                        onDragOver={(e) => { e.preventDefault(); setDragOverIdx(activeSections.length); }}
-                                        onDrop={() => handleSectionDrop(activeSections.length)}
-                                        onDragLeave={() => setDragOverIdx(null)}
-                                        className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${dragOverIdx === activeSections.length ? 'border-blue-400 bg-blue-50/50' : 'border-gray-200 hover:border-gray-300'}`}
-                                    >
-                                        <p className="text-sm text-gray-400">여기에 섹션을 드래그하여 추가</p>
-                                    </div>
-                                )}
 
                                 {/* Footer */}
                                 <div className="pt-6 border-t border-gray-100 flex justify-end items-center gap-2">
