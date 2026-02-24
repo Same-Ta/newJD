@@ -1210,9 +1210,9 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     }
 
     return (
-        <div className="flex flex-col h-full bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden max-w-[1200px] mx-auto" style={{ height: 'calc(100vh - 140px)'}}>
+        <div className="flex flex-col h-full bg-white md:rounded-2xl md:border border-gray-200 md:shadow-xl overflow-hidden max-w-[1200px] mx-auto">
             
-            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+            <div className="flex flex-col md:flex-row flex-1 min-h-0">
                 {/* Left Profile Section */}
                 <div className="hidden md:flex w-[240px] border-r border-gray-100 flex-col bg-[#FAFBFC] pt-16 overflow-y-auto scrollbar-hide">
                 {/* Profile Image */}
@@ -1335,7 +1335,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
             </div>
 
             {/* Right Content Section */}
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-white">
                     <div className="flex items-center gap-2">
                         <h3 className="font-bold text-lg text-gray-800">공고 상세</h3>
@@ -1388,7 +1388,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                     </div>
                 </div>
                 
-                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-hide" onDragOver={isEditing ? handleDragAutoScroll : undefined} onDragLeave={isEditing ? stopAutoScroll : undefined} onDrop={isEditing ? stopAutoScroll : undefined}>
+                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }} onDragOver={isEditing ? handleDragAutoScroll : undefined} onDragLeave={isEditing ? stopAutoScroll : undefined} onDrop={isEditing ? stopAutoScroll : undefined}>
                     <div className="p-8 space-y-8">
                         {/* 공고 제목 */}
                         <div>

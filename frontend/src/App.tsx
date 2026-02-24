@@ -461,7 +461,7 @@ const App = () => {
             )}
           </div>
         </header>
-        <main className="pt-16">
+        <main className="pt-16 h-[100dvh] overflow-hidden">
           <Suspense fallback={<PageLoader />}>
             <JDDetail jdId={selectedJdId} onNavigate={navigateTo} />
           </Suspense>
