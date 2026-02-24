@@ -283,7 +283,12 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
         setDraggedSection(null); setDragOverIdx(null);
     };
     const handleSectionDragEnd = () => { stopAutoScroll(); setDraggedSection(null); setDragOverIdx(null); };
-    const removeSection = (s: SectionType) => setSectionOrder(prev => prev.filter(x => x !== s));
+    const removeSection = (s: SectionType) => {
+        setSectionOrder(prev => prev.filter(x => x !== s));
+        if (s === 'requirements') updateEditedField('requirements', []);
+        else if (s === 'preferred') updateEditedField('preferred', []);
+        else if (s === 'benefits') updateEditedField('benefits', []);
+    };
 
     const getDisplaySections = (): SectionType[] => {
         if (!jdData) return [];
@@ -540,7 +545,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                         placeholder="회사/동아리 소개를 입력하세요"
                                     />
                                 ) : (
-                                    <p className="text-[14px] text-gray-700 leading-relaxed">{jdData.description}</p>
+                                    <p className="text-[14px] text-gray-700 leading-relaxed whitespace-pre-wrap">{jdData.description}</p>
                                 )}
                             </div>
                         </div>
@@ -664,7 +669,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                 placeholder="비전을 입력하세요"
                                             />
                                         ) : (
-                                            jdData.vision && <p className="text-[13px] text-gray-700 leading-relaxed">{jdData.vision}</p>
+                                            jdData.vision && <p className="text-[13px] text-gray-700 leading-relaxed whitespace-pre-wrap">{jdData.vision}</p>
                                         )}
                                     </div>
                                     <div>
@@ -678,7 +683,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                 placeholder="미션을 입력하세요"
                                             />
                                         ) : (
-                                            jdData.mission && <p className="text-[13px] text-gray-700 leading-relaxed">{jdData.mission}</p>
+                                            jdData.mission && <p className="text-[13px] text-gray-700 leading-relaxed whitespace-pre-wrap">{jdData.mission}</p>
                                         )}
                                     </div>
                                 </div>
@@ -758,9 +763,11 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                             if (ki < idx) newTypes[ki] = currentTypes[ki];
                                                             else if (ki > idx) newTypes[ki - 1] = currentTypes[ki];
                                                         });
-                                                        updateEditedField('requirements', newReqs.length ? newReqs : ['']);
+                                                        updateEditedField('requirements', newReqs);
                                                         updateEditedField('requirementTypes', newTypes);
                                                     }}
+                                                    type="button"
+                                                    onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
                                                     className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors"
                                                 >✕</button>
                                             </div>
@@ -878,9 +885,11 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                             if (ki < idx) newTypes[ki] = currentTypes[ki];
                                                             else if (ki > idx) newTypes[ki - 1] = currentTypes[ki];
                                                         });
-                                                        updateEditedField('preferred', newPref.length ? newPref : ['']);
+                                                        updateEditedField('preferred', newPref);
                                                         updateEditedField('preferredTypes', newTypes);
                                                     }}
+                                                    type="button"
+                                                    onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
                                                     className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors"
                                                 >✕</button>
                                             </div>
@@ -958,6 +967,8 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                         const newBenefits = current.filter((_, i) => i !== idx);
                                                         updateEditedField('benefits', newBenefits.length ? newBenefits : ['']);
                                                     }}
+                                                    type="button"
+                                                    onPointerDown={(e) => e.stopPropagation()}
                                                     className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors"
                                                 >✕</button>
                                             </div>
@@ -1015,6 +1026,8 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                             const newOptions = (editedData?.applicationFields?.skillOptions || []).filter((_, i) => i !== catIdx);
                                                             updateEditedField('applicationFields', { ...editedData?.applicationFields, skillOptions: newOptions });
                                                         }}
+                                                        type="button"
+                                                        onPointerDown={(e) => e.stopPropagation()}
                                                         className="text-red-300 hover:text-red-500 text-[11px] transition-colors"
                                                     >✕</button>
                                                 </>
@@ -1432,7 +1445,13 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                             <div
                                 key={section}
                                 draggable={isEditing}
-                                onDragStart={(e) => isEditing && handleSectionDragStart(e, section)}
+                                onDragStart={(e) => {
+                                    if ((e.target as HTMLElement).closest('button, input, textarea, select, a')) {
+                                        e.preventDefault();
+                                        return;
+                                    }
+                                    isEditing && handleSectionDragStart(e, section);
+                                }}
                                 onDragOver={(e) => isEditing && handleSectionDragOver(e, idx)}
                                 onDrop={() => isEditing && handleSectionDrop(idx)}
                                 onDragEnd={handleSectionDragEnd}

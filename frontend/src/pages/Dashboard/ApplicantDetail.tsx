@@ -338,7 +338,7 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
                                         <div className="flex-1">
                                             <p className="text-sm font-medium text-gray-900">{answer.question}</p>
                                             {answer.detail && (
-                                                <p className="text-xs text-gray-500 mt-1">{answer.detail}</p>
+                                                <p className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{answer.detail}</p>
                                             )}
                                         </div>
                                     </div>
@@ -347,7 +347,7 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
                         </div>
                     )}
 
-                    {/* 우대 사항 / 우대 체크리스트 */}
+                    {/* 우대 사항 / 우대 체크리스트 */}}
                     {application.preferredAnswers && application.preferredAnswers.length > 0 && (
                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                             <div className="flex items-center justify-between mb-4">
@@ -367,7 +367,7 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
                                         <div className="flex-1">
                                             <p className="text-sm font-medium text-gray-900">{answer.question}</p>
                                             {answer.detail && (
-                                                <p className="text-xs text-gray-500 mt-1">{answer.detail}</p>
+                                                <p className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{answer.detail}</p>
                                             )}
                                         </div>
                                     </div>
