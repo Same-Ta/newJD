@@ -763,11 +763,11 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                             if (ki < idx) newTypes[ki] = currentTypes[ki];
                                                             else if (ki > idx) newTypes[ki - 1] = currentTypes[ki];
                                                         });
-                                                        updateEditedField('requirements', newReqs);
-                                                        updateEditedField('requirementTypes', newTypes);
+                                                        setEditedData(prev => prev ? { ...prev, requirements: newReqs, requirementTypes: newTypes } : prev);
                                                     }}
                                                     type="button"
-                                                    onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                                                    draggable={false}
+                                                    onMouseDown={(e) => e.stopPropagation()}
                                                     className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors"
                                                 >✕</button>
                                             </div>
@@ -885,11 +885,11 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                             if (ki < idx) newTypes[ki] = currentTypes[ki];
                                                             else if (ki > idx) newTypes[ki - 1] = currentTypes[ki];
                                                         });
-                                                        updateEditedField('preferred', newPref);
-                                                        updateEditedField('preferredTypes', newTypes);
+                                                        setEditedData(prev => prev ? { ...prev, preferred: newPref, preferredTypes: newTypes } : prev);
                                                     }}
                                                     type="button"
-                                                    onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                                                    draggable={false}
+                                                    onMouseDown={(e) => e.stopPropagation()}
                                                     className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors"
                                                 >✕</button>
                                             </div>
@@ -968,7 +968,8 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                         updateEditedField('benefits', newBenefits.length ? newBenefits : ['']);
                                                     }}
                                                     type="button"
-                                                    onPointerDown={(e) => e.stopPropagation()}
+                                                    draggable={false}
+                                                    onMouseDown={(e) => e.stopPropagation()}
                                                     className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors"
                                                 >✕</button>
                                             </div>
@@ -1027,7 +1028,8 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                             updateEditedField('applicationFields', { ...editedData?.applicationFields, skillOptions: newOptions });
                                                         }}
                                                         type="button"
-                                                        onPointerDown={(e) => e.stopPropagation()}
+                                                        draggable={false}
+                                                        onMouseDown={(e) => e.stopPropagation()}
                                                         className="text-red-300 hover:text-red-500 text-[11px] transition-colors"
                                                     >✕</button>
                                                 </>
