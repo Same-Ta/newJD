@@ -1,5 +1,5 @@
-﻿import { useState, useEffect, useRef } from 'react';
-import { Filter, Download, X, Sparkles, FileText, Trash2, Search, Calendar, ChevronDown, Users } from 'lucide-react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
+import { Filter, Download, X, Sparkles, FileText, Trash2, Search, Calendar, ChevronDown, Users, ClipboardList, Shuffle, ArrowUpDown, Clock, CheckCircle2 } from 'lucide-react';
 import { auth } from '@/config/firebase';
 import { applicationAPI, jdAPI } from '@/services/api';
 import { AIAnalysisDashboard } from '@/components/ai/AIAnalysisComponents';
@@ -66,6 +66,16 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
     
     const [openStatusDropdown, setOpenStatusDropdown] = useState<string | null>(null);
     const statusDropdownRef = useRef<HTMLDivElement>(null);
+
+    // 면접 일정 내보내기 모달 상태
+    const [showInterviewModal, setShowInterviewModal] = useState(false);
+    const [interviewSortOrder, setInterviewSortOrder] = useState<'alphabetical' | 'random'>('alphabetical');
+    const [interviewDate, setInterviewDate] = useState('');
+    const [interviewStartTime, setInterviewStartTime] = useState('09:00');
+    const [interviewDuration, setInterviewDuration] = useState(30); // 분
+    const [interviewBreak, setInterviewBreak] = useState(10); // 분
+    const [interviewLocation, setInterviewLocation] = useState('');
+    const [shuffledPassers, setShuffledPassers] = useState<Application[]>([]);
 
     useEffect(() => {
         if (isDemoMode) {
@@ -211,6 +221,101 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
             await runAnalysis(selectedApplicant);
         } finally {
             setSummaryLoading(false);
+        }
+    };
+
+    // 면접 일정 관련 함수
+    const getPassedApplicants = useCallback(() => {
+        return applications.filter(app => app.status === '합격');
+    }, [applications]);
+
+    const openInterviewModal = () => {
+        const passers = getPassedApplicants();
+        const sorted = [...passers].sort((a, b) =>
+            a.applicantName.localeCompare(b.applicantName, 'ko')
+        );
+        setShuffledPassers(sorted);
+        setInterviewSortOrder('alphabetical');
+        setShowInterviewModal(true);
+    };
+
+    const handleSortChange = (order: 'alphabetical' | 'random') => {
+        setInterviewSortOrder(order);
+        const passers = getPassedApplicants();
+        if (order === 'alphabetical') {
+            setShuffledPassers([...passers].sort((a, b) =>
+                a.applicantName.localeCompare(b.applicantName, 'ko')
+            ));
+        } else {
+            const arr = [...passers];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            setShuffledPassers(arr);
+        }
+    };
+
+    const calcInterviewTime = (index: number): string => {
+        if (!interviewDate || !interviewStartTime) return '-';
+        const [h, m] = interviewStartTime.split(':').map(Number);
+        const totalMinutes = h * 60 + m + index * (interviewDuration + interviewBreak);
+        const endMinutes = totalMinutes + interviewDuration;
+        const fmt = (mins: number) => {
+            const hh = Math.floor(mins / 60) % 24;
+            const mm = mins % 60;
+            return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+        };
+        return `${fmt(totalMinutes)} ~ ${fmt(endMinutes)}`;
+    };
+
+    const handleInterviewExcel = async () => {
+        const confirmed = confirm(
+            '개인정보 보안 경고\n\n' +
+            '엑셀 파일에는 합격자의 개인정보(이름, 이메일, 전화번호)가 포함되어 있습니다.\n\n' +
+            '이 파일은 안전하게 보관해주세요.\n' +
+            '미허가자에게 공유하거나 공개하지 마세요.\n\n' +
+            '다운로드하시겠습니까?'
+        );
+        if (!confirmed) return;
+
+        try {
+            const XLSX = await import('xlsx');
+
+            const excelData = shuffledPassers.map((app, index) => {
+                const timeSlot = calcInterviewTime(index);
+                return {
+                    '순번': index + 1,
+                    '이름': app.applicantName || '-',
+                    '이메일': app.applicantEmail || '-',
+                    '전화번호': app.applicantPhone || '-',
+                    '성별': app.applicantGender || '-',
+                    '지원공고': app.jdTitle || '-',
+                    '면접일자': interviewDate || '-',
+                    '면접시간': timeSlot,
+                    '면접장소': interviewLocation || '-',
+                    '소요시간(분)': interviewDuration,
+                    '정렬방식': interviewSortOrder === 'alphabetical' ? '가나다순' : '무작위',
+                };
+            });
+
+            const worksheet = XLSX.utils.json_to_sheet(excelData);
+            worksheet['!cols'] = [
+                { wch: 6 }, { wch: 12 }, { wch: 25 }, { wch: 15 },
+                { wch: 8 }, { wch: 30 }, { wch: 14 }, { wch: 18 },
+                { wch: 20 }, { wch: 14 }, { wch: 12 },
+            ];
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, '면접 일정');
+
+            const today = new Date();
+            const dateString = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+            XLSX.writeFile(workbook, `면접일정_${dateString}.xlsx`);
+            setShowInterviewModal(false);
+        } catch (error) {
+            console.error('면접 일정 엑셀 생성 실패:', error);
+            alert('엑셀 파일 생성 중 오류가 발생했습니다.');
         }
     };
 
@@ -444,6 +549,17 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                     </div>
                     
                     <div className="flex items-center gap-2 flex-wrap self-start">
+                        <button
+                            onClick={openInterviewModal}
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm flex-shrink-0"
+                        >
+                            <ClipboardList size={18}/> 면접 일정 내보내기
+                            {getPassedApplicants().length > 0 && (
+                                <span className="ml-1 px-1.5 py-0.5 bg-white/30 rounded-full text-xs font-bold">
+                                    {getPassedApplicants().length}명
+                                </span>
+                            )}
+                        </button>
                         <button
                             onClick={handleExcelDownload}
                             className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm flex-shrink-0"
@@ -818,6 +934,185 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                     </tbody>
                 </table>
             </div>
+
+            {/* 면접 일정 내보내기 모달 */}
+            {showInterviewModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowInterviewModal(false)}>
+                    <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+                        {/* 모달 헤더 */}
+                        <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 p-6 text-white">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h2 className="text-2xl font-bold mb-1">면접 일정 내보내기</h2>
+                                    <p className="text-indigo-100 text-sm">합격자 {getPassedApplicants().length}명의 면접 일정을 설정하고 엑셀로 내보냅니다.</p>
+                                </div>
+                                <button onClick={() => setShowInterviewModal(false)} className="p-2 hover:bg-white/20 rounded-lg transition-colors"><X size={24} /></button>
+                            </div>
+                        </div>
+
+                        <div className="overflow-y-auto max-h-[calc(90vh-200px)]">
+                            {getPassedApplicants().length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+                                    <CheckCircle2 size={48} className="text-gray-200 mb-4" />
+                                    <p className="text-gray-500 font-medium text-lg">합격자가 없습니다</p>
+                                    <p className="text-gray-400 text-sm mt-1">지원자 목록에서 상태를 '합격'으로 변경하면 면접 일정에 포함됩니다.</p>
+                                </div>
+                            ) : (
+                                <div className="p-6 space-y-6">
+                                    {/* 정렬 방식 */}
+                                    <div>
+                                        <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                            <ArrowUpDown size={16} className="text-indigo-500" />
+                                            정렬 방식 선택
+                                        </h3>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                onClick={() => handleSortChange('alphabetical')}
+                                                className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 text-sm font-semibold transition-all ${
+                                                    interviewSortOrder === 'alphabetical'
+                                                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                                                        : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                가나다순 (이름 순)
+                                            </button>
+                                            <button
+                                                onClick={() => handleSortChange('random')}
+                                                className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 text-sm font-semibold transition-all ${
+                                                    interviewSortOrder === 'random'
+                                                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                                                        : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                <Shuffle size={15} />
+                                                무작위 순서
+                                            </button>
+                                        </div>
+                                        {interviewSortOrder === 'random' && (
+                                            <button
+                                                onClick={() => handleSortChange('random')}
+                                                className="mt-2 text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+                                            >
+                                                <Shuffle size={12} /> 순서 다시 섞기
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* 면접 설정 */}
+                                    <div>
+                                        <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                            <Clock size={16} className="text-indigo-500" />
+                                            면접 일정 설정
+                                            <span className="text-xs text-gray-400 font-normal">(선택사항)</span>
+                                        </h3>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1 font-medium">면접 날짜</label>
+                                                <input
+                                                    type="date"
+                                                    value={interviewDate}
+                                                    onChange={e => setInterviewDate(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1 font-medium">시작 시간</label>
+                                                <input
+                                                    type="time"
+                                                    value={interviewStartTime}
+                                                    onChange={e => setInterviewStartTime(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1 font-medium">면접 소요시간 (분)</label>
+                                                <input
+                                                    type="number"
+                                                    min="5"
+                                                    max="180"
+                                                    value={interviewDuration}
+                                                    onChange={e => setInterviewDuration(Number(e.target.value))}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1 font-medium">면접 간 대기시간 (분)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="60"
+                                                    value={interviewBreak}
+                                                    onChange={e => setInterviewBreak(Number(e.target.value))}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                                />
+                                            </div>
+                                            <div className="col-span-2">
+                                                <label className="block text-xs text-gray-500 mb-1 font-medium">면접 장소</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="예: 본사 3층 회의실A"
+                                                    value={interviewLocation}
+                                                    onChange={e => setInterviewLocation(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 합격자 미리보기 */}
+                                    <div>
+                                        <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                            <Users size={16} className="text-indigo-500" />
+                                            면접 순서 미리보기
+                                            <span className="text-xs text-gray-400 font-normal">({shuffledPassers.length}명)</span>
+                                        </h3>
+                                        <div className="rounded-xl border border-gray-100 overflow-hidden">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-gray-50 text-xs text-gray-500 font-semibold">
+                                                    <tr>
+                                                        <th className="px-4 py-2.5 text-left">순번</th>
+                                                        <th className="px-4 py-2.5 text-left">이름</th>
+                                                        <th className="px-4 py-2.5 text-left">지원공고</th>
+                                                        <th className="px-4 py-2.5 text-left">면접시간</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-50">
+                                                    {shuffledPassers.map((app, i) => (
+                                                        <tr key={app.id} className="hover:bg-indigo-50/30 transition-colors">
+                                                            <td className="px-4 py-2.5 text-gray-500 font-medium">{i + 1}</td>
+                                                            <td className="px-4 py-2.5 font-semibold text-gray-900">{app.applicantName}</td>
+                                                            <td className="px-4 py-2.5 text-gray-500 text-xs">{app.jdTitle}</td>
+                                                            <td className="px-4 py-2.5 text-indigo-600 font-medium text-xs">
+                                                                {interviewDate ? `${interviewDate} ${calcInterviewTime(i)}` : calcInterviewTime(i)}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="border-t border-gray-100 p-5 bg-gray-50 flex justify-between items-center">
+                            <p className="text-xs text-gray-400">
+                                합격자 {getPassedApplicants().length}명 · {interviewSortOrder === 'alphabetical' ? '가나다순' : '무작위 순서'}
+                            </p>
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setShowInterviewModal(false)} className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">취소</button>
+                                <button
+                                    onClick={handleInterviewExcel}
+                                    disabled={getPassedApplicants().length === 0}
+                                    className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                                >
+                                    <Download size={16} /> 엑셀로 내보내기
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {selectedApplicant && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeModal}>
