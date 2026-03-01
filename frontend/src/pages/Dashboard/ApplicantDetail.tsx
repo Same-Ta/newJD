@@ -338,7 +338,7 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
                                         <div className="flex-1">
                                             <p className="text-sm font-medium text-gray-900">{answer.question}</p>
                                             {answer.detail && (
-                                                <p className="text-xs text-gray-500 mt-1">{answer.detail}</p>
+                                                <p className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{answer.detail}</p>
                                             )}
                                         </div>
                                     </div>
@@ -367,7 +367,7 @@ export const ApplicantDetail = ({ applicationId, onBack }: ApplicantDetailProps)
                                         <div className="flex-1">
                                             <p className="text-sm font-medium text-gray-900">{answer.question}</p>
                                             {answer.detail && (
-                                                <p className="text-xs text-gray-500 mt-1">{answer.detail}</p>
+                                                <p className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{answer.detail}</p>
                                             )}
                                         </div>
                                     </div>

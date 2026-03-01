@@ -100,6 +100,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
         preferredAnswers: {} as Record<number, { checked: boolean; detail: string }>,
         selectedSkills: {} as Record<string, string[]>
     });
+    const [formErrors, setFormErrors] = useState<Record<string, string>>({});
     
     // 공고 페이지에서의 체크박스 상태 (보여주기용)
     const [viewRequirementChecks, setViewRequirementChecks] = useState<Record<number, { checked: boolean; detail: string }>>({});
@@ -288,7 +289,12 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
         setDraggedSection(null); setDragOverIdx(null);
     };
     const handleSectionDragEnd = () => { stopAutoScroll(); setDraggedSection(null); setDragOverIdx(null); };
-    const removeSection = (s: SectionType) => setSectionOrder(prev => prev.filter(x => x !== s));
+    const removeSection = (s: SectionType) => {
+        setSectionOrder(prev => prev.filter(x => x !== s));
+        if (s === 'requirements') updateEditedField('requirements', []);
+        else if (s === 'preferred') updateEditedField('preferred', []);
+        else if (s === 'benefits') updateEditedField('benefits', []);
+    };
 
     const getDisplaySections = (): SectionType[] => {
         if (!jdData) return [];
@@ -422,18 +428,35 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     };
 
     const handleApplicationSubmit = async () => {
-        // 필수 필드 검증 (이름, 이메일은 항상 필수)
-        if (!applicationForm.name || !applicationForm.email) {
-            alert('이름과 이메일은 필수 입력 항목입니다.');
-            return;
-        }
-        
-        // 전화번호가 필수로 설정된 경우 검증
+        // 형식 유효성 검사
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const phoneRegex = /^01[016789]-?\d{3,4}-?\d{4}$/;
+        const urlRegex = /^https?:\/\/.+/;
         const fields = jdData?.applicationFields;
-        if (fields?.phone && !applicationForm.phone) {
-            alert('전화번호는 필수 입력 항목입니다.');
+        const errors: Record<string, string> = {};
+
+        if (!applicationForm.name.trim()) {
+            errors.name = '이름을 입력해주세요.';
+        }
+        if (!applicationForm.email.trim()) {
+            errors.email = '이메일을 입력해주세요.';
+        } else if (!emailRegex.test(applicationForm.email.trim())) {
+            errors.email = '올바른 이메일 형식으로 입력해주세요. (예: example@email.com)';
+        }
+        if (fields?.phone && !applicationForm.phone.trim()) {
+            errors.phone = '전화번호를 입력해주세요.';
+        } else if (applicationForm.phone.trim() && !phoneRegex.test(applicationForm.phone.replace(/\s/g, ''))) {
+            errors.phone = '올바른 전화번호 형식으로 입력해주세요. (예: 010-1234-5678)';
+        }
+        if (applicationForm.portfolio.trim() && !urlRegex.test(applicationForm.portfolio.trim())) {
+            errors.portfolio = '올바른 URL 형식으로 입력해주세요. (예: https://github.com/...)';
+        }
+
+        if (Object.keys(errors).length > 0) {
+            setFormErrors(errors);
             return;
         }
+        setFormErrors({});
 
         if (!jdId || !jdData) {
             alert('공고 정보를 불러올 수 없습니다.');
@@ -545,7 +568,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                         placeholder="회사/동아리 소개를 입력하세요"
                                     />
                                 ) : (
-                                    <p className="text-[14px] text-gray-700 leading-relaxed">{jdData.description}</p>
+                                    <p className="text-[14px] text-gray-700 leading-relaxed whitespace-pre-wrap">{jdData.description}</p>
                                 )}
                             </div>
                         </div>
@@ -669,7 +692,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                 placeholder="비전을 입력하세요"
                                             />
                                         ) : (
-                                            jdData.vision && <p className="text-[13px] text-gray-700 leading-relaxed">{jdData.vision}</p>
+                                            jdData.vision && <p className="text-[13px] text-gray-700 leading-relaxed whitespace-pre-wrap">{jdData.vision}</p>
                                         )}
                                     </div>
                                     <div>
@@ -683,7 +706,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                 placeholder="미션을 입력하세요"
                                             />
                                         ) : (
-                                            jdData.mission && <p className="text-[13px] text-gray-700 leading-relaxed">{jdData.mission}</p>
+                                            jdData.mission && <p className="text-[13px] text-gray-700 leading-relaxed whitespace-pre-wrap">{jdData.mission}</p>
                                         )}
                                     </div>
                                 </div>
@@ -763,9 +786,11 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                             if (ki < idx) newTypes[ki] = currentTypes[ki];
                                                             else if (ki > idx) newTypes[ki - 1] = currentTypes[ki];
                                                         });
-                                                        updateEditedField('requirements', newReqs.length ? newReqs : ['']);
-                                                        updateEditedField('requirementTypes', newTypes);
+                                                        setEditedData(prev => prev ? { ...prev, requirements: newReqs, requirementTypes: newTypes } : prev);
                                                     }}
+                                                    type="button"
+                                                    draggable={false}
+                                                    onMouseDown={(e) => e.stopPropagation()}
                                                     className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors"
                                                 >✕</button>
                                             </div>
@@ -883,9 +908,11 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                             if (ki < idx) newTypes[ki] = currentTypes[ki];
                                                             else if (ki > idx) newTypes[ki - 1] = currentTypes[ki];
                                                         });
-                                                        updateEditedField('preferred', newPref.length ? newPref : ['']);
-                                                        updateEditedField('preferredTypes', newTypes);
+                                                        setEditedData(prev => prev ? { ...prev, preferred: newPref, preferredTypes: newTypes } : prev);
                                                     }}
+                                                    type="button"
+                                                    draggable={false}
+                                                    onMouseDown={(e) => e.stopPropagation()}
                                                     className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors"
                                                 >✕</button>
                                             </div>
@@ -963,6 +990,9 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                         const newBenefits = current.filter((_, i) => i !== idx);
                                                         updateEditedField('benefits', newBenefits.length ? newBenefits : ['']);
                                                     }}
+                                                    type="button"
+                                                    draggable={false}
+                                                    onMouseDown={(e) => e.stopPropagation()}
                                                     className="text-red-300 hover:text-red-500 text-[11px] flex-shrink-0 transition-colors"
                                                 >✕</button>
                                             </div>
@@ -1020,6 +1050,9 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                                             const newOptions = (editedData?.applicationFields?.skillOptions || []).filter((_, i) => i !== catIdx);
                                                             updateEditedField('applicationFields', { ...editedData?.applicationFields, skillOptions: newOptions });
                                                         }}
+                                                        type="button"
+                                                        draggable={false}
+                                                        onMouseDown={(e) => e.stopPropagation()}
                                                         className="text-red-300 hover:text-red-500 text-[11px] transition-colors"
                                                     >✕</button>
                                                 </>
@@ -1215,9 +1248,9 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     }
 
     return (
-        <div className="flex flex-col h-full bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden max-w-[1200px] mx-auto" style={{ height: 'calc(100vh - 140px)'}}>
+        <div className="flex flex-col h-full bg-white md:rounded-2xl md:border border-gray-200 md:shadow-xl overflow-hidden max-w-[1200px] mx-auto">
             
-            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+            <div className="flex flex-col md:flex-row flex-1 min-h-0">
                 {/* Left Profile Section */}
                 <div className="hidden md:flex w-[240px] border-r border-gray-100 flex-col bg-[#FAFBFC] pt-16 overflow-y-auto scrollbar-hide">
                 {/* Profile Image */}
@@ -1340,7 +1373,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
             </div>
 
             {/* Right Content Section */}
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-white">
                     <div className="flex items-center gap-2">
                         <h3 className="font-bold text-lg text-gray-800">공고 상세</h3>
@@ -1393,7 +1426,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                     </div>
                 </div>
                 
-                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-hide" onDragOver={isEditing ? handleDragAutoScroll : undefined} onDragLeave={isEditing ? stopAutoScroll : undefined} onDrop={isEditing ? stopAutoScroll : undefined}>
+                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }} onDragOver={isEditing ? handleDragAutoScroll : undefined} onDragLeave={isEditing ? stopAutoScroll : undefined} onDrop={isEditing ? stopAutoScroll : undefined}>
                     <div className="p-8 space-y-8">
                         {/* 공고 제목 */}
                         <div>
@@ -1474,7 +1507,13 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                             <div
                                 key={section}
                                 draggable={isEditing}
-                                onDragStart={(e) => isEditing && handleSectionDragStart(e, section)}
+                                onDragStart={(e) => {
+                                    if ((e.target as HTMLElement).closest('button, input, textarea, select, a')) {
+                                        e.preventDefault();
+                                        return;
+                                    }
+                                    isEditing && handleSectionDragStart(e, section);
+                                }}
                                 onDragOver={(e) => isEditing && handleSectionDragOver(e, idx)}
                                 onDrop={() => isEditing && handleSectionDrop(idx)}
                                 onDragEnd={handleSectionDragEnd}
@@ -1526,14 +1565,14 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
 
             {/* 지원서 작성 모달 */}
             {showApplicationModal && (
-                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowApplicationModal(false)}>
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => { setShowApplicationModal(false); setFormErrors({}); }}>
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                         {/* 모달 헤더 */}
                         <div className="px-7 pt-7 pb-5">
                             <div className="flex items-center justify-between mb-1">
                                 <h3 className="text-lg font-bold text-gray-900">지원서 작성</h3>
                                 <button 
-                                    onClick={() => setShowApplicationModal(false)}
+                                    onClick={() => { setShowApplicationModal(false); setFormErrors({}); }}
                                     className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600 text-lg"
                                 >
                                     ✕
@@ -1556,11 +1595,12 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                     <input
                                         type="text"
                                         value={applicationForm.name}
-                                        onChange={(e) => setApplicationForm({ ...applicationForm, name: e.target.value })}
+                                        onChange={(e) => { setApplicationForm({ ...applicationForm, name: e.target.value }); setFormErrors(prev => ({ ...prev, name: '' })); }}
                                         placeholder="홍길동"
-                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all placeholder:text-gray-300"
+                                        className={`w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all placeholder:text-gray-300 ${formErrors.name ? 'border-red-400' : 'border-gray-200'}`}
                                         required
                                     />
+                                    {formErrors.name && <p className="mt-1 text-[12px] text-red-500">{formErrors.name}</p>}
                                 </div>
 
                                 <div>
@@ -1568,11 +1608,12 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                     <input
                                         type="email"
                                         value={applicationForm.email}
-                                        onChange={(e) => setApplicationForm({ ...applicationForm, email: e.target.value })}
+                                        onChange={(e) => { setApplicationForm({ ...applicationForm, email: e.target.value }); setFormErrors(prev => ({ ...prev, email: '' })); }}
                                         placeholder="example@email.com"
-                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all placeholder:text-gray-300"
+                                        className={`w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all placeholder:text-gray-300 ${formErrors.email ? 'border-red-400' : 'border-gray-200'}`}
                                         required
                                     />
+                                    {formErrors.email && <p className="mt-1 text-[12px] text-red-500">{formErrors.email}</p>}
                                 </div>
                             </div>
 
@@ -1598,10 +1639,11 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                             <input
                                                 type="tel"
                                                 value={applicationForm.phone}
-                                                onChange={(e) => setApplicationForm({ ...applicationForm, phone: e.target.value })}
+                                                onChange={(e) => { setApplicationForm({ ...applicationForm, phone: e.target.value }); setFormErrors(prev => ({ ...prev, phone: '' })); }}
                                                 placeholder="010-0000-0000"
-                                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all placeholder:text-gray-300"
+                                                className={`w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all placeholder:text-gray-300 ${formErrors.phone ? 'border-red-400' : 'border-gray-200'}`}
                                             />
+                                            {formErrors.phone && <p className="mt-1 text-[12px] text-red-500">{formErrors.phone}</p>}
                                         </div>
                                     )}
 
@@ -1668,10 +1710,11 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                                             <input
                                                 type="url"
                                                 value={applicationForm.portfolio}
-                                                onChange={(e) => setApplicationForm({ ...applicationForm, portfolio: e.target.value })}
+                                                onChange={(e) => { setApplicationForm({ ...applicationForm, portfolio: e.target.value }); setFormErrors(prev => ({ ...prev, portfolio: '' })); }}
                                                 placeholder="포트폴리오 링크 (https://...)"
-                                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all placeholder:text-gray-300"
+                                                className={`w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all placeholder:text-gray-300 ${formErrors.portfolio ? 'border-red-400' : 'border-gray-200'}`}
                                             />
+                                            {formErrors.portfolio && <p className="mt-1 text-[12px] text-red-500">{formErrors.portfolio}</p>}
                                             
                                             <div className="flex items-center gap-3 my-2">
                                                 <div className="flex-1 h-px bg-gray-200" />
@@ -1811,7 +1854,7 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                         {/* 모달 푸터 */}
                         <div className="px-7 py-5 border-t border-gray-100 flex justify-end gap-3">
                             <button
-                                onClick={() => setShowApplicationModal(false)}
+                                onClick={() => { setShowApplicationModal(false); setFormErrors({}); }}
                                 className="px-5 py-2.5 rounded-xl text-[13px] font-bold text-gray-500 hover:bg-gray-100 transition-colors"
                                 disabled={submitting}
                             >
