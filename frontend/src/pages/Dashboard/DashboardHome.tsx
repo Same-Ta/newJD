@@ -228,7 +228,7 @@ export const DashboardHome = ({ onNavigate, onNavigateToJD }: DashboardHomeProps
             )}
 
             {/* 통합 대시보드 그리드 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
                 {/* 진행 중인 공고 카드 */}
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
                     <div className="flex justify-between items-start mb-6">

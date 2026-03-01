@@ -293,10 +293,10 @@ export const applicationAPI = {
     return result;
   },
 
-  analyze: async (applicantData: any) => {
+  analyze: async (applicantData: any, aiCriteria?: string) => {
     return await apiRequest('/api/applications/analyze', {
       method: 'POST',
-      body: JSON.stringify({ applicantData }),
+      body: JSON.stringify({ applicantData, ...(aiCriteria ? { aiCriteria } : {}) }),
     });
   },
 

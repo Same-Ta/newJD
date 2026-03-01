@@ -10,6 +10,7 @@ from config.firebase import get_db, bucket
 import os
 from dependencies.auth import verify_token
 from models.schemas import ApplicationCreate, ApplicationUpdate, ApplicationResponse, AIAnalysisRequest, SaveAnalysisRequest
+from utils.rate_limiter import ai_analyze_limiter
 
 router = APIRouter(prefix="/api/applications", tags=["Applications"])
 
@@ -116,7 +117,7 @@ async def download_portfolio(application_id: str, user_data: dict = Depends(veri
 
 
 @router.post("/analyze")
-async def analyze_application(request: AIAnalysisRequest, user_data: dict = Depends(verify_token)):
+async def analyze_application(request: AIAnalysisRequest, user_data: dict = Depends(ai_analyze_limiter)):
     """지원자를 AI로 분석합니다."""
     try:
         GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -149,9 +150,22 @@ async def analyze_application(request: AIAnalysisRequest, user_data: dict = Depe
             # ID가 없으면 전달받은 데이터 그대로 사용 (backward compatibility)
             applicant = request.applicantData
 
+        # AI 평가 기준 섹션 구성 (공고별 인재상 설정이 있는 경우 포함)
+        ai_criteria_section = ""
+        if request.aiCriteria and request.aiCriteria.strip():
+            ai_criteria_section = f"""
+[채용 담당자 지정 평가 기준 - 최우선 적용]
+아래는 이 공고의 채용 담당자가 직접 설정한 인재상과 평가 기준입니다. 이 기준을 최우선으로 고려하여 지원자를 평가하세요:
+
+{request.aiCriteria.strip()}
+
+위 기준에 얼마나 부합하는지를 분석 전반에 반영하고, [채용 가이드] 섹션에서 이 기준 대비 적합도를 명시적으로 언급하세요.
+---
+"""
+
         prompt = f"""[시스템 역할]
 당신은 초기 스타트업의 생존을 결정짓는 전문 채용 컨설턴트입니다. 지원자의 답변에서 미사여구를 제거하고, 오직 [데이터, 방법론, 행동 패턴]만을 근거로 역량(Skill)과 의지(Will)를 냉정하게 판별합니다.
-
+{ai_criteria_section}
 [분석 원칙]
 - 냉정한 상/중/하: 수치와 구체적 방법론이 없으면 무조건 '중' 이하로 판정합니다.
 - 팩트 위주: 지원자의 답변을 짧게 인용(Quote)하여 평가의 객관성을 확보합니다.

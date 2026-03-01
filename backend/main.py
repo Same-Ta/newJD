@@ -20,7 +20,17 @@ from routes.comments import router as comments_router
 from routes.team import router as team_router
 from routes.pdf_analysis import router as pdf_router
 
-app = FastAPI(title="Winnow API", version="1.0.0")
+# Swagger / ReDoc 는 개발 환경에서만 노출
+# 프로덕션: DOCS_ENABLED 환경변수를 설정하지 않으면 완전 비활성화
+_docs_enabled = os.getenv("DOCS_ENABLED", "false").lower() == "true"
+
+app = FastAPI(
+    title="Winnow API",
+    version="1.0.0",
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 
 # ==================== GZip 압축 미들웨어 ====================
 # 500바이트 이상 응답 자동 gzip 압축 → 네트워크 전송량 50-70% 감소

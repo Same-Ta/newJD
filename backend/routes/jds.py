@@ -114,7 +114,10 @@ async def update_jd(jd_id: str, jd: JDUpdate, user_data: dict = Depends(verify_t
         if not doc.exists:
             raise HTTPException(status_code=404, detail="JD not found")
 
-        if doc.to_dict().get('userId') != user_data['uid']:
+        jd_existing = doc.to_dict()
+        uid = user_data['uid']
+        # 소유자 또는 협업자(콜라보레이터)이면 수정 가능
+        if jd_existing.get('userId') != uid and uid not in (jd_existing.get('collaboratorIds') or []):
             raise HTTPException(status_code=403, detail="Not authorized")
 
         update_data = {k: v for k, v in jd.dict().items() if v is not None}

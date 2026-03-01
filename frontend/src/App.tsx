@@ -444,19 +444,12 @@ const App = () => {
             <span className="font-extrabold text-[19px] text-gray-900 tracking-tight">WINNOW</span>
           </button>
           <div className="flex items-center gap-3">
-            {isLoggedIn ? (
+            {isLoggedIn && (
               <button 
                 onClick={() => navigateTo('my-jds')}
                 className="px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
               >
                 내 공고로 이동
-              </button>
-            ) : (
-              <button 
-                onClick={() => navigateTo('login')}
-                className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-              >
-                로그인
               </button>
             )}
           </div>

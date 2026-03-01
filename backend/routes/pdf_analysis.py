@@ -1,5 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from dependencies.auth import verify_token
+from utils.rate_limiter import pdf_analyze_limiter
 import json
 import io
 import os
@@ -115,7 +116,7 @@ async def _analyze_with_vision(content: bytes, filename: str) -> dict:
 @router.post("/analyze")
 async def analyze_pdf(
     file: UploadFile = File(...),
-    current_user: dict = Depends(verify_token)
+    current_user: dict = Depends(pdf_analyze_limiter)
 ):
     """PDF 파일을 업로드하여 채용공고 내용을 AI로 분석"""
     if not file.filename or not file.filename.lower().endswith('.pdf'):

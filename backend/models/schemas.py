@@ -80,6 +80,10 @@ class JDCreate(BaseModel):
     recruitmentProcess: Optional[List[str]] = None  # 모집 절차
     activitySchedule: Optional[str] = None    # 활동 일정
     membershipFee: Optional[str] = None       # 회비/활동비
+    # 부제목 및 AI 평가 기준
+    subtitle: Optional[str] = None            # 부제목/부연설명
+    aiCriteria: Optional[str] = None          # AI 평가 기준 (원하는 인재상 등)
+    sectionOrder: Optional[List[str]] = None  # 섹션 표시 순서
 
 
 class JDUpdate(BaseModel):
@@ -113,6 +117,10 @@ class JDUpdate(BaseModel):
     recruitmentProcess: Optional[List[str]] = None
     activitySchedule: Optional[str] = None
     membershipFee: Optional[str] = None
+    # 부제목 및 AI 평가 기준
+    subtitle: Optional[str] = None            # 부제목/부연설명
+    aiCriteria: Optional[str] = None          # AI 평가 기준 (원하는 인재상 등)
+    sectionOrder: Optional[List[str]] = None  # 섹션 표시 순서
 
 
 # ==================== Application Models ====================
@@ -257,6 +265,7 @@ class ApplicationUpdate(BaseModel):
 # ==================== AI Models ====================
 class AIAnalysisRequest(BaseModel):
     applicantData: Dict[str, Any]
+    aiCriteria: Optional[str] = None  # AI 평가 기준 (JD에서 전달)
 
 
 class SaveAnalysisRequest(BaseModel):

@@ -58,7 +58,7 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
       return () => window.removeEventListener('tutorial:close-menus', handleCloseMenus);
     }, [isDemoMode]);
     
-    const [jdList, setJdList] = useState<Array<{ id: string; title: string; type?: string }>>([]);
+const [jdList, setJdList] = useState<Array<{ id: string; title: string; type?: string; aiCriteria?: string }>>([]);
     
     const [selectedApplicant, setSelectedApplicant] = useState<Application | null>(null);
     const [aiSummary, setAiSummary] = useState<string>('');
@@ -81,8 +81,8 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
         if (isDemoMode) {
             setApplications(demoApplicants as any);
             setJdList([
-                { id: 'demo-jd-001', title: '프론트엔드 개발자 (React/TypeScript)', type: 'company' },
-                { id: 'demo-jd-002', title: '백엔드 엔지니어 (Python/FastAPI)', type: 'company' },
+                { id: 'demo-jd-001', title: '프론트엔드 개발자 (React/TypeScript)', type: 'company', aiCriteria: '' },
+                { id: 'demo-jd-002', title: '백엔드 엔지니어 (Python/FastAPI)', type: 'company', aiCriteria: '' },
             ]);
             setLoading(false);
             return;
@@ -134,7 +134,8 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
             const jdsList = jdsData.map((jd: any) => ({
                 id: jd.id,
                 title: jd.title || '제목 없음',
-                type: jd.type || 'club'
+                type: jd.type || 'club',
+                aiCriteria: jd.aiCriteria || ''
             }));
 
             setJdList(jdsList);
@@ -205,7 +206,9 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
 
     const runAnalysis = async (application: Application) => {
         try {
-            const result = await applicationAPI.analyze(application);
+            const matchedJd = jdList.find(j => j.title === application.jdTitle);
+            const aiCriteria = matchedJd?.aiCriteria || undefined;
+            const result = await applicationAPI.analyze(application, aiCriteria);
             setAiSummary(result.analysis);
             await applicationAPI.saveAnalysis(application.id, result.analysis);
         } catch (error) {
@@ -940,13 +943,13 @@ export const ApplicantList = ({ onNavigateToApplicant }: { onNavigateToApplicant
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowInterviewModal(false)}>
                     <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
                         {/* 모달 헤더 */}
-                        <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 p-6 text-white">
+                        <div className="p-6 border-b border-gray-100">
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <h2 className="text-2xl font-bold mb-1">면접 일정 내보내기</h2>
-                                    <p className="text-indigo-100 text-sm">합격자 {getPassedApplicants().length}명의 면접 일정을 설정하고 엑셀로 내보냅니다.</p>
+                                    <h2 className="text-xl font-bold text-gray-900 mb-0.5">면접 일정 내보내기</h2>
+                                    <p className="text-gray-500 text-sm">합격자 {getPassedApplicants().length}명의 면접 일정을 설정하고 엑셀로 내보냅니다.</p>
                                 </div>
-                                <button onClick={() => setShowInterviewModal(false)} className="p-2 hover:bg-white/20 rounded-lg transition-colors"><X size={24} /></button>
+                                <button onClick={() => setShowInterviewModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"><X size={20} /></button>
                             </div>
                         </div>
 

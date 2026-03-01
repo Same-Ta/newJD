@@ -55,6 +55,8 @@ interface JDData {
         skillOptions?: { category: string; skills: string[] }[];
     };
     sectionOrder?: string[];
+    subtitle?: string;
+    aiCriteria?: string;
 }
 
 type SectionType = 'description' | 'recruitment' | 'visionMission' | 'requirements' | 'preferred' | 'benefits' | 'skills' | 'applicationForm';
@@ -137,7 +139,10 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
     
     const { isDemoMode, onDemoAction, currentStepId } = useDemoMode();
     const currentUserId = auth.currentUser?.uid;
-    const isOwner = isDemoMode || (currentUserId && jdData?.userId === currentUserId);
+    const isOwner = isDemoMode || (currentUserId && (
+        jdData?.userId === currentUserId ||
+        ((jdData as any)?.collaboratorIds || []).includes(currentUserId!)
+    ));
 
     // 데모 모드: 드래그 &  드롭 시연 (섹션 순서 변경 애니메이션)
     const [demoDragAnimating, setDemoDragAnimating] = useState(false);
@@ -1393,19 +1398,56 @@ export const JDDetail = ({ jdId, onNavigate }: JDDetailProps) => {
                         {/* 공고 제목 */}
                         <div>
                             {isEditing ? (
-                                <input
-                                    type="text"
-                                    value={editedData?.title || ''}
-                                    onChange={(e) => updateEditedField('title', e.target.value)}
-                                    className="text-2xl font-bold text-gray-900 mb-4 w-full bg-transparent border-0 border-b-2 border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-1 transition-colors"
-                                    placeholder="공고 제목을 입력하세요"
-                                />
+                                <>
+                                    <input
+                                        type="text"
+                                        value={editedData?.title || ''}
+                                        onChange={(e) => updateEditedField('title', e.target.value)}
+                                        className="text-2xl font-bold text-gray-900 mb-2 w-full bg-transparent border-0 border-b-2 border-dashed border-blue-300 outline-none focus:border-blue-500 px-0 py-1 transition-colors"
+                                        placeholder="공고 제목을 입력하세요"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={editedData?.subtitle || ''}
+                                        onChange={(e) => updateEditedField('subtitle', e.target.value)}
+                                        className="text-sm text-gray-500 mb-4 w-full bg-transparent border-0 border-b border-dashed border-blue-200 outline-none focus:border-blue-400 px-0 py-1 transition-colors"
+                                        placeholder="부제목 / 부연설명 (선택사항)"
+                                    />
+                                </>
                             ) : (
-                                <h1 className="text-2xl font-bold text-gray-900 mb-4">
-                                    {jdData.title || '제목 없음'}
-                                </h1>
+                                <>
+                                    <h1 className="text-2xl font-bold text-gray-900 mb-1">
+                                        {jdData.title || '제목 없음'}
+                                    </h1>
+                                    {jdData.subtitle && (
+                                        <p className="text-sm text-gray-500 mb-4">{jdData.subtitle}</p>
+                                    )}
+                                </>
                             )}
                         </div>
+
+                        {/* AI 평가 기준 설정 (관리자 전용) */}
+                        {isOwner && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-amber-600 font-bold text-sm">AI 평가 기준</span>
+                                    <span className="text-xs text-amber-500 font-normal">· 지원자에게는 보이지 않습니다</span>
+                                </div>
+                                {isEditing ? (
+                                    <textarea
+                                        value={editedData?.aiCriteria || ''}
+                                        onChange={(e) => updateEditedField('aiCriteria', e.target.value)}
+                                        className="w-full text-sm text-gray-700 bg-white border border-amber-200 rounded-lg px-3 py-2 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 transition-colors resize-none"
+                                        rows={4}
+                                        placeholder="예: 협동심과 리더십을 갖춘 인재, 관련 프로젝트 경험 필수, 영어 커뮤니케이션 가능자 우대..."
+                                    />
+                                ) : (
+                                    <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                                        {jdData.aiCriteria || <span className="text-gray-400 italic">AI 평가 기준이 설정되지 않았습니다. 수정 모드에서 입력하세요.</span>}
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
                         {/* 섹션 팔레트 */}
                         {isEditing && paletteSections.length > 0 && (
